@@ -25,8 +25,10 @@ Expression
 Comparison / Assignment
     <field>          -- In where: match by type; in update: cast to type
     <field>=<value>  -- In where: match by value; in update: set value; value may be blank
-    <field>+=<value>  -- In update: if int or number, addition; if string, append; if list, append if missing (treat as a set)
-    <field>-=<value>  -- In update: if int or number, subtraction; if list, remove if present (treat as a set)
+    <field>+=<value>  -- In where: if list, exists;
+                      -- In update: if int or number, addition; if string, append; if list, append if missing (treat as a set)
+    <field>-=<value>  -- In where: if list, not exists;
+                      -- In update: if int or number, subtraction; if list, remove if present (treat as a set)
     
 
 Fields
