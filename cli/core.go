@@ -42,12 +42,30 @@ type Field struct {
 	ElemType *FieldType // non-nil for list:<type>
 }
 
+// Comparison is used in `where` clauses.
 type Comparison struct {
+	Neg   bool
 	Field Field
-	Value *string // nil = field must exist, no value constraint
+	Value *string // nil = type-only match
 }
 
-// Expression is an OR of AND-groups
+// AssignOp is the mutation operator used in assignments.
+type AssignOp int
+
+const (
+	OpSet AssignOp = iota // =
+	OpAdd                 // +=
+	OpSub                 // -=
+)
+
+// Assignment is used in `update set` clauses.
+type Assignment struct {
+	Field Field
+	Op    AssignOp
+	Value *string // nil = cast to Field.Type
+}
+
+// Expression is an OR of AND-groups.
 type Expression [][]Comparison
 
 func parseTypeName(s string) (FieldType, error) {
@@ -87,17 +105,53 @@ func ParseField(s string) (Field, error) {
 }
 
 func ParseComparison(s string) (Comparison, error) {
+	neg := strings.HasPrefix(s, "!")
+	if neg {
+		s = s[1:]
+	}
 	i := strings.IndexByte(s, '=')
 	if i < 0 {
 		f, err := ParseField(s)
-		return Comparison{Field: f}, err
+		return Comparison{Neg: neg, Field: f}, err
 	}
 	f, err := ParseField(s[:i])
 	if err != nil {
 		return Comparison{}, err
 	}
 	v := s[i+1:]
-	return Comparison{Field: f, Value: &v}, nil
+	return Comparison{Neg: neg, Field: f, Value: &v}, nil
+}
+
+func ParseAssignment(s string) (Assignment, error) {
+	if i := strings.Index(s, "+="); i >= 0 {
+		f, err := ParseField(s[:i])
+		if err != nil {
+			return Assignment{}, err
+		}
+		v := s[i+2:]
+		return Assignment{Field: f, Op: OpAdd, Value: &v}, nil
+	}
+	if i := strings.Index(s, "-="); i >= 0 {
+		f, err := ParseField(s[:i])
+		if err != nil {
+			return Assignment{}, err
+		}
+		v := s[i+2:]
+		return Assignment{Field: f, Op: OpSub, Value: &v}, nil
+	}
+	if i := strings.IndexByte(s, '='); i >= 0 {
+		f, err := ParseField(s[:i])
+		if err != nil {
+			return Assignment{}, err
+		}
+		v := s[i+1:]
+		return Assignment{Field: f, Op: OpSet, Value: &v}, nil
+	}
+	f, err := ParseField(s)
+	if err != nil {
+		return Assignment{}, err
+	}
+	return Assignment{Field: f, Op: OpSet}, nil // Value nil = cast
 }
 
 func ParseExpression(s string) (Expression, error) {
@@ -163,7 +217,6 @@ func ReadFile(path string) (*File, error) {
 	rest := s[4:]
 	end := strings.Index(rest, "\n---\n")
 	if end < 0 {
-		// Handle frontmatter ending at EOF without trailing newline
 		if after, found := strings.CutSuffix(rest, "\n---"); found {
 			if err := yaml.Unmarshal([]byte(after), &f.FM); err != nil {
 				return nil, fmt.Errorf("%s: %w", path, err)
@@ -220,20 +273,33 @@ func (f *File) matchesAll(cmps []Comparison) bool {
 
 func (f *File) matchesCmp(cmp Comparison) bool {
 	v, ok := f.FM[cmp.Field.Name]
+	var result bool
 	if !ok {
-		return false
+		result = false
+	} else if cmp.Field.Type != TypeAny && !isType(v, cmp.Field) {
+		result = false
+	} else if cmp.Value != nil {
+		if arr, ok := v.([]interface{}); ok {
+			for _, item := range arr {
+				if fmtValue(item) == *cmp.Value {
+					result = true
+					break
+				}
+			}
+		} else {
+			result = fmtValue(v) == *cmp.Value
+		}
+	} else {
+		result = true
 	}
-	if cmp.Field.Type != TypeAny && !isType(v, cmp.Field.Type) {
-		return false
+	if cmp.Neg {
+		return !result
 	}
-	if cmp.Value != nil {
-		return fmtValue(v) == *cmp.Value
-	}
-	return true
+	return result
 }
 
-func isType(v interface{}, t FieldType) bool {
-	switch t {
+func isType(v interface{}, f Field) bool {
+	switch f.Type {
 	case TypeAny:
 		return true
 	case TypeString:
@@ -266,8 +332,20 @@ func isType(v interface{}, t FieldType) bool {
 		}
 		return false
 	case TypeList:
-		_, ok := v.([]interface{})
-		return ok
+		arr, ok := v.([]interface{})
+		if !ok {
+			return false
+		}
+		if f.ElemType == nil {
+			return true
+		}
+		elemField := Field{Type: *f.ElemType}
+		for _, item := range arr {
+			if !isType(item, elemField) {
+				return false
+			}
+		}
+		return true
 	}
 	return false
 }
@@ -292,7 +370,7 @@ func fmtValue(v interface{}) string {
 	}
 }
 
-func (f *File) Set(name, value string) {
+func (f *File) set(name, value string) {
 	f.FM[name] = value
 	f.hasFM = true
 }
@@ -302,32 +380,115 @@ func (f *File) Remove(field Field) bool {
 	if !ok {
 		return false
 	}
-	if field.Type != TypeAny && !isType(v, field.Type) {
+	if field.Type != TypeAny && !isType(v, field) {
 		return false
 	}
 	delete(f.FM, field.Name)
 	return true
 }
 
-func (f *File) Cast(field Field, targetType FieldType) error {
-	v, ok := f.FM[field.Name]
-	if !ok {
-		return fmt.Errorf("field %q not found", field.Name)
+func (f *File) Apply(a Assignment) error {
+	v, ok := f.FM[a.Field.Name]
+
+	if a.Value == nil {
+		// Cast form: no = present, field type is the target.
+		if !ok || a.Field.Type == TypeAny {
+			return nil
+		}
+		newVal, err := castValue(v, a.Field)
+		if err != nil {
+			return fmt.Errorf("casting %q: %w", a.Field.Name, err)
+		}
+		f.FM[a.Field.Name] = newVal
+		f.hasFM = true
+		return nil
 	}
-	if field.Type != TypeAny && !isType(v, field.Type) {
-		return fmt.Errorf("field %q is not of type %v", field.Name, field.Type)
+
+	switch a.Op {
+	case OpSet:
+		f.set(a.Field.Name, *a.Value)
+
+	case OpAdd:
+		if !ok {
+			f.FM[a.Field.Name] = *a.Value
+			f.hasFM = true
+			return nil
+		}
+		switch cur := v.(type) {
+		case int:
+			n, err := strconv.ParseInt(*a.Value, 10, 64)
+			if err != nil {
+				return fmt.Errorf("field %q: += requires int value, got %q", a.Field.Name, *a.Value)
+			}
+			f.FM[a.Field.Name] = cur + int(n)
+		case int64:
+			n, err := strconv.ParseInt(*a.Value, 10, 64)
+			if err != nil {
+				return fmt.Errorf("field %q: += requires int value, got %q", a.Field.Name, *a.Value)
+			}
+			f.FM[a.Field.Name] = cur + n
+		case float64:
+			n, err := strconv.ParseFloat(*a.Value, 64)
+			if err != nil {
+				return fmt.Errorf("field %q: += requires number value, got %q", a.Field.Name, *a.Value)
+			}
+			f.FM[a.Field.Name] = cur + n
+		case string:
+			f.FM[a.Field.Name] = cur + *a.Value
+		case []interface{}:
+			for _, item := range cur {
+				if fmtValue(item) == *a.Value {
+					return nil // already present, treat as set
+				}
+			}
+			f.FM[a.Field.Name] = append(cur, *a.Value)
+		default:
+			return fmt.Errorf("field %q: += not supported for this type", a.Field.Name)
+		}
+		f.hasFM = true
+
+	case OpSub:
+		if !ok {
+			return nil
+		}
+		switch cur := v.(type) {
+		case int:
+			n, err := strconv.ParseInt(*a.Value, 10, 64)
+			if err != nil {
+				return fmt.Errorf("field %q: -= requires int value, got %q", a.Field.Name, *a.Value)
+			}
+			f.FM[a.Field.Name] = cur - int(n)
+		case int64:
+			n, err := strconv.ParseInt(*a.Value, 10, 64)
+			if err != nil {
+				return fmt.Errorf("field %q: -= requires int value, got %q", a.Field.Name, *a.Value)
+			}
+			f.FM[a.Field.Name] = cur - n
+		case float64:
+			n, err := strconv.ParseFloat(*a.Value, 64)
+			if err != nil {
+				return fmt.Errorf("field %q: -= requires number value, got %q", a.Field.Name, *a.Value)
+			}
+			f.FM[a.Field.Name] = cur - n
+		case []interface{}:
+			result := make([]interface{}, 0, len(cur))
+			for _, item := range cur {
+				if fmtValue(item) != *a.Value {
+					result = append(result, item)
+				}
+			}
+			f.FM[a.Field.Name] = result
+		default:
+			return fmt.Errorf("field %q: -= not supported for this type", a.Field.Name)
+		}
+		f.hasFM = true
 	}
-	newVal, err := castValue(v, targetType)
-	if err != nil {
-		return fmt.Errorf("casting %q: %w", field.Name, err)
-	}
-	f.FM[field.Name] = newVal
 	return nil
 }
 
-func castValue(v interface{}, t FieldType) (interface{}, error) {
+func castValue(v interface{}, f Field) (interface{}, error) {
 	s := fmtValue(v)
-	switch t {
+	switch f.Type {
 	case TypeString:
 		return s, nil
 	case TypeInt:
@@ -358,20 +519,26 @@ func castValue(v interface{}, t FieldType) (interface{}, error) {
 		}
 		return "[[" + s + "]]", nil
 	case TypeList:
-		if arr, ok := v.([]interface{}); ok {
-			return arr, nil
+		var arr []interface{}
+		if existing, ok := v.([]interface{}); ok {
+			arr = make([]interface{}, len(existing))
+			copy(arr, existing)
+		} else {
+			arr = []interface{}{s}
 		}
-		return []interface{}{s}, nil
+		if f.ElemType != nil {
+			elemField := Field{Type: *f.ElemType}
+			for i, item := range arr {
+				casted, err := castValue(item, elemField)
+				if err != nil {
+					return nil, fmt.Errorf("element %d: %w", i, err)
+				}
+				arr[i] = casted
+			}
+		}
+		return arr, nil
 	case TypeAny:
 		return v, nil
 	}
 	return nil, fmt.Errorf("unsupported target type")
-}
-
-func (f *File) CheckType(field Field) bool {
-	v, ok := f.FM[field.Name]
-	if !ok {
-		return false
-	}
-	return isType(v, field.Type)
 }

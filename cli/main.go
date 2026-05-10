@@ -10,39 +10,43 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var filterExpr string
-
-// splitArgs separates file/glob args from field-spec args.
-// Arg N is a file arg if it's a glob that expands to files, or an existing path.
-// The first arg that matches neither starts the field-spec tail.
-func splitArgs(args []string) (files []string, rest []string) {
-	for i, arg := range args {
-		if strings.ContainsAny(arg, "*?[") {
-			if expanded, err := filepath.Glob(arg); err == nil && len(expanded) > 0 {
-				files = append(files, expanded...)
-				continue
-			}
+// splitOn splits args on the first occurrence of keyword, returning the two halves.
+func splitOn(args []string, keyword string) (before, after []string, found bool) {
+	for i, a := range args {
+		if a == keyword {
+			return args[:i], args[i+1:], true
 		}
-		if _, err := os.Stat(arg); err == nil {
-			files = append(files, arg)
-			continue
-		}
-		rest = args[i:]
-		return
 	}
-	return
+	return args, nil, false
 }
 
-func loadFiles(paths []string) ([]*File, error) {
-	var expr Expression
-	var err error
-	if filterExpr != "" {
-		expr, err = ParseExpression(filterExpr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid filter: %w", err)
+func expandGlobs(patterns []string) ([]string, error) {
+	var files []string
+	for _, p := range patterns {
+		if strings.ContainsAny(p, "*?[") {
+			expanded, err := filepath.Glob(p)
+			if err != nil {
+				return nil, err
+			}
+			files = append(files, expanded...)
+		} else if _, err := os.Stat(p); err == nil {
+			files = append(files, p)
+		} else {
+			return nil, fmt.Errorf("no such file or pattern: %s", p)
 		}
 	}
+	return files, nil
+}
 
+func loadFiles(paths []string, whereArgs []string) ([]*File, error) {
+	var expr Expression
+	if len(whereArgs) > 0 {
+		var err error
+		expr, err = ParseExpression(strings.Join(whereArgs, " "))
+		if err != nil {
+			return nil, fmt.Errorf("invalid where clause: %w", err)
+		}
+	}
 	var files []*File
 	for _, path := range paths {
 		f, err := ReadFile(path)
@@ -67,27 +71,39 @@ func main() {
 		Short:        "Markdown frontmatter batch editor",
 		SilenceUsage: true,
 	}
-	root.PersistentFlags().StringVar(&filterExpr, "filter", "", "filter expression")
-	root.AddCommand(listCmd(), setCmd(), rmCmd(), castCmd(), checkCmd())
+	root.AddCommand(selectCmd(), updateCmd(), alterCmd())
 
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
 	}
 }
 
-func listCmd() *cobra.Command {
+func selectCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list <glob|files...> [<field|comparison>...]",
+		Use:   "select <field>... from <glob>... [where <expression>]",
 		Short: "Output table of filename and field values",
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			filePaths, fieldArgs := splitArgs(args)
-			if len(filePaths) == 0 {
-				return fmt.Errorf("no files specified")
+			fieldArgs, rest, _ := splitOn(args, "from")
+			globArgs, whereArgs, _ := splitOn(rest, "where")
+
+			if len(globArgs) == 0 {
+				return fmt.Errorf("no files specified (missing 'from'?)")
 			}
-			files, err := loadFiles(filePaths)
+			paths, err := expandGlobs(globArgs)
 			if err != nil {
 				return err
+			}
+			files, err := loadFiles(paths, whereArgs)
+			if err != nil {
+				return err
+			}
+
+			if len(fieldArgs) == 0 {
+				for _, f := range files {
+					fmt.Println(f.Path)
+				}
+				return nil
 			}
 
 			type col struct {
@@ -121,13 +137,6 @@ func listCmd() *cobra.Command {
 				}
 			}
 
-			if len(cols) == 0 {
-				for _, f := range filtered {
-					fmt.Println(f.Path)
-				}
-				return nil
-			}
-
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 			headers := []string{"filename"}
 			seps := []string{strings.Repeat("-", 8)}
@@ -155,37 +164,47 @@ func listCmd() *cobra.Command {
 	}
 }
 
-func setCmd() *cobra.Command {
+func updateCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "set <glob|files...> <field=value>...",
-		Short: "Set field values",
+		Use:   "update <glob>... set <field|assignment>... [where <expression>]",
+		Short: "Cast or set field values",
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			filePaths, fieldArgs := splitArgs(args)
-			if len(filePaths) == 0 {
+			globArgs, rest, ok := splitOn(args, "set")
+			if !ok {
+				return fmt.Errorf("missing 'set' keyword")
+			}
+			assignArgs, whereArgs, _ := splitOn(rest, "where")
+
+			if len(globArgs) == 0 {
 				return fmt.Errorf("no files specified")
 			}
-			if len(fieldArgs) == 0 {
-				return fmt.Errorf("no field=value assignments specified")
+			if len(assignArgs) == 0 {
+				return fmt.Errorf("no fields or assignments specified")
 			}
-			files, err := loadFiles(filePaths)
+			paths, err := expandGlobs(globArgs)
 			if err != nil {
 				return err
 			}
-			var cmps []Comparison
-			for _, arg := range fieldArgs {
-				cmp, err := ParseComparison(arg)
+			files, err := loadFiles(paths, whereArgs)
+			if err != nil {
+				return err
+			}
+
+			var assignments []Assignment
+			for _, arg := range assignArgs {
+				a, err := ParseAssignment(arg)
 				if err != nil {
 					return err
 				}
-				if cmp.Value == nil {
-					return fmt.Errorf("set requires field=value, got %q", arg)
-				}
-				cmps = append(cmps, cmp)
+				assignments = append(assignments, a)
 			}
+
 			for _, f := range files {
-				for _, cmp := range cmps {
-					f.Set(cmp.Field.Name, *cmp.Value)
+				for _, a := range assignments {
+					if err := f.Apply(a); err != nil {
+						fmt.Fprintf(os.Stderr, "%s: %v\n", f.Path, err)
+					}
 				}
 				if err := f.Write(); err != nil {
 					writeErr(f, err)
@@ -196,112 +215,54 @@ func setCmd() *cobra.Command {
 	}
 }
 
-func rmCmd() *cobra.Command {
+func alterCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "rm <glob|files...> <field>",
-		Short: "Remove a field (only if type matches when type is specified)",
+		Use:   "alter <glob>... drop <field>... [where <expression>]",
+		Short: "Remove fields",
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			filePaths, fieldArgs := splitArgs(args)
-			if len(filePaths) == 0 {
+			globArgs, rest, ok := splitOn(args, "drop")
+			if !ok {
+				return fmt.Errorf("missing 'drop' keyword")
+			}
+			fieldArgs, whereArgs, _ := splitOn(rest, "where")
+
+			if len(globArgs) == 0 {
 				return fmt.Errorf("no files specified")
 			}
-			if len(fieldArgs) != 1 {
-				return fmt.Errorf("expected exactly one field, got %d", len(fieldArgs))
+			if len(fieldArgs) == 0 {
+				return fmt.Errorf("no fields specified")
 			}
-			files, err := loadFiles(filePaths)
+			paths, err := expandGlobs(globArgs)
 			if err != nil {
 				return err
 			}
-			field, err := ParseField(fieldArgs[0])
+			files, err := loadFiles(paths, whereArgs)
 			if err != nil {
 				return err
 			}
+
+			var fields []Field
+			for _, arg := range fieldArgs {
+				field, err := ParseField(arg)
+				if err != nil {
+					return err
+				}
+				fields = append(fields, field)
+			}
+
 			for _, f := range files {
-				if f.Remove(field) {
+				changed := false
+				for _, field := range fields {
+					if f.Remove(field) {
+						changed = true
+					}
+				}
+				if changed {
 					if err := f.Write(); err != nil {
 						writeErr(f, err)
 					}
 				}
-			}
-			return nil
-		},
-	}
-}
-
-func castCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "cast <glob|files...> <field> <type>",
-		Short: "Cast a field to a different type",
-		Args:  cobra.ArbitraryArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			filePaths, fieldArgs := splitArgs(args)
-			if len(filePaths) == 0 {
-				return fmt.Errorf("no files specified")
-			}
-			if len(fieldArgs) != 2 {
-				return fmt.Errorf("expected <field> <type>, got %d args", len(fieldArgs))
-			}
-			files, err := loadFiles(filePaths)
-			if err != nil {
-				return err
-			}
-			field, err := ParseField(fieldArgs[0])
-			if err != nil {
-				return err
-			}
-			targetType, err := parseTypeName(fieldArgs[1])
-			if err != nil {
-				return err
-			}
-			for _, f := range files {
-				if err := f.Cast(field, targetType); err != nil {
-					fmt.Fprintf(os.Stderr, "%s: %v\n", f.Path, err)
-					continue
-				}
-				if err := f.Write(); err != nil {
-					writeErr(f, err)
-				}
-			}
-			return nil
-		},
-	}
-}
-
-func checkCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "check <glob|files...> <field>",
-		Short: "Check that a field exists and matches its type",
-		Args:  cobra.ArbitraryArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			filePaths, fieldArgs := splitArgs(args)
-			if len(filePaths) == 0 {
-				return fmt.Errorf("no files specified")
-			}
-			if len(fieldArgs) != 1 {
-				return fmt.Errorf("expected exactly one field, got %d", len(fieldArgs))
-			}
-			files, err := loadFiles(filePaths)
-			if err != nil {
-				return err
-			}
-			field, err := ParseField(fieldArgs[0])
-			if err != nil {
-				return err
-			}
-			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			anyFail := false
-			for _, f := range files {
-				status := "ok"
-				if !f.CheckType(field) {
-					status = "FAIL"
-					anyFail = true
-				}
-				fmt.Fprintf(w, "%s\t%s\n", f.Path, status)
-			}
-			w.Flush()
-			if anyFail {
-				return fmt.Errorf("some files failed the check")
 			}
 			return nil
 		},
