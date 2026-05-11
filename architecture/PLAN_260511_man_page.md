@@ -41,8 +41,8 @@ Edit `cli/main.go`:
     _install-man: _gen-man
         ./fm install-man
     ```
-11. Run `just _gen-man` to produce `docs/fm.1`.
-12. Commit: `cli/main.go`, `go.mod`, `go.sum`, `vendor/`, `docs/fm.1`, `justfile`.
+11. Run `just _gen-man` to produce `docs/man/fm.1`.
+12. Commit: `cli/main.go`, `go.mod`, `go.sum`, `vendor/`, `docs/man/fm.1`, `justfile`.
 
 ---
 
@@ -52,7 +52,7 @@ Edit `cli/main.go`:
     `{{SHA256}}` placeholders. Formula body:
     - `url` pointing to the GitHub release tarball.
     - `depends_on` Go.
-    - `install` block: `go build`, `man1.install "docs/fm.1"`,
+    - `install` block: `go build`, `man1.install "docs/man/fm.1"`,
       completions for bash/zsh/fish via `fm completion <shell>`.
     - `test` block: `fm --version`.
 14. Create `scripts/make-formula.sh`:

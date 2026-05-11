@@ -11,7 +11,7 @@ Use `github.com/spf13/cobra/doc` to auto-generate the man page from the command
 definitions. Generation is exposed as a hidden subcommand `fm gen-man [dir]` so no
 separate build tool or repo clone is needed — users who install via `go install` can
 run `fm gen-man` then `fm install-man` to also get the man page. The generated
-`docs/fm.1` is committed to the repo as a convenience.
+`docs/man/fm.1` is committed to the repo as a convenience.
 
 ### Changes
 
@@ -24,11 +24,11 @@ run `fm gen-man` then `fm install-man` to also get the man page. The generated
 **`go.mod` / `vendor/`**
 - Add `github.com/spf13/cobra/doc` (sub-package of already-vendored cobra module).
 
-**`docs/fm.1`**
+**`docs/man/fm.1`**
 - Generated man page committed to the repo.
 
 **`justfile`** — maintainer recipes (private, prefixed `_`):
-- `_gen-man`: builds binary and runs `./fm gen-man docs/` to regenerate `docs/fm.1`.
+- `_gen-man`: builds binary and runs `./fm gen-man docs/man/` to regenerate `docs/man/fm.1`.
 - `_install-man`: calls `_gen-man` then runs `fm install-man`.
 
 ---
@@ -49,7 +49,7 @@ page, and shell completions.
 
 **`scripts/fm.rb.tmpl`** (new)
 - Homebrew formula template with `{{VERSION}}` and `{{SHA256}}` placeholders.
-- Installs binary via `go build`, installs `docs/fm.1` as a man page, generates and
+- Installs binary via `go build`, installs `docs/man/fm.1` as a man page, generates and
   installs shell completions via `fm completion <shell>`.
 
 **`justfile`** — maintainer recipe:

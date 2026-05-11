@@ -15,12 +15,13 @@ vendor:
 dev *args:
     go run ./cli {{args}}
 
-install:
+install: _install-man
     go build -o $(go env GOPATH)/bin/fm ./cli
 
 [private]
 _gen-man: build
-    ./fm gen-man docs/
+    mkdir -p docs/man
+    ./fm gen-man docs/man/
 
 [private]
 _install-man: _gen-man
