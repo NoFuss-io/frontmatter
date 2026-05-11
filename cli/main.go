@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 
@@ -20,6 +22,20 @@ func splitOn(args []string, keyword string) (before, after []string, found bool)
 		}
 	}
 	return args, nil, false
+}
+
+// splitCommas expands comma-separated tokens, handling "a,b", "a, b", and "a , b".
+func splitCommas(args []string) []string {
+	var out []string
+	for _, arg := range args {
+		for _, part := range strings.Split(arg, ",") {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				out = append(out, part)
+			}
+		}
+	}
+	return out
 }
 
 func expandGlobs(patterns []string) ([]string, error) {
@@ -82,11 +98,14 @@ func main() {
 
 func selectCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "select <field>... from <glob>... [where <expression>]",
+		Use:   "select <field>[, <field>]... from <glob>... [where <expression>] [sort by <field>[, <field>]... [desc]] [limit <n>]",
 		Short: "Output table of filename and field values",
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fieldArgs, rest, _ := splitOn(args, "from")
+			fieldArgs = splitCommas(fieldArgs)
+			rest, limitRest, hasLimit := splitOn(rest, "limit")
+			rest, sortRest, hasSortBy := splitOn(rest, "sort")
 			globArgs, whereArgs, _ := splitOn(rest, "where")
 
 			if len(globArgs) == 0 {
@@ -101,7 +120,18 @@ func selectCmd() *cobra.Command {
 				return err
 			}
 
+			sortFields, desc, err := parseSortClause(hasSortBy, sortRest)
+			if err != nil {
+				return err
+			}
+			limit, err := parseLimitClause(hasLimit, limitRest)
+			if err != nil {
+				return err
+			}
+
 			if len(fieldArgs) == 0 {
+				sortFiles(files, sortFields, desc)
+				files = applyLimit(files, limit)
 				for _, f := range files {
 					fmt.Println(f.Path)
 				}
@@ -139,6 +169,9 @@ func selectCmd() *cobra.Command {
 				}
 			}
 
+			sortFiles(filtered, sortFields, desc)
+			filtered = applyLimit(filtered, limit)
+
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 			headers := []string{"filename"}
 			seps := []string{strings.Repeat("-", 8)}
@@ -166,9 +199,76 @@ func selectCmd() *cobra.Command {
 	}
 }
 
+func parseSortClause(present bool, tokens []string) ([]Field, bool, error) {
+	if !present {
+		return nil, false, nil
+	}
+	if len(tokens) == 0 || tokens[0] != "by" {
+		return nil, false, fmt.Errorf("expected 'by' after 'sort'")
+	}
+	args := splitCommas(tokens[1:])
+	desc := len(args) > 0 && args[len(args)-1] == "desc"
+	if desc {
+		args = args[:len(args)-1]
+	}
+	if len(args) == 0 {
+		return nil, false, fmt.Errorf("no fields specified after 'sort by'")
+	}
+	var fields []Field
+	for _, arg := range args {
+		f, err := ParseField(arg)
+		if err != nil {
+			return nil, false, err
+		}
+		fields = append(fields, f)
+	}
+	return fields, desc, nil
+}
+
+func parseLimitClause(present bool, tokens []string) (int, error) {
+	if !present {
+		return 0, nil
+	}
+	if len(tokens) != 1 {
+		return 0, fmt.Errorf("limit requires exactly one integer argument")
+	}
+	n, err := strconv.Atoi(tokens[0])
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("limit must be a non-negative integer, got %q", tokens[0])
+	}
+	return n, nil
+}
+
+func applyLimit(files []*File, n int) []*File {
+	if n == 0 || n >= len(files) {
+		return files
+	}
+	return files[:n]
+}
+
+func sortFiles(files []*File, fields []Field, desc bool) {
+	if len(fields) == 0 {
+		return
+	}
+	sort.SliceStable(files, func(i, j int) bool {
+		for _, sf := range fields {
+			vi := fmtValue(files[i].FM[sf.Name])
+			vj := fmtValue(files[j].FM[sf.Name])
+			if vi == vj {
+				continue
+			}
+			if desc {
+				return vi > vj
+			}
+			return vi < vj
+		}
+		return false
+	})
+}
+
 func updateCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "update <glob>... set <field|assignment>... [where <expression>]",
+		Use:   "update <glob>... set <assignment>[, <assignment>]... [where <expression>]",
 		Short: "Cast or set field values",
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -177,6 +277,7 @@ func updateCmd() *cobra.Command {
 				return fmt.Errorf("missing 'set' keyword")
 			}
 			assignArgs, whereArgs, _ := splitOn(rest, "where")
+			assignArgs = splitCommas(assignArgs)
 
 			if len(globArgs) == 0 {
 				return fmt.Errorf("no files specified")
@@ -219,7 +320,7 @@ func updateCmd() *cobra.Command {
 
 func alterCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "alter <glob>... drop <field>... [where <expression>]",
+		Use:   "alter <glob>... drop <field>[, <field>]... [where <expression>]",
 		Short: "Remove fields",
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -228,6 +329,7 @@ func alterCmd() *cobra.Command {
 				return fmt.Errorf("missing 'drop' keyword")
 			}
 			fieldArgs, whereArgs, _ := splitOn(rest, "where")
+			fieldArgs = splitCommas(fieldArgs)
 
 			if len(globArgs) == 0 {
 				return fmt.Errorf("no files specified")

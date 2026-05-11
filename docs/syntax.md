@@ -3,9 +3,9 @@
 ## Commands
 
 ```
-fm select <field>... from <glob>... [where <expression>]
-fm update <glob>... set <field|assignment>... [where <expression>]
-fm alter  <glob>... drop <field>...           [where <expression>]
+fm select <field>[, <field>]...  from <glob>...  [where <expression>]  [sort by <field>[, <field>]... [desc]]  [limit <n>]
+fm update <glob>...  set <assignment>[, <assignment>]...              [where <expression>]
+fm alter  <glob>...  drop <field>[, <field>]...                       [where <expression>]
 ```
 
 ### `select`
@@ -14,19 +14,21 @@ Prints a table with one row per matching file and one column per field.
 
 ```sh
 fm select title, date from '*.md' where published=true
+fm select title, date from '*.md' sort by date desc
 ```
 
 When no fields are given, prints only matching filenames.
 
+`sort by` accepts one or more fields and an optional `desc` suffix for descending order. Sorting is lexicographic; files missing the sort field sort last. Dates stored as `YYYY-MM-DD` sort correctly as strings.
+
+`limit <n>` truncates the output to at most `n` rows, applied after sorting.
+
 ### `update`
 
-Casts or sets fields on matching files.
-
-- `<field>` (no `=`) — cast the field to the given type; skipped if the field is absent or already that type
-- `<assignment>` — set, add to, or remove from the field value
+Applies a list of assignments to each matching file. See the [Assignments](#assignments-update-set) table for all forms. A bare `<name>:<type>` (no operator) casts the field to that type; skipped if the field is absent or the type is `any`.
 
 ```sh
-fm update '*.md' set date:date rating:int
+fm update '*.md' set date:date, rating:int
 fm update '*.md' set tags+=cooking where category=recipe
 ```
 
