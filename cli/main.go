@@ -10,6 +10,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const VERSION = "v0.1" // TODO: Repalce with semver
+
 // splitOn splits args on the first occurrence of keyword, returning the two halves.
 func splitOn(args []string, keyword string) (before, after []string, found bool) {
 	for i, a := range args {
@@ -68,7 +70,7 @@ func writeErr(f *File, err error) {
 func main() {
 	root := &cobra.Command{
 		Use:          "fm",
-		Short:        "Markdown frontmatter batch editor",
+		Short:        fmt.Sprintf("Markdown frontmatter batch editor (%s)", VERSION),
 		SilenceUsage: true,
 	}
 	root.AddCommand(selectCmd(), updateCmd(), alterCmd())
