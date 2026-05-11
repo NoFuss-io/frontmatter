@@ -1,11 +1,11 @@
 ---
-category: Side Dish
 author: "[[Marcus Fager]]"
-size: 12 servings?
-time: 1h
+category: Side Dish
 description: Great with burgers
+size: 12 servings?
 tags:
   - nyum
+time: 1h
 ---
 
 - 0.5 kg diced bacon (dice finely if you do it yourself, otherwise it takes forever and won't be as good)

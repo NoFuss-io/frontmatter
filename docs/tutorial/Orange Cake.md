@@ -1,8 +1,8 @@
 ---
-category: Snack
 author: Mary Berry
-url: http://www.bbc.co.uk/food/recipes/spiced_whole_orange_cake_42761
+category: Snack
 size: Makes a lot of cake. Try half.
+url: http://www.bbc.co.uk/food/recipes/spiced_whole_orange_cake_42761
 veggie: true
 ---
 

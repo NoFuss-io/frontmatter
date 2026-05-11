@@ -1,9 +1,9 @@
 ---
+author: Meny i P1
 category: Dinner
 description: This recipe is inspired by what is likely the original, published by Sara Ask and Lisa Bjärbo in the cookbook Mera vego (2014). It started as a stopgap solution — the red lentils were out, but there was a bag of black beluga lentils. A very successful improvisation.
-author: Meny i P1
-url: https://sverigesradio.se/artikel/belugabolognese
 size: 4 servings
+url: https://sverigesradio.se/artikel/belugabolognese
 vegan: true
 ---
 

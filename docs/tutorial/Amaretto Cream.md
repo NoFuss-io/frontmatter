@@ -1,11 +1,11 @@
 ---
-category: Drink
 author: Stjärtilleriet
-vegetarian: true
-vegan: true
-time: 15 min
+category: Drink
 tags:
   - nyum
+time: 15 min
+vegan: true
+vegetarian: true
 ---
 
 - 1 l cream

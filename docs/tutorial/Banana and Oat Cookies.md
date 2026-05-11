@@ -1,6 +1,6 @@
 ---
-category: Snack
 author: Diestist-Annika
+category: Snack
 url: https://dietistannica.com/2015/02/12/banan-och-havrecookies-mellanmalskakor-grundrecept/
 vegan: true
 ---

@@ -1,11 +1,11 @@
 ---
-category: Side Dish
 author: Christofer Bäcklin
-vegetarian: true
-vegan: false
-time: 10 min
+category: Side Dish
 tags:
   - nyum
+time: 10 min
+vegan: false
+vegetarian: true
 ---
 
 - 0.75 l whole milk
