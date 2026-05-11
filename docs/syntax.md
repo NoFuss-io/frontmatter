@@ -59,6 +59,8 @@ Same limitations as in `update` apply to `alter`.
 <name>:<type>
 ```
 
+Field lists (in `select`, `update set`, `alter drop`, and `sort by`) accept a trailing comma after the last field. This is useful when a field name collides with a keyword — e.g. `select from, from *` selects the field named `from` from all files.
+
 ## Types
 
 | Type          | Notes                                        |

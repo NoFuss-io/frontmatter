@@ -25,6 +25,7 @@ func splitOn(args []string, keyword string) (before, after []string, found bool)
 }
 
 // splitCommas expands comma-separated tokens, handling "a,b", "a, b", and "a , b".
+// Empty parts are discarded, so trailing commas are silently accepted.
 func splitCommas(args []string) []string {
 	var out []string
 	for _, arg := range args {
