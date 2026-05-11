@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/cobra/doc"
 )
 
 const VERSION = "v0.1" // TODO: Repalce with semver
@@ -86,11 +88,21 @@ func writeErr(f *File, err error) {
 
 func main() {
 	root := &cobra.Command{
-		Use:          "fm",
-		Short:        fmt.Sprintf("Markdown frontmatter batch editor (%s)", VERSION),
+		Use:   "fm",
+		Short: fmt.Sprintf("Markdown frontmatter batch editor (%s)", VERSION),
+		Long: `fm is a command-line tool for batch-querying and editing YAML frontmatter in
+Markdown files. It is designed for knowledge management workflows such as Obsidian
+vaults, where structured metadata lives in a --- YAML block at the top of each .md file.
+
+Commands follow a SQL-inspired syntax:
+
+  fm select <fields> from <files> [where <expr>] [sort by <field> [desc]] [limit <n>]
+  fm update <files> set <assignments> [where <expr>]
+  fm alter  <files> drop <fields> [where <expr>]`,
 		SilenceUsage: true,
 	}
 	root.AddCommand(selectCmd(), updateCmd(), alterCmd())
+	root.AddCommand(genManCmd(root), installManCmd(root))
 
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
@@ -101,6 +113,17 @@ func selectCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "select <field>[, <field>]... from <glob>... [where <expression>] [sort by <field>[, <field>]... [desc]] [limit <n>]",
 		Short: "Output table of filename and field values",
+		Long: `Prints a table with one row per matching file and one column per requested field.
+With no field list, only filenames are printed.
+
+Fields may carry a type annotation (field:type) to restrict output to files where that
+field holds a value of the given type.
+
+sort by accepts one or more comma-separated fields followed by an optional desc suffix
+for descending order. Sorting is lexicographic; files missing the sort field sort last.
+Dates stored as YYYY-MM-DD sort correctly as strings.
+
+limit n truncates the output to at most n rows, applied after sorting.`,
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fieldArgs, rest, _ := splitOn(args, "from")
@@ -271,6 +294,15 @@ func updateCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "update <glob>... set <assignment>[, <assignment>]... [where <expression>]",
 		Short: "Cast or set field values",
+		Long: `Applies one or more assignments to each matching file and writes the result back to
+disk. Field order is always sorted alphabetically after a write.
+
+Assignment forms:
+
+  field:type      Cast field to type; creates it as null if absent. Skipped when type is any.
+  field=value     Set field to value. Use null to clear the field.
+  field+=value    Numbers: add. Strings: append. Lists: append if not already present.
+  field-=value    Numbers: subtract. Lists: remove if present.`,
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			globArgs, rest, ok := splitOn(args, "set")
@@ -319,10 +351,100 @@ func updateCmd() *cobra.Command {
 	}
 }
 
+func genManCmd(root *cobra.Command) *cobra.Command {
+	return &cobra.Command{
+		Use:    "gen-man [dir]",
+		Short:  "Generate man page files",
+		Hidden: true,
+		Args:   cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dir := "."
+			if len(args) == 1 {
+				dir = args[0]
+			}
+			header := &doc.GenManHeader{
+				Title:   "FM",
+				Section: "1",
+				Source:  "fm " + VERSION,
+			}
+			return doc.GenManTree(root, header, dir)
+		},
+	}
+}
+
+func installManCmd(root *cobra.Command) *cobra.Command {
+	return &cobra.Command{
+		Use:    "install-man",
+		Short:  "Install man page to system man path",
+		Hidden: true,
+		Args:   cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			tmp, err := os.MkdirTemp("", "fm-man-*")
+			if err != nil {
+				return err
+			}
+			defer os.RemoveAll(tmp)
+
+			header := &doc.GenManHeader{
+				Title:   "FM",
+				Section: "1",
+				Source:  "fm " + VERSION,
+			}
+			if err := doc.GenManTree(root, header, tmp); err != nil {
+				return err
+			}
+
+			manDir := findMan1Dir()
+			if err := os.MkdirAll(manDir, 0755); err != nil {
+				return fmt.Errorf("cannot create %s: %w", manDir, err)
+			}
+
+			data, err := os.ReadFile(filepath.Join(tmp, "fm.1"))
+			if err != nil {
+				return err
+			}
+			dst := filepath.Join(manDir, "fm.1")
+			if err := os.WriteFile(dst, data, 0644); err != nil {
+				return fmt.Errorf("cannot install to %s: %w", dst, err)
+			}
+			fmt.Println(dst)
+			return nil
+		},
+	}
+}
+
+func findMan1Dir() string {
+	if out, err := exec.Command("man", "--manpath").Output(); err == nil {
+		for _, d := range strings.Split(strings.TrimSpace(string(out)), ":") {
+			man1 := filepath.Join(d, "man1")
+			if isWritableDir(man1) {
+				return man1
+			}
+		}
+	}
+	return filepath.Join(os.Getenv("HOME"), ".local/share/man/man1")
+}
+
+func isWritableDir(dir string) bool {
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return false
+	}
+	f, err := os.CreateTemp(dir, ".write-test-*")
+	if err != nil {
+		return false
+	}
+	f.Close()
+	os.Remove(f.Name())
+	return true
+}
+
 func alterCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "alter <glob>... drop <field>[, <field>]... [where <expression>]",
 		Short: "Remove fields",
+		Long: `Removes one or more fields from each matching file's frontmatter and writes the
+result back to disk. When a field carries a type annotation (field:type), it is only
+removed if the stored value matches that type.`,
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			globArgs, rest, ok := splitOn(args, "drop")

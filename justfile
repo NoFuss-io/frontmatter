@@ -18,6 +18,14 @@ dev *args:
 install:
     go build -o $(go env GOPATH)/bin/fm ./cli
 
+[private]
+_gen-man: build
+    ./fm gen-man docs/
+
+[private]
+_install-man: _gen-man
+    ./fm install-man
+
 install-skill: install
     mkdir -p ~/.claude/skills/fm
     cp SKILL.md ~/.claude/skills/fm/SKILL.md
