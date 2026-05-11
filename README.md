@@ -59,19 +59,6 @@ go install github.com/backlin/frontmatter
 
 # For next agentic session
 
-Classify updates in ambiguous and unambiguous.
-
-
-## Harmonize syntax with SQL
-
-- Introduce comma-separation in SELECT
-- && -> AND
-- || -> OR
-- SORT BY
-- LIMIT
-- Find other diffs to SQL
-- case-sensitivity
-
-
-## Write missing documentation
-References from README
+Verbose output mode.
+Assignment from other field.
+Unit tests.

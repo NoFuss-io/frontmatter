@@ -16,6 +16,8 @@ import (
 
 const VERSION = "v0.1" // TODO: Repalce with semver
 
+var verbose int
+
 // splitOn splits args on the first occurrence of keyword, returning the two halves.
 func splitOn(args []string, keyword string) (before, after []string, found bool) {
 	for i, a := range args {
@@ -101,6 +103,7 @@ Commands follow a SQL-inspired syntax:
   fm alter  <files> drop <fields> [where <expr>]`,
 		SilenceUsage: true,
 	}
+	root.PersistentFlags().CountVarP(&verbose, "verbose", "v", "Verbosity: -v prints modified count, -vv prints each processed file and total")
 	root.AddCommand(selectCmd(), updateCmd(), alterCmd())
 	root.AddCommand(genManCmd(root), installManCmd(root))
 
@@ -336,7 +339,11 @@ Assignment forms:
 				assignments = append(assignments, a)
 			}
 
+			modified := 0
 			for _, f := range files {
+				if verbose >= 2 {
+					fmt.Fprintln(os.Stderr, f.Path)
+				}
 				for _, a := range assignments {
 					if err := f.Apply(a); err != nil {
 						fmt.Fprintf(os.Stderr, "%s: %v\n", f.Path, err)
@@ -344,7 +351,14 @@ Assignment forms:
 				}
 				if err := f.Write(); err != nil {
 					writeErr(f, err)
+				} else {
+					modified++
 				}
+			}
+			if verbose >= 2 {
+				fmt.Fprintf(os.Stderr, "%d files\n", len(files))
+			} else if verbose >= 1 {
+				fmt.Fprintf(os.Stderr, "%d files modified\n", modified)
 			}
 			return nil
 		},
@@ -478,7 +492,11 @@ removed if the stored value matches that type.`,
 				fields = append(fields, field)
 			}
 
+			modified := 0
 			for _, f := range files {
+				if verbose >= 2 {
+					fmt.Fprintln(os.Stderr, f.Path)
+				}
 				changed := false
 				for _, field := range fields {
 					if f.Remove(field) {
@@ -488,8 +506,15 @@ removed if the stored value matches that type.`,
 				if changed {
 					if err := f.Write(); err != nil {
 						writeErr(f, err)
+					} else {
+						modified++
 					}
 				}
+			}
+			if verbose >= 2 {
+				fmt.Fprintf(os.Stderr, "%d files\n", len(files))
+			} else if verbose >= 1 {
+				fmt.Fprintf(os.Stderr, "%d files modified\n", modified)
 			}
 			return nil
 		},
