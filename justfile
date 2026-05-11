@@ -18,6 +18,10 @@ dev *args:
 install:
     go build -o $(go env GOPATH)/bin/fm ./cli
 
+install-skill: install
+    mkdir -p ~/.claude/skills/fm
+    cp SKILL.md ~/.claude/skills/fm/SKILL.md
+
 shell-completion:
     @echo 'Bash — add to ~/.bashrc:'
     @echo '  eval "$(fm completion bash)"'
