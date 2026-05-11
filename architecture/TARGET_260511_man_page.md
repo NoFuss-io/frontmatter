@@ -50,7 +50,7 @@ page, and shell completions.
 **`scripts/fm.rb.tmpl`** (new)
 - Homebrew formula template with `{{VERSION}}` and `{{SHA256}}` placeholders.
 - Installs binary via `go build`, installs `docs/man/fm.1` as a man page, generates and
-  installs shell completions via `fm completion <shell>`.
+  installs shell completions via `generate_completions_from_executable(bin/"fm", "completion")`.
 
 **`justfile`** — maintainer recipe:
 - `_formula tag`: runs `scripts/make-formula.sh {{tag}}`.
