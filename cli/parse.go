@@ -91,7 +91,7 @@ func ParseField(s string) (Field, error) {
 }
 
 func ParseComparison(s string) (Comparison, error) {
-	neg := strings.HasPrefix(s, "!")
+	neg := strings.HasPrefix(s, "-")
 	if neg {
 		s = s[1:]
 	}
@@ -146,9 +146,9 @@ func ParseExpression(s string) (Expression, error) {
 		s = s[1 : len(s)-1]
 	}
 	var expr Expression
-	for _, orPart := range strings.Split(s, "||") {
+	for _, orPart := range strings.Split(s, " or ") {
 		var group []Comparison
-		for _, andPart := range strings.Split(orPart, "&&") {
+		for _, andPart := range strings.Split(orPart, " and ") {
 			cmp, err := ParseComparison(strings.TrimSpace(andPart))
 			if err != nil {
 				return nil, fmt.Errorf("in expression: %w", err)
