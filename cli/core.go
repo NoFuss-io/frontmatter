@@ -246,7 +246,11 @@ func (f *File) Apply(a Assignment) error {
 			return nil
 		}
 		if !ok {
-			f.FM[a.Field.Name] = nil
+			if a.Field.Type == TypeList {
+				f.FM[a.Field.Name] = []interface{}{}
+			} else {
+				f.FM[a.Field.Name] = nil
+			}
 			f.hasFM = true
 			return nil
 		}
@@ -392,7 +396,9 @@ func castValue(v interface{}, f Field) (interface{}, error) {
 		return "[[" + s + "]]", nil
 	case TypeList:
 		var arr []interface{}
-		if existing, ok := v.([]interface{}); ok {
+		if v == nil {
+			return []interface{}{}, nil
+		} else if existing, ok := v.([]interface{}); ok {
 			arr = make([]interface{}, len(existing))
 			copy(arr, existing)
 		} else {
