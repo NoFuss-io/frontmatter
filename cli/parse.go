@@ -2,8 +2,74 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
+
+// splitOn splits args on the first occurrence of keyword, returning the two halves.
+func splitOn(args []string, keyword string) (before, after []string, found bool) {
+	for i, a := range args {
+		if a == keyword {
+			return args[:i], args[i+1:], true
+		}
+	}
+	return args, nil, false
+}
+
+// splitCommas expands comma-separated tokens, handling "a,b", "a, b", and "a , b".
+// Empty parts are discarded, so trailing commas are silently accepted.
+func splitCommas(args []string) []string {
+	var out []string
+	for _, arg := range args {
+		for _, part := range strings.Split(arg, ",") {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				out = append(out, part)
+			}
+		}
+	}
+	return out
+}
+
+func parseSortClause(present bool, tokens []string) ([]Field, bool, error) {
+	if !present {
+		return nil, false, nil
+	}
+	if len(tokens) == 0 || tokens[0] != "by" {
+		return nil, false, fmt.Errorf("expected 'by' after 'sort'")
+	}
+	args := splitCommas(tokens[1:])
+	desc := len(args) > 0 && args[len(args)-1] == "desc"
+	if desc {
+		args = args[:len(args)-1]
+	}
+	if len(args) == 0 {
+		return nil, false, fmt.Errorf("no fields specified after 'sort by'")
+	}
+	var fields []Field
+	for _, arg := range args {
+		f, err := ParseField(arg)
+		if err != nil {
+			return nil, false, err
+		}
+		fields = append(fields, f)
+	}
+	return fields, desc, nil
+}
+
+func parseLimitClause(present bool, tokens []string) (int, error) {
+	if !present {
+		return 0, nil
+	}
+	if len(tokens) != 1 {
+		return 0, fmt.Errorf("limit requires exactly one integer argument")
+	}
+	n, err := strconv.Atoi(tokens[0])
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("limit must be a non-negative integer, got %q", tokens[0])
+	}
+	return n, nil
+}
 
 type FieldType int
 

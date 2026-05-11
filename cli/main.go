@@ -3,15 +3,12 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/cobra/doc"
 )
 
 type Semver struct{ Major, Minor, Patch int }
@@ -23,31 +20,6 @@ func (v Semver) String() string {
 var VERSION = Semver{0, 1, 0}
 
 var verbose int
-
-// splitOn splits args on the first occurrence of keyword, returning the two halves.
-func splitOn(args []string, keyword string) (before, after []string, found bool) {
-	for i, a := range args {
-		if a == keyword {
-			return args[:i], args[i+1:], true
-		}
-	}
-	return args, nil, false
-}
-
-// splitCommas expands comma-separated tokens, handling "a,b", "a, b", and "a , b".
-// Empty parts are discarded, so trailing commas are silently accepted.
-func splitCommas(args []string) []string {
-	var out []string
-	for _, arg := range args {
-		for _, part := range strings.Split(arg, ",") {
-			part = strings.TrimSpace(part)
-			if part != "" {
-				out = append(out, part)
-			}
-		}
-	}
-	return out
-}
 
 func expandGlobs(patterns []string) ([]string, error) {
 	var files []string
@@ -88,10 +60,6 @@ func loadFiles(paths []string, whereArgs []string) ([]*File, error) {
 		}
 	}
 	return files, nil
-}
-
-func writeErr(f *File, err error) {
-	fmt.Fprintf(os.Stderr, "error writing %s: %v\n", f.Path, err)
 }
 
 func main() {
@@ -232,46 +200,6 @@ limit n truncates the output to at most n rows, applied after sorting.`,
 	}
 }
 
-func parseSortClause(present bool, tokens []string) ([]Field, bool, error) {
-	if !present {
-		return nil, false, nil
-	}
-	if len(tokens) == 0 || tokens[0] != "by" {
-		return nil, false, fmt.Errorf("expected 'by' after 'sort'")
-	}
-	args := splitCommas(tokens[1:])
-	desc := len(args) > 0 && args[len(args)-1] == "desc"
-	if desc {
-		args = args[:len(args)-1]
-	}
-	if len(args) == 0 {
-		return nil, false, fmt.Errorf("no fields specified after 'sort by'")
-	}
-	var fields []Field
-	for _, arg := range args {
-		f, err := ParseField(arg)
-		if err != nil {
-			return nil, false, err
-		}
-		fields = append(fields, f)
-	}
-	return fields, desc, nil
-}
-
-func parseLimitClause(present bool, tokens []string) (int, error) {
-	if !present {
-		return 0, nil
-	}
-	if len(tokens) != 1 {
-		return 0, fmt.Errorf("limit requires exactly one integer argument")
-	}
-	n, err := strconv.Atoi(tokens[0])
-	if err != nil || n < 0 {
-		return 0, fmt.Errorf("limit must be a non-negative integer, got %q", tokens[0])
-	}
-	return n, nil
-}
-
 func applyLimit(files []*File, n int) []*File {
 	if n == 0 || n >= len(files) {
 		return files
@@ -299,230 +227,3 @@ func sortFiles(files []*File, fields []Field, desc bool) {
 	})
 }
 
-func updateCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "update <glob>... set <assignment>[, <assignment>]... [where <expression>]",
-		Short: "Cast or set field values",
-		Long: `Applies one or more assignments to each matching file and writes the result back to
-disk. Field order is always sorted alphabetically after a write.
-
-Assignment forms:
-
-  field:type      Cast field to type; creates it as null if absent. Skipped when type is any.
-  field=value     Set field to value. Use null to clear the field.
-  field+=value    Numbers: add. Strings: append. Lists: append if not already present.
-  field-=value    Numbers: subtract. Lists: remove if present.`,
-		Args:  cobra.ArbitraryArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			globArgs, rest, ok := splitOn(args, "set")
-			if !ok {
-				return fmt.Errorf("missing 'set' keyword")
-			}
-			assignArgs, whereArgs, _ := splitOn(rest, "where")
-			assignArgs = splitCommas(assignArgs)
-
-			if len(globArgs) == 0 {
-				return fmt.Errorf("no files specified")
-			}
-			if len(assignArgs) == 0 {
-				return fmt.Errorf("no fields or assignments specified")
-			}
-			paths, err := expandGlobs(globArgs)
-			if err != nil {
-				return err
-			}
-			files, err := loadFiles(paths, whereArgs)
-			if err != nil {
-				return err
-			}
-
-			var assignments []Assignment
-			for _, arg := range assignArgs {
-				a, err := ParseAssignment(arg)
-				if err != nil {
-					return err
-				}
-				assignments = append(assignments, a)
-			}
-
-			modified := 0
-			for _, f := range files {
-				if verbose >= 2 {
-					fmt.Fprintln(os.Stderr, f.Path)
-				}
-				for _, a := range assignments {
-					if err := f.Apply(a); err != nil {
-						fmt.Fprintf(os.Stderr, "%s: %v\n", f.Path, err)
-					}
-				}
-				if err := f.Write(); err != nil {
-					writeErr(f, err)
-				} else {
-					modified++
-				}
-			}
-			if verbose >= 2 {
-				fmt.Fprintf(os.Stderr, "%d files\n", len(files))
-			} else if verbose >= 1 {
-				fmt.Fprintf(os.Stderr, "%d files modified\n", modified)
-			}
-			return nil
-		},
-	}
-}
-
-func genManCmd(root *cobra.Command) *cobra.Command {
-	return &cobra.Command{
-		Use:    "gen-man [dir]",
-		Short:  "Generate man page files",
-		Hidden: true,
-		Args:   cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			dir := "."
-			if len(args) == 1 {
-				dir = args[0]
-			}
-			header := &doc.GenManHeader{
-				Title:   "FM",
-				Section: "1",
-				Source:  "fm " + VERSION.String(),
-			}
-			return doc.GenManTree(root, header, dir)
-		},
-	}
-}
-
-func installManCmd(root *cobra.Command) *cobra.Command {
-	return &cobra.Command{
-		Use:    "install-man",
-		Short:  "Install man page to system man path",
-		Hidden: true,
-		Args:   cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			tmp, err := os.MkdirTemp("", "fm-man-*")
-			if err != nil {
-				return err
-			}
-			defer os.RemoveAll(tmp)
-
-			header := &doc.GenManHeader{
-				Title:   "FM",
-				Section: "1",
-				Source:  "fm " + VERSION.String(),
-			}
-			if err := doc.GenManTree(root, header, tmp); err != nil {
-				return err
-			}
-
-			manDir := findMan1Dir()
-			if err := os.MkdirAll(manDir, 0755); err != nil {
-				return fmt.Errorf("cannot create %s: %w", manDir, err)
-			}
-
-			data, err := os.ReadFile(filepath.Join(tmp, "fm.1"))
-			if err != nil {
-				return err
-			}
-			dst := filepath.Join(manDir, "fm.1")
-			if err := os.WriteFile(dst, data, 0644); err != nil {
-				return fmt.Errorf("cannot install to %s: %w", dst, err)
-			}
-			fmt.Println(dst)
-			return nil
-		},
-	}
-}
-
-func findMan1Dir() string {
-	if out, err := exec.Command("man", "--manpath").Output(); err == nil {
-		for _, d := range strings.Split(strings.TrimSpace(string(out)), ":") {
-			man1 := filepath.Join(d, "man1")
-			if isWritableDir(man1) {
-				return man1
-			}
-		}
-	}
-	return filepath.Join(os.Getenv("HOME"), ".local/share/man/man1")
-}
-
-func isWritableDir(dir string) bool {
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return false
-	}
-	f, err := os.CreateTemp(dir, ".write-test-*")
-	if err != nil {
-		return false
-	}
-	f.Close()
-	os.Remove(f.Name())
-	return true
-}
-
-func alterCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "alter <glob>... drop <field>[, <field>]... [where <expression>]",
-		Short: "Remove fields",
-		Long: `Removes one or more fields from each matching file's frontmatter and writes the
-result back to disk. When a field carries a type annotation (field:type), it is only
-removed if the stored value matches that type.`,
-		Args:  cobra.ArbitraryArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			globArgs, rest, ok := splitOn(args, "drop")
-			if !ok {
-				return fmt.Errorf("missing 'drop' keyword")
-			}
-			fieldArgs, whereArgs, _ := splitOn(rest, "where")
-			fieldArgs = splitCommas(fieldArgs)
-
-			if len(globArgs) == 0 {
-				return fmt.Errorf("no files specified")
-			}
-			if len(fieldArgs) == 0 {
-				return fmt.Errorf("no fields specified")
-			}
-			paths, err := expandGlobs(globArgs)
-			if err != nil {
-				return err
-			}
-			files, err := loadFiles(paths, whereArgs)
-			if err != nil {
-				return err
-			}
-
-			var fields []Field
-			for _, arg := range fieldArgs {
-				field, err := ParseField(arg)
-				if err != nil {
-					return err
-				}
-				fields = append(fields, field)
-			}
-
-			modified := 0
-			for _, f := range files {
-				if verbose >= 2 {
-					fmt.Fprintln(os.Stderr, f.Path)
-				}
-				changed := false
-				for _, field := range fields {
-					if f.Remove(field) {
-						changed = true
-					}
-				}
-				if changed {
-					if err := f.Write(); err != nil {
-						writeErr(f, err)
-					} else {
-						modified++
-					}
-				}
-			}
-			if verbose >= 2 {
-				fmt.Fprintf(os.Stderr, "%d files\n", len(files))
-			} else if verbose >= 1 {
-				fmt.Fprintf(os.Stderr, "%d files modified\n", modified)
-			}
-			return nil
-		},
-	}
-}
