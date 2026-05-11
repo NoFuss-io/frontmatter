@@ -14,7 +14,13 @@ import (
 	"github.com/spf13/cobra/doc"
 )
 
-const VERSION = "v0.1" // TODO: Repalce with semver
+type Semver struct{ Major, Minor, Patch int }
+
+func (v Semver) String() string {
+	return fmt.Sprintf("v%d.%d.%d", v.Major, v.Minor, v.Patch)
+}
+
+var VERSION = Semver{0, 1, 0}
 
 var verbose int
 
@@ -379,7 +385,7 @@ func genManCmd(root *cobra.Command) *cobra.Command {
 			header := &doc.GenManHeader{
 				Title:   "FM",
 				Section: "1",
-				Source:  "fm " + VERSION,
+				Source:  "fm " + VERSION.String(),
 			}
 			return doc.GenManTree(root, header, dir)
 		},
@@ -402,7 +408,7 @@ func installManCmd(root *cobra.Command) *cobra.Command {
 			header := &doc.GenManHeader{
 				Title:   "FM",
 				Section: "1",
-				Source:  "fm " + VERSION,
+				Source:  "fm " + VERSION.String(),
 			}
 			if err := doc.GenManTree(root, header, tmp); err != nil {
 				return err
