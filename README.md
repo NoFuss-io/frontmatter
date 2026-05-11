@@ -15,10 +15,10 @@ In a nutshell:
 
 ```sh
 fm \
-    SELECT <properties> \
+    SELECT <fields> \
     FROM <files> \
     WHERE <conditions> \
-    SORT BY <properties> \
+    SORT BY <fields> \
     LIMIT <number>
 ```
 
@@ -27,7 +27,7 @@ fm UPDATE <files> SET <assignments> WHERE <conditions>
 ```
 
 ```sh
-fm ALTER <files> DROP <properties> WHERE <conditions>
+fm ALTER <files> DROP <fields> WHERE <conditions>
 ```
 
 ### Example

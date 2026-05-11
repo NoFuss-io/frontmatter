@@ -1,40 +1,41 @@
 ---
-category: Tillbehör
+category: Side Dish
 author: "[[Marcus Fager]]"
-size: 12 portioner?
+size: 12 servings?
 time: 1h
-description: Kanongott till hamburgare
+description: Great with burgers
 tags:
   - nyum
 ---
-- 0.5 kg tärnat bacon (tärna smått om du gör det själv, annars tar det evigheter och blir inte lika bra)
 
-> Stek bacon i olja tills krispigt, lägg åt sidan men ha lite fett kvar.
+- 0.5 kg diced bacon (dice finely if you do it yourself, otherwise it takes forever and won't be as good)
 
----
-
-- Ordentligt med skivad rödlök, ca 3 st
-- Vitlök, 5 klyftor grovt hackade
-
-> Stek löken hårt och länge. Mot slutet lägg i vitlök och stek tills den är mjuk.
+> Fry bacon in oil until crispy, set aside but keep some fat in the pan.
 
 ---
 
-- 1-2 dl socker
+- A good amount of sliced red onion, approx. 3
+- Garlic, 5 cloves roughly chopped
 
-> Lägg i sockret låt det smälta ut och karamelliseras.
+> Fry the onion hard and for a long time. Near the end add the garlic and fry until soft.
 
 ---
 
-- 0.25 dl frysta [[Hallon]] (slöseri att göra på färska)
-- 2.5 dl äpplecidervinäger
+- 1-2 dl sugar
 
-> Häll i vinägern och hallon och reducera.
+> Add the sugar, let it melt and caramelise.
+
+---
+
+- 0.25 dl frozen [[Raspberry|Raspberries]] (wasteful to use fresh)
+- 2.5 dl apple cider vinegar
+
+> Add the vinegar and raspberries and reduce.
 
 ---
 
 - Salt
-- Peppar
-- Hickory liquid smoke (Marcus använde 2 msk, men det låter jättemycket i mina öron)
+- Pepper
+- Hickory liquid smoke (Marcus used 2 tbsp, but that sounds like a lot to me)
 
-> Smaka av.
+> Taste and adjust.

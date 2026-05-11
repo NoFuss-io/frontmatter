@@ -1,59 +1,59 @@
 ---
-category: Fika
+category: Snack
 time: 3h
 veggie: true
 ---
 
-- 3 dl vetemjöl
-- 0.5 tsk salt
-- 4 msk fingervarmt vatten
-- 1 msk solrosolja
-- 1 ägg
-- 0.5 tsk citronsaft
+- 3 dl all-purpose flour
+- 0.5 tsp salt
+- 4 tbsp lukewarm water
+- 1 tbsp sunflower oil
+- 1 egg
+- 0.5 tsp lemon juice
 
-> Blanda mjöl och salt i en bunke.
+> Mix flour and salt in a bowl.
 > 
-> Blanda ljummet vatten, olja, och ägg. Rör ner lite i taget i mjölet och arbeta ihop med en gaffel (vispar kletar bara igen).
+> Mix lukewarm water, oil, and egg. Stir in a little at a time into the flour and work together with a fork (a whisk just clogs up).
 > 
-> Knåda degen smidig.
+> Knead the dough until smooth.
 > 
-> Släng sedan degen i bakbordet 100 gånger (har något med glutenet att göra).
+> Then slam the dough against the work surface 100 times (something to do with the gluten).
 > 
-> Smörja degen med lite olja, lägg i en plastpåse, och låt vila varmt 1h.
+> Brush the dough with a little oil, put in a plastic bag, and let rest in a warm place for 1h.
 
 ---
 
-- 3 syrliga äpplen, t.ex. Granny Smith
-- 0.5 dl russin
-- 1 dl strösocker
-- Skalet från 0.5 citron
-- 1 tsk kanel
-- 0.5 dl ströbröd
+- 3 tart apples, e.g. Granny Smith
+- 0.5 dl raisins
+- 1 dl sugar
+- Zest of 0.5 lemon
+- 1 tsp cinnamon
+- 0.5 dl breadcrumbs
 
-> Blanda fyllning
-
----
-
-- Mjöl
-- 0.5 dl smält smör
-- 2 msk mjölk
-
-> Sätt ugnen på 200°C. Det går även bra att frysa en ogräddad strudel och grädda senare.
-> 
-> Täck bakbordet med en stor ren duk. Strö på lite mjöl.
-> 
-> Kavla ut degen så långt det går.
-> 
-> Sträck ut degen med nävarna i luften. Sök på Youtube för att se hur. Arbeta för eftersom degen torkar snabbt.
-> 
-> Pensla. Ha på fyllning men inte ända ut i kanterna. Skär bort de grövsta kanterna och vik i degen lite. Rulla ihop, hjälp till genom att lyfta bakduken.
-> 
-> Flytta över till en plår, pensla igen, och grädda 35-40 min.
+> Mix filling
 
 ---
 
-- Florsocker
-- Citronmeliss
-- Vispgrädde eller vaniljglass
+- Flour
+- 0.5 dl melted butter
+- 2 tbsp milk
 
-> Pynta och servera.
+> Preheat oven to 200°C. You can also freeze an unbaked strudel and bake it later.
+> 
+> Cover the work surface with a large clean cloth. Sprinkle with a little flour.
+> 
+> Roll out the dough as far as it will go.
+> 
+> Stretch the dough with your knuckles in the air. Search on YouTube to see how. Work quickly as the dough dries fast.
+> 
+> Brush. Add filling but not all the way to the edges. Cut off the thickest edges and fold the dough in a little. Roll up, helping by lifting the cloth.
+> 
+> Transfer to a baking sheet, brush again, and bake 35-40 min.
+
+---
+
+- Powdered sugar
+- Lemon balm
+- Whipped cream or vanilla ice cream
+
+> Garnish and serve.

@@ -25,12 +25,19 @@ When no fields are given, prints only matching filenames.
 
 ### `update`
 
-Applies a list of assignments to each matching file. See the [Assignments](#assignments-update-set) table for all forms. A bare `<name>:<type>` (no operator) casts the field to that type; skipped if the field is absent or the type is `any`.
+Applies a list of assignments to each matching file. See the [Assignments](#assignments-update-set) table for all forms. A bare `<name>:<type>` (no operator) casts the field to that type; creates the field as `null` if absent; skipped if the type is `any`.
 
 ```sh
 fm update '*.md' set date:date, rating:int
 fm update '*.md' set tags+=cooking where category=recipe
 ```
+
+Limitations:
+
+- Updates do not preseve field order but always sort them.
+- `null` is a keyword, so `field:string=null` will never assign `"null"` as value.
+  If you need that you need to solve it outside `fm`, e.g. with `sed`.
+
 
 ### `alter`
 
@@ -39,6 +46,9 @@ Removes fields from matching files. If a field is typed, only removes it when th
 ```sh
 fm alter '*.md' drop draft where published=true
 ```
+
+Same limitations as in `update` apply to `alter`.
+
 
 ---
 
@@ -55,6 +65,7 @@ fm alter '*.md' drop draft where published=true
 |:--------------|:---------------------------------------------|
 | `any`         | Matches any type (default when omitted)      |
 | `string`      |                                              |
+| `bool`        | Boolean; casts blank/zero to `false`, non-blank/non-zero to `true` |
 | `int`         | Integer numbers                              |
 | `number`      | Integer or floating-point                    |
 | `date`        | Stored as `YYYY-MM-DD`; also parses `MM/DD/YYYY`, `DD.MM.YYYY`, RFC 3339 |
@@ -69,7 +80,7 @@ fm alter '*.md' drop draft where published=true
 | Syntax             | Effect                                                                 |
 |:-------------------|:-----------------------------------------------------------------------|
 | `<field>`          | Cast field to `<field>`'s type                                         |
-| `<field>=<value>`  | Set field to value (value may be blank)                                |
+| `<field>=<value>`  | Set field to value; use `null` to set the field to null                |
 | `<field>+=<value>` | int/number: add; string: append; list: append if not present           |
 | `<field>-=<value>` | int/number: subtract; list: remove if present                          |
 
@@ -91,6 +102,7 @@ Outer parentheses around the whole expression are stripped, but nested grouping 
 |:-------------------|:---------------------------------------------------------------------|
 | `<field>`          | Field exists (and matches type if typed)                             |
 | `<field>=<value>`  | Field equals value; for lists, value is contained in the list        |
+| `<field>=null`     | Field exists with a null value                                       |
 | `<field>+=<value>` | List field contains value                                            |
 | `<field>-=<value>` | List field does not contain value                                    |
 

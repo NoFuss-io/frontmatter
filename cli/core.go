@@ -124,7 +124,9 @@ func (f *File) matchesCmp(cmp Comparison) bool {
 	} else if cmp.Field.Type != TypeAny && !isType(v, cmp.Field) {
 		result = false
 	} else if cmp.Value != nil {
-		if arr, ok := v.([]interface{}); ok {
+		if *cmp.Value == "null" {
+			result = v == nil
+		} else if arr, ok := v.([]interface{}); ok {
 			for _, item := range arr {
 				if fmtValue(item) == *cmp.Value {
 					result = true
@@ -171,6 +173,9 @@ func isType(v interface{}, f Field) bool {
 			return err == nil
 		}
 		return false
+	case TypeBool:
+		_, ok := v.(bool)
+		return ok
 	case TypeLink:
 		if s, ok := v.(string); ok {
 			return strings.HasPrefix(s, "[[") || (strings.HasPrefix(s, "[") && strings.Contains(s, "]("))
@@ -237,7 +242,12 @@ func (f *File) Apply(a Assignment) error {
 
 	if a.Value == nil {
 		// Cast form: no = present, field type is the target.
-		if !ok || a.Field.Type == TypeAny {
+		if a.Field.Type == TypeAny {
+			return nil
+		}
+		if !ok {
+			f.FM[a.Field.Name] = nil
+			f.hasFM = true
 			return nil
 		}
 		newVal, err := castValue(v, a.Field)
@@ -251,7 +261,12 @@ func (f *File) Apply(a Assignment) error {
 
 	switch a.Op {
 	case OpSet:
-		f.set(a.Field.Name, *a.Value)
+		if *a.Value == "null" {
+			f.FM[a.Field.Name] = nil
+			f.hasFM = true
+		} else {
+			f.set(a.Field.Name, *a.Value)
+		}
 
 	case OpAdd:
 		if !ok {
@@ -358,6 +373,18 @@ func castValue(v interface{}, f Field) (interface{}, error) {
 			}
 		}
 		return nil, fmt.Errorf("cannot parse %q as date", s)
+	case TypeBool:
+		if v == nil {
+			return nil, nil
+		}
+		if b, ok := v.(bool); ok {
+			return b, nil
+		}
+		b, err := strconv.ParseBool(s)
+		if err != nil {
+			return s != "" && s != "0", nil
+		}
+		return b, nil
 	case TypeLink:
 		if strings.HasPrefix(s, "[[") {
 			return s, nil

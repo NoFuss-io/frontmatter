@@ -10,6 +10,7 @@ type FieldType int
 const (
 	TypeAny FieldType = iota
 	TypeString
+	TypeBool
 	TypeInt
 	TypeNumber
 	TypeDate
@@ -18,7 +19,7 @@ const (
 )
 
 var typeNames = map[string]FieldType{
-	"any": TypeAny, "string": TypeString, "int": TypeInt,
+	"any": TypeAny, "string": TypeString, "bool": TypeBool, "int": TypeInt,
 	"number": TypeNumber, "date": TypeDate, "link": TypeLink, "list": TypeList,
 }
 
