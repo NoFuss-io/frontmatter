@@ -4,13 +4,170 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
-
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 )
+
+func selectCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "select <field>[, <field>]... from <glob>... [where <expression>] [sort by <field>[, <field>]... [desc]] [limit <n>]",
+		Short: "Output table of filename and field values",
+		Long: `Prints a table with one row per matching file and one column per requested field.
+With no field list, only filenames are printed.
+
+Fields may carry a type annotation (field:type) to restrict output to files where that
+field holds a value of the given type.
+
+sort by accepts one or more comma-separated fields followed by an optional desc suffix
+for descending order. Sorting is lexicographic; files missing the sort field sort last.
+Dates stored as YYYY-MM-DD sort correctly as strings.
+
+limit n truncates the output to at most n rows, applied after sorting.`,
+		Args: cobra.ArbitraryArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			stmt, err := newSelectStatement(args)
+			if err != nil {
+				return err
+			}
+			result, err := stmt.run()
+			if err != nil {
+				return err
+			}
+			if len(stmt.cols) == 0 {
+				for _, row := range result.rows {
+					fmt.Println(row[0])
+				}
+			} else {
+				result.print(os.Stdout)
+			}
+			return nil
+		},
+	}
+}
+
+type selectStatement struct {
+	cols       []selectCol
+	globs      []string
+	where      Expression
+	sortFields []Field
+	sortDesc   bool
+	limit      int
+}
+
+func newSelectStatement(args []string) (selectStatement, error) {
+	fieldArgs, rest, _ := splitOn(args, "from")
+	fieldArgs = splitCommas(fieldArgs)
+	rest, limitRest, hasLimit := splitOn(rest, "limit")
+	rest, sortRest, hasSortBy := splitOn(rest, "sort")
+	globArgs, whereArgs, _ := splitOn(rest, "where")
+
+	if len(globArgs) == 0 {
+		return selectStatement{}, fmt.Errorf("no files specified (missing 'from'?)")
+	}
+
+	var cols []selectCol
+	for _, arg := range fieldArgs {
+		cmp, err := ParseComparison(arg)
+		if err != nil {
+			return selectStatement{}, err
+		}
+		c := selectCol{field: cmp.Field}
+		if cmp.Value != nil {
+			c.cmp = &cmp
+		}
+		cols = append(cols, c)
+	}
+
+	var where Expression
+	if len(whereArgs) > 0 {
+		var err error
+		where, err = ParseExpression(strings.Join(whereArgs, " "))
+		if err != nil {
+			return selectStatement{}, fmt.Errorf("invalid where clause: %w", err)
+		}
+	}
+
+	sortFields, sortDesc, err := parseSortClause(hasSortBy, sortRest)
+	if err != nil {
+		return selectStatement{}, err
+	}
+
+	limit, err := parseLimitClause(hasLimit, limitRest)
+	if err != nil {
+		return selectStatement{}, err
+	}
+
+	return selectStatement{
+		cols:       cols,
+		globs:      globArgs,
+		where:      where,
+		sortFields: sortFields,
+		sortDesc:   sortDesc,
+		limit:      limit,
+	}, nil
+}
+
+func (s selectStatement) run() (*SelectResult, error) {
+	var paths []string
+	for _, p := range s.globs {
+		if strings.ContainsAny(p, "*?[") {
+			expanded, err := filepath.Glob(p)
+			if err != nil {
+				return nil, err
+			}
+			paths = append(paths, expanded...)
+		} else if _, err := os.Stat(p); err == nil {
+			paths = append(paths, p)
+		} else {
+			return nil, fmt.Errorf("no such file or pattern: %s", p)
+		}
+	}
+
+	headers := make([]string, 1+len(s.cols))
+	headers[0] = "filename"
+	for i, c := range s.cols {
+		headers[i+1] = c.field.Name
+	}
+	result := &SelectResult{headers: headers}
+
+	if len(s.sortFields) > 0 {
+		var files []*File
+		for _, path := range paths {
+			f, err := ReadFile(path)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+				continue
+			}
+			if f.Matches(s.where) && matchesCols(f, s.cols) {
+				files = append(files, f)
+			}
+		}
+		sortFiles(files, s.sortFields, s.sortDesc)
+		for _, f := range applyLimit(files, s.limit) {
+			result.addFile(f, s.cols)
+		}
+	} else {
+		for _, path := range paths {
+			f, err := ReadFile(path)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+				continue
+			}
+			if f.Matches(s.where) && matchesCols(f, s.cols) {
+				result.addFile(f, s.cols)
+			}
+			if s.limit > 0 && len(result.rows) >= s.limit {
+				break
+			}
+		}
+	}
+
+	return result, nil
+}
 
 type selectCol struct {
 	field Field
@@ -54,121 +211,6 @@ func matchesCols(f *File, cols []selectCol) bool {
 		}
 	}
 	return true
-}
-
-func selectCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "select <field>[, <field>]... from <glob>... [where <expression>] [sort by <field>[, <field>]... [desc]] [limit <n>]",
-		Short: "Output table of filename and field values",
-		Long: `Prints a table with one row per matching file and one column per requested field.
-With no field list, only filenames are printed.
-
-Fields may carry a type annotation (field:type) to restrict output to files where that
-field holds a value of the given type.
-
-sort by accepts one or more comma-separated fields followed by an optional desc suffix
-for descending order. Sorting is lexicographic; files missing the sort field sort last.
-Dates stored as YYYY-MM-DD sort correctly as strings.
-
-limit n truncates the output to at most n rows, applied after sorting.`,
-		Args: cobra.ArbitraryArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fieldArgs, rest, _ := splitOn(args, "from")
-			fieldArgs = splitCommas(fieldArgs)
-			rest, limitRest, hasLimit := splitOn(rest, "limit")
-			rest, sortRest, hasSortBy := splitOn(rest, "sort")
-			globArgs, whereArgs, _ := splitOn(rest, "where")
-
-			if len(globArgs) == 0 {
-				return fmt.Errorf("no files specified (missing 'from'?)")
-			}
-			paths, err := expandGlobs(globArgs)
-			if err != nil {
-				return err
-			}
-			sortFields, desc, err := parseSortClause(hasSortBy, sortRest)
-			if err != nil {
-				return err
-			}
-			limit, err := parseLimitClause(hasLimit, limitRest)
-			if err != nil {
-				return err
-			}
-
-			seq, err := iterFiles(paths, whereArgs)
-			if err != nil {
-				return err
-			}
-
-			if len(fieldArgs) == 0 {
-				if hasSortBy {
-					var files []*File
-					for f := range seq {
-						files = append(files, f)
-					}
-					sortFiles(files, sortFields, desc)
-					for _, f := range applyLimit(files, limit) {
-						fmt.Println(f.Path)
-					}
-				} else {
-					count := 0
-					for f := range seq {
-						fmt.Println(f.Path)
-						count++
-						if limit > 0 && count >= limit {
-							break
-						}
-					}
-				}
-				return nil
-			}
-
-			var cols []selectCol
-			for _, arg := range fieldArgs {
-				cmp, err := ParseComparison(arg)
-				if err != nil {
-					return err
-				}
-				c := selectCol{field: cmp.Field}
-				if cmp.Value != nil {
-					c.cmp = &cmp
-				}
-				cols = append(cols, c)
-			}
-
-			headers := make([]string, 1+len(cols))
-			headers[0] = "filename"
-			for i, c := range cols {
-				headers[i+1] = c.field.Name
-			}
-			result := &SelectResult{headers: headers}
-
-			if hasSortBy {
-				var files []*File
-				for f := range seq {
-					if matchesCols(f, cols) {
-						files = append(files, f)
-					}
-				}
-				sortFiles(files, sortFields, desc)
-				for _, f := range applyLimit(files, limit) {
-					result.addFile(f, cols)
-				}
-			} else {
-				for f := range seq {
-					if matchesCols(f, cols) {
-						result.addFile(f, cols)
-					}
-					if limit > 0 && len(result.rows) >= limit {
-						break
-					}
-				}
-			}
-
-			result.print(os.Stdout)
-			return nil
-		},
-	}
 }
 
 func applyLimit(files []*File, n int) []*File {

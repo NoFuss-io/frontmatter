@@ -2,10 +2,7 @@ package main
 
 import (
 	"fmt"
-	"iter"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -19,47 +16,6 @@ func (v Semver) String() string {
 var VERSION = Semver{0, 1, 0}
 
 var verbose int
-
-func expandGlobs(patterns []string) ([]string, error) {
-	var files []string
-	for _, p := range patterns {
-		if strings.ContainsAny(p, "*?[") {
-			expanded, err := filepath.Glob(p)
-			if err != nil {
-				return nil, err
-			}
-			files = append(files, expanded...)
-		} else if _, err := os.Stat(p); err == nil {
-			files = append(files, p)
-		} else {
-			return nil, fmt.Errorf("no such file or pattern: %s", p)
-		}
-	}
-	return files, nil
-}
-
-func iterFiles(paths []string, whereArgs []string) (iter.Seq[*File], error) {
-	var expr Expression
-	if len(whereArgs) > 0 {
-		var err error
-		expr, err = ParseExpression(strings.Join(whereArgs, " "))
-		if err != nil {
-			return nil, fmt.Errorf("invalid where clause: %w", err)
-		}
-	}
-	return func(yield func(*File) bool) {
-		for _, path := range paths {
-			f, err := ReadFile(path)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "warning: %v\n", err)
-				continue
-			}
-			if f.Matches(expr) && !yield(f) {
-				return
-			}
-		}
-	}, nil
-}
 
 func main() {
 	root := &cobra.Command{

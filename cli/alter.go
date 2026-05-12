@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -16,63 +18,109 @@ result back to disk. When a field carries a type annotation (field:type), it is 
 removed if the stored value matches that type.`,
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			globArgs, rest, ok := splitOn(args, "drop")
-			if !ok {
-				return fmt.Errorf("missing 'drop' keyword")
-			}
-			fieldArgs, whereArgs, _ := splitOn(rest, "where")
-			fieldArgs = splitCommas(fieldArgs)
-
-			if len(globArgs) == 0 {
-				return fmt.Errorf("no files specified")
-			}
-			if len(fieldArgs) == 0 {
-				return fmt.Errorf("no fields specified")
-			}
-			paths, err := expandGlobs(globArgs)
+			stmt, err := newAlterStatement(args)
 			if err != nil {
 				return err
 			}
-
-			var fields []Field
-			for _, arg := range fieldArgs {
-				field, err := ParseField(arg)
-				if err != nil {
-					return err
-				}
-				fields = append(fields, field)
-			}
-
-			seq, err := iterFiles(paths, whereArgs)
-			if err != nil {
-				return err
-			}
-			total, modified := 0, 0
-			for f := range seq {
-				total++
-				if verbose >= 2 {
-					fmt.Fprintln(os.Stderr, f.Path)
-				}
-				changed := false
-				for _, field := range fields {
-					if f.Remove(field) {
-						changed = true
-					}
-				}
-				if changed {
-					if e := f.Write(); e != nil {
-						writeErr(f, e)
-					} else {
-						modified++
-					}
-				}
-			}
-			if verbose >= 2 {
-				fmt.Fprintf(os.Stderr, "%d files\n", total)
-			} else if verbose >= 1 {
-				fmt.Fprintf(os.Stderr, "%d files modified\n", modified)
-			}
-			return nil
+			return stmt.run()
 		},
 	}
+}
+
+type alterStatement struct {
+	globs  []string
+	where  Expression
+	fields []Field
+}
+
+func newAlterStatement(args []string) (alterStatement, error) {
+	globArgs, rest, ok := splitOn(args, "drop")
+	if !ok {
+		return alterStatement{}, fmt.Errorf("missing 'drop' keyword")
+	}
+	fieldArgs, whereArgs, _ := splitOn(rest, "where")
+	fieldArgs = splitCommas(fieldArgs)
+
+	if len(globArgs) == 0 {
+		return alterStatement{}, fmt.Errorf("no files specified")
+	}
+	if len(fieldArgs) == 0 {
+		return alterStatement{}, fmt.Errorf("no fields specified")
+	}
+
+	var fields []Field
+	for _, arg := range fieldArgs {
+		field, err := ParseField(arg)
+		if err != nil {
+			return alterStatement{}, err
+		}
+		fields = append(fields, field)
+	}
+
+	var where Expression
+	if len(whereArgs) > 0 {
+		var err error
+		where, err = ParseExpression(strings.Join(whereArgs, " "))
+		if err != nil {
+			return alterStatement{}, fmt.Errorf("invalid where clause: %w", err)
+		}
+	}
+
+	return alterStatement{
+		globs:  globArgs,
+		where:  where,
+		fields: fields,
+	}, nil
+}
+
+func (s alterStatement) run() error {
+	var paths []string
+	for _, p := range s.globs {
+		if strings.ContainsAny(p, "*?[") {
+			expanded, err := filepath.Glob(p)
+			if err != nil {
+				return err
+			}
+			paths = append(paths, expanded...)
+		} else if _, err := os.Stat(p); err == nil {
+			paths = append(paths, p)
+		} else {
+			return fmt.Errorf("no such file or pattern: %s", p)
+		}
+	}
+
+	total, modified := 0, 0
+	for _, path := range paths {
+		f, err := ReadFile(path)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+			continue
+		}
+		if !f.Matches(s.where) {
+			continue
+		}
+		total++
+		if verbose >= 2 {
+			fmt.Fprintln(os.Stderr, f.Path)
+		}
+		changed := false
+		for _, field := range s.fields {
+			if f.Remove(field) {
+				changed = true
+			}
+		}
+		if changed {
+			if e := f.Write(); e != nil {
+				writeErr(f, e)
+			} else {
+				modified++
+			}
+		}
+	}
+	if verbose >= 2 {
+		fmt.Fprintf(os.Stderr, "%d files\n", total)
+	} else if verbose >= 1 {
+		fmt.Fprintf(os.Stderr, "%d files modified\n", modified)
+	}
+	return nil
 }
