@@ -38,8 +38,8 @@ limit n truncates the output to at most n rows, applied after sorting.`,
 				return err
 			}
 			if len(stmt.cols) == 0 {
-				for _, row := range result.rows {
-					fmt.Println(row[0])
+				for _, path := range result.files {
+					fmt.Println(path)
 				}
 			} else {
 				result.print(os.Stdout)
@@ -127,10 +127,9 @@ func (s selectStatement) run() (*SelectResult, error) {
 		}
 	}
 
-	headers := make([]string, 1+len(s.cols))
-	headers[0] = "filename"
+	headers := make([]string, len(s.cols))
 	for i, c := range s.cols {
-		headers[i+1] = c.field.Name
+		headers[i] = c.field.Name
 	}
 	result := &SelectResult{headers: headers}
 
@@ -148,7 +147,7 @@ func (s selectStatement) run() (*SelectResult, error) {
 		}
 		sortFiles(files, s.sortFields, s.sortDesc)
 		for _, f := range applyLimit(files, s.limit) {
-			result.addFile(f, s.cols)
+			result.addRow(f, s.cols)
 		}
 	} else {
 		for _, path := range paths {
@@ -158,7 +157,7 @@ func (s selectStatement) run() (*SelectResult, error) {
 				continue
 			}
 			if f.Matches(s.where) && matchesCols(f, s.cols) {
-				result.addFile(f, s.cols)
+				result.addRow(f, s.cols)
 			}
 			if s.limit > 0 && len(result.rows) >= s.limit {
 				break
@@ -175,16 +174,17 @@ type selectCol struct {
 }
 
 type SelectResult struct {
-	headers []string
-	rows    [][]string
+	files   []string   // one path per row
+	headers []string   // field column headers (excludes filename)
+	rows    [][]string // field values per row (excludes filename)
 }
 
-func (r *SelectResult) addFile(f *File, cols []selectCol) {
-	row := make([]string, 1+len(cols))
-	row[0] = f.Path
+func (r *SelectResult) addRow(f *File, cols []selectCol) {
+	r.files = append(r.files, f.Path)
+	row := make([]string, len(cols))
 	for i, c := range cols {
 		if v, ok := f.FM[c.field.Name]; ok {
-			row[i+1] = fmtValue(v)
+			row[i] = fmtValue(v)
 		}
 	}
 	r.rows = append(r.rows, row)
@@ -192,14 +192,15 @@ func (r *SelectResult) addFile(f *File, cols []selectCol) {
 
 func (r *SelectResult) print(w io.Writer) {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	seps := make([]string, len(r.headers))
-	for i, h := range r.headers {
+	headers := append([]string{"filename"}, r.headers...)
+	seps := make([]string, len(headers))
+	for i, h := range headers {
 		seps[i] = strings.Repeat("-", len(h))
 	}
-	fmt.Fprintln(tw, strings.Join(r.headers, "\t"))
+	fmt.Fprintln(tw, strings.Join(headers, "\t"))
 	fmt.Fprintln(tw, strings.Join(seps, "\t"))
-	for _, row := range r.rows {
-		fmt.Fprintln(tw, strings.Join(row, "\t"))
+	for i, row := range r.rows {
+		fmt.Fprintln(tw, strings.Join(append([]string{r.files[i]}, row...), "\t"))
 	}
 	tw.Flush()
 }

@@ -15,31 +15,33 @@ import (
 // dateVal preserves YAML date-only formatting (unquoted, no time component).
 type dateVal string
 
-func (d dateVal) MarshalYAML() (interface{}, error) {
+func (d dateVal) MarshalYAML() (any, error) {
 	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!timestamp", Value: string(d)}, nil
 }
+
+type frontmatter map[string]any
 
 // File represents a parsed markdown file with frontmatter.
 type File struct {
 	Path  string
-	FM    map[string]interface{}
+	FM    frontmatter
 	Body  string
 	hasFM bool
 }
 
-func normalizeFM(m map[string]interface{}) {
+func normalizeFM(m map[string]any) {
 	for k, v := range m {
 		m[k] = normalizeVal(v)
 	}
 }
 
-func normalizeVal(v interface{}) interface{} {
+func normalizeVal(v any) any {
 	switch v := v.(type) {
 	case time.Time:
 		return dateVal(v.Format("2006-01-02"))
-	case map[string]interface{}:
+	case map[string]any:
 		normalizeFM(v)
-	case []interface{}:
+	case []any:
 		for i, item := range v {
 			v[i] = normalizeVal(item)
 		}
@@ -52,7 +54,7 @@ func ReadFile(path string) (*File, error) {
 	if err != nil {
 		return nil, err
 	}
-	f := &File{Path: path, FM: make(map[string]interface{})}
+	f := &File{Path: path, FM: make(map[string]any)}
 	s := string(raw)
 
 	if !strings.HasPrefix(s, "---\n") {
@@ -126,7 +128,7 @@ func (f *File) matchesCmp(cmp Comparison) bool {
 	} else if cmp.Value != nil {
 		if *cmp.Value == "null" {
 			result = v == nil
-		} else if arr, ok := v.([]interface{}); ok {
+		} else if arr, ok := v.([]any); ok {
 			for _, item := range arr {
 				if fmtValue(item) == *cmp.Value {
 					result = true
@@ -145,7 +147,7 @@ func (f *File) matchesCmp(cmp Comparison) bool {
 	return result
 }
 
-func isType(v interface{}, f Field) bool {
+func isType(v any, f Field) bool {
 	switch f.Type {
 	case TypeAny:
 		return true
@@ -182,7 +184,7 @@ func isType(v interface{}, f Field) bool {
 		}
 		return false
 	case TypeList:
-		arr, ok := v.([]interface{})
+		arr, ok := v.([]any)
 		if !ok {
 			return false
 		}
@@ -200,7 +202,7 @@ func isType(v interface{}, f Field) bool {
 	return false
 }
 
-func fmtValue(v interface{}) string {
+func fmtValue(v any) string {
 	if v == nil {
 		return ""
 	}
@@ -209,7 +211,7 @@ func fmtValue(v interface{}) string {
 		return v.Format("2006-01-02")
 	case dateVal:
 		return string(v)
-	case []interface{}:
+	case []any:
 		parts := make([]string, len(v))
 		for i, item := range v {
 			parts[i] = fmtValue(item)
@@ -247,7 +249,7 @@ func (f *File) Apply(a Assignment) error {
 		}
 		if !ok {
 			if a.Field.Type == TypeList {
-				f.FM[a.Field.Name] = []interface{}{}
+				f.FM[a.Field.Name] = []any{}
 			} else {
 				f.FM[a.Field.Name] = nil
 			}
@@ -299,7 +301,7 @@ func (f *File) Apply(a Assignment) error {
 			f.FM[a.Field.Name] = cur + n
 		case string:
 			f.FM[a.Field.Name] = cur + *a.Value
-		case []interface{}:
+		case []any:
 			for _, item := range cur {
 				if fmtValue(item) == *a.Value {
 					return nil // already present, treat as set
@@ -334,8 +336,8 @@ func (f *File) Apply(a Assignment) error {
 				return fmt.Errorf("field %q: -= requires number value, got %q", a.Field.Name, *a.Value)
 			}
 			f.FM[a.Field.Name] = cur - n
-		case []interface{}:
-			result := make([]interface{}, 0, len(cur))
+		case []any:
+			result := make([]any, 0, len(cur))
 			for _, item := range cur {
 				if fmtValue(item) != *a.Value {
 					result = append(result, item)
@@ -350,7 +352,7 @@ func (f *File) Apply(a Assignment) error {
 	return nil
 }
 
-func castValue(v interface{}, f Field) (interface{}, error) {
+func castValue(v any, f Field) (any, error) {
 	s := fmtValue(v)
 	switch f.Type {
 	case TypeString:
@@ -395,14 +397,14 @@ func castValue(v interface{}, f Field) (interface{}, error) {
 		}
 		return "[[" + s + "]]", nil
 	case TypeList:
-		var arr []interface{}
+		var arr []any
 		if v == nil {
-			return []interface{}{}, nil
-		} else if existing, ok := v.([]interface{}); ok {
-			arr = make([]interface{}, len(existing))
+			return []any{}, nil
+		} else if existing, ok := v.([]any); ok {
+			arr = make([]any, len(existing))
 			copy(arr, existing)
 		} else {
-			arr = []interface{}{s}
+			arr = []any{s}
 		}
 		if f.ElemType != nil {
 			elemField := Field{Type: *f.ElemType}

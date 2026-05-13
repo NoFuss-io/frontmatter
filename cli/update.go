@@ -95,6 +95,23 @@ func (s updateStatement) run() error {
 		}
 	}
 
+	var result *SelectResult
+	var resultCols []selectCol
+	if verbose >= 2 {
+		seen := map[string]bool{}
+		for _, a := range s.assignments {
+			if !seen[a.Field.Name] {
+				resultCols = append(resultCols, selectCol{field: a.Field})
+				seen[a.Field.Name] = true
+			}
+		}
+		headers := make([]string, len(resultCols))
+		for i, c := range resultCols {
+			headers[i] = c.field.Name
+		}
+		result = &SelectResult{headers: headers}
+	}
+
 	total, modified := 0, 0
 	for _, path := range paths {
 		f, err := ReadFile(path)
@@ -106,9 +123,6 @@ func (s updateStatement) run() error {
 			continue
 		}
 		total++
-		if verbose >= 2 {
-			fmt.Fprintln(os.Stderr, f.Path)
-		}
 		for _, a := range s.assignments {
 			if e := f.Apply(a); e != nil {
 				fmt.Fprintf(os.Stderr, "%s: %v\n", f.Path, e)
@@ -118,10 +132,13 @@ func (s updateStatement) run() error {
 			writeErr(f, e)
 		} else {
 			modified++
+			if result != nil {
+				result.addRow(f, resultCols)
+			}
 		}
 	}
-	if verbose >= 2 {
-		fmt.Fprintf(os.Stderr, "%d files\n", total)
+	if result != nil {
+		result.print(os.Stdout)
 	} else if verbose >= 1 {
 		fmt.Fprintf(os.Stderr, "%d files modified\n", modified)
 	}

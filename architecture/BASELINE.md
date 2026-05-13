@@ -98,7 +98,7 @@ current value matches the specified type.
 ```go
 type File struct {
     Path string
-    FM   map[string]interface{}
+    FM   map[string]any
     Body string
     hasFM bool
 }
@@ -115,9 +115,9 @@ The central entity. `FM` is the parsed YAML frontmatter as a generic map.
 | `Matches`      | `(f *File, expr Expression) bool`              | Evaluate WHERE expression (OR of ANDs) |
 | `Apply`        | `(f *File, a Assignment) error`                | Execute a single assignment operation |
 | `Remove`       | `(f *File, field Field) bool`                  | Conditionally delete a field |
-| `isType`       | `(v interface{}, f Field) bool`                | Type-check a value against a Field spec |
-| `castValue`    | `(v interface{}, f Field) (interface{}, error)`| Convert a value to the target type |
-| `fmtValue`     | `(v interface{}) string`                       | Render any value as a string |
+| `isType`       | `(v any, f Field) bool`                | Type-check a value against a Field spec |
+| `castValue`    | `(v any, f Field) (any, error)`| Convert a value to the target type |
+| `fmtValue`     | `(v any) string`                       | Render any value as a string |
 
 ### Date handling
 
@@ -224,7 +224,7 @@ glob expansion → ReadFile → Matches (WHERE filter)
 ## Notable Design Decisions
 
 - **Single binary, no library**: All logic in `package main`; no exported API surface.
-- **Generic frontmatter map**: `FM` is `map[string]interface{}`, giving flexibility at the
+- **Generic frontmatter map**: `FM` is `map[string]any`, giving flexibility at the
   cost of type-safety; types are checked/enforced at query/mutation time.
 - **Date-only timestamps**: Custom `dateVal` marshaller ensures dates are stored without
   time-zone noise (`2024-01-15` not `2024-01-15T00:00:00Z`).
