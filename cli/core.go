@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -20,6 +21,25 @@ func (d dateVal) MarshalYAML() (any, error) {
 }
 
 type frontmatter map[string]any
+
+// expandGlobs expands glob patterns and checks for file existence.
+func expandGlobs(globs []string) ([]string, error) {
+	var paths []string
+	for _, p := range globs {
+		if strings.ContainsAny(p, "*?[") {
+			expanded, err := filepath.Glob(p)
+			if err != nil {
+				return nil, err
+			}
+			paths = append(paths, expanded...)
+		} else if _, err := os.Stat(p); err == nil {
+			paths = append(paths, p)
+		} else {
+			return nil, fmt.Errorf("no such file or pattern: %s", p)
+		}
+	}
+	return paths, nil
+}
 
 // File represents a parsed markdown file with frontmatter.
 type File struct {

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -112,19 +111,9 @@ func newSelectStatement(args []string) (selectStatement, error) {
 }
 
 func (s selectStatement) run() (*SelectResult, error) {
-	var paths []string
-	for _, p := range s.globs {
-		if strings.ContainsAny(p, "*?[") {
-			expanded, err := filepath.Glob(p)
-			if err != nil {
-				return nil, err
-			}
-			paths = append(paths, expanded...)
-		} else if _, err := os.Stat(p); err == nil {
-			paths = append(paths, p)
-		} else {
-			return nil, fmt.Errorf("no such file or pattern: %s", p)
-		}
+	paths, err := expandGlobs(s.globs)
+	if err != nil {
+		return nil, err
 	}
 
 	headers := make([]string, len(s.cols))

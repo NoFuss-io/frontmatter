@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -80,19 +79,9 @@ func newUpdateStatement(args []string) (updateStatement, error) {
 }
 
 func (s updateStatement) run() error {
-	var paths []string
-	for _, p := range s.globs {
-		if strings.ContainsAny(p, "*?[") {
-			expanded, err := filepath.Glob(p)
-			if err != nil {
-				return err
-			}
-			paths = append(paths, expanded...)
-		} else if _, err := os.Stat(p); err == nil {
-			paths = append(paths, p)
-		} else {
-			return fmt.Errorf("no such file or pattern: %s", p)
-		}
+	paths, err := expandGlobs(s.globs)
+	if err != nil {
+		return err
 	}
 
 	var result *SelectResult
