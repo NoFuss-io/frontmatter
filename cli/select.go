@@ -115,6 +115,12 @@ func (s selectStatement) run() (*SelectResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	n := len(paths)
+
+	// No sorting -> Limit before processing
+	if n > s.limit && s.limit > 0 && len(s.sortFields) == 0 {
+		paths = paths[:n]
+	}
 
 	headers := make([]string, len(s.cols))
 	for i, c := range s.cols {
@@ -122,36 +128,28 @@ func (s selectStatement) run() (*SelectResult, error) {
 	}
 	result := &SelectResult{headers: headers}
 
+	var files []*File
+	for _, path := range paths {
+		f, err := ReadFile(path)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+			continue
+		}
+		if f.Matches(s.where) && matchesCols(f, s.cols) {
+			files = append(files, f)
+		}
+	}
+
+	// Sorting -> Limit after processing and sorting
 	if len(s.sortFields) > 0 {
-		var files []*File
-		for _, path := range paths {
-			f, err := ReadFile(path)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "warning: %v\n", err)
-				continue
-			}
-			if f.Matches(s.where) && matchesCols(f, s.cols) {
-				files = append(files, f)
-			}
-		}
 		sortFiles(files, s.sortFields, s.sortDesc)
-		for _, f := range applyLimit(files, s.limit) {
-			result.addRow(f, s.cols)
+		if n > s.limit && s.limit > 0 {
+			files = files[:n]
 		}
-	} else {
-		for _, path := range paths {
-			f, err := ReadFile(path)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "warning: %v\n", err)
-				continue
-			}
-			if f.Matches(s.where) && matchesCols(f, s.cols) {
-				result.addRow(f, s.cols)
-			}
-			if s.limit > 0 && len(result.rows) >= s.limit {
-				break
-			}
-		}
+	}
+
+	for _, f := range files {
+		result.addRow(f, s.cols)
 	}
 
 	return result, nil
@@ -201,13 +199,6 @@ func matchesCols(f *File, cols []selectCol) bool {
 		}
 	}
 	return true
-}
-
-func applyLimit(files []*File, n int) []*File {
-	if n == 0 || n >= len(files) {
-		return files
-	}
-	return files[:n]
 }
 
 func sortFiles(files []*File, fields []Field, desc bool) {
