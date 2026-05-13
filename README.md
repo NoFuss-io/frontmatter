@@ -6,6 +6,14 @@ using SQL expressions.
 Great utility tool for [Obsidian](https://obsidian.md).
 
 
+## Agentic installation
+
+```sh
+git clone git@github.com/backlin/fm.git
+cd fm
+just install-skill
+```
+
 ## tl;dr
 
 - [Complete syntax](./docs/syntax.md)
