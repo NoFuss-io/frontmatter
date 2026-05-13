@@ -41,6 +41,22 @@ func expandGlobs(globs []string) ([]string, error) {
 	return paths, nil
 }
 
+// readMatchingFiles reads and filters files by a where expression.
+func readMatchingFiles(paths []string, where Expression) []*File {
+	var files []*File
+	for _, path := range paths {
+		f, err := ReadFile(path)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+			continue
+		}
+		if f.Matches(where) {
+			files = append(files, f)
+		}
+	}
+	return files
+}
+
 // File represents a parsed markdown file with frontmatter.
 type File struct {
 	Path  string

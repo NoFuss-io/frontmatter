@@ -8,12 +8,15 @@ lint:
     go vet ./...
     staticcheck ./...
 
+test:
+    go test ./...
+
 vendor:
     go mod tidy
     go mod vendor
 
 dev *args:
-    go run ./cli {{args}}
+    go run ./cli {{ args }}
 
 install: _install-man
     go build -o $(go env GOPATH)/bin/fm ./cli

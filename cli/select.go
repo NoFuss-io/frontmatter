@@ -119,7 +119,7 @@ func (s selectStatement) run() (*SelectResult, error) {
 
 	// No sorting -> Limit before processing
 	if n > s.limit && s.limit > 0 && len(s.sortFields) == 0 {
-		paths = paths[:n]
+		paths = paths[:s.limit]
 	}
 
 	headers := make([]string, len(s.cols))
@@ -143,8 +143,8 @@ func (s selectStatement) run() (*SelectResult, error) {
 	// Sorting -> Limit after processing and sorting
 	if len(s.sortFields) > 0 {
 		sortFiles(files, s.sortFields, s.sortDesc)
-		if n > s.limit && s.limit > 0 {
-			files = files[:n]
+		if len(files) > s.limit && s.limit > 0 {
+			files = files[:s.limit]
 		}
 	}
 

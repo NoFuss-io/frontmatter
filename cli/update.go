@@ -84,6 +84,8 @@ func (s updateStatement) run() error {
 		return err
 	}
 
+	files := readMatchingFiles(paths, s.where)
+
 	var result *SelectResult
 	var resultCols []selectCol
 	if verbose >= 2 {
@@ -101,17 +103,8 @@ func (s updateStatement) run() error {
 		result = &SelectResult{headers: headers}
 	}
 
-	total, modified := 0, 0
-	for _, path := range paths {
-		f, err := ReadFile(path)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
-			continue
-		}
-		if !f.Matches(s.where) {
-			continue
-		}
-		total++
+	modified := 0
+	for _, f := range files {
 		for _, a := range s.assignments {
 			if e := f.Apply(a); e != nil {
 				fmt.Fprintf(os.Stderr, "%s: %v\n", f.Path, e)

@@ -78,17 +78,10 @@ func (s alterStatement) run() error {
 		return err
 	}
 
-	total, modified := 0, 0
-	for _, path := range paths {
-		f, err := ReadFile(path)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
-			continue
-		}
-		if !f.Matches(s.where) {
-			continue
-		}
-		total++
+	files := readMatchingFiles(paths, s.where)
+
+	modified := 0
+	for _, f := range files {
 		if verbose >= 2 {
 			fmt.Fprintln(os.Stderr, f.Path)
 		}
@@ -107,7 +100,7 @@ func (s alterStatement) run() error {
 		}
 	}
 	if verbose >= 2 {
-		fmt.Fprintf(os.Stderr, "%d files\n", total)
+		fmt.Fprintf(os.Stderr, "%d files\n", len(files))
 	} else if verbose >= 1 {
 		fmt.Fprintf(os.Stderr, "%d files modified\n", modified)
 	}
