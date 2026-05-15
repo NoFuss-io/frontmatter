@@ -23,6 +23,9 @@ func (d dateVal) MarshalYAML() (any, error) {
 type frontmatter map[string]any
 
 // expandGlobs expands glob patterns and checks for file existence.
+// POSIX shells expand unquoted globs before exec, but this handles cases where
+// the shell is bypassed: Windows (cmd.exe), quoted globs, and programmatic
+// callers (exec.Command, subprocess.run without shell=True).
 func expandGlobs(globs []string) ([]string, error) {
 	var paths []string
 	for _, p := range globs {
@@ -301,49 +304,85 @@ func (f *File) Apply(a Assignment) error {
 		return nil
 	}
 
+	// Resolve value: field reference or literal string.
+	val := *a.Value
+	var nativeVal any
+	var hasNative bool
+	if a.ValueIsRef {
+		rv, rvOk := f.FM[val]
+		if !rvOk {
+			if a.Op == OpSet {
+				f.FM[a.Field.Name] = nil
+				f.hasFM = true
+			}
+			return nil
+		}
+		nativeVal = rv
+		hasNative = true
+		val = fmtValue(rv)
+	}
+
 	switch a.Op {
 	case OpSet:
-		if *a.Value == "null" {
+		if hasNative {
+			f.FM[a.Field.Name] = nativeVal
+		} else if val == "null" {
 			f.FM[a.Field.Name] = nil
-			f.hasFM = true
 		} else {
-			f.set(a.Field.Name, *a.Value)
+			f.set(a.Field.Name, val)
 		}
+		f.hasFM = true
 
 	case OpAdd:
 		if !ok {
-			f.FM[a.Field.Name] = *a.Value
+			if hasNative {
+				f.FM[a.Field.Name] = nativeVal
+			} else {
+				f.FM[a.Field.Name] = val
+			}
 			f.hasFM = true
 			return nil
 		}
+		// List merge when both sides are lists.
+		if cur, curIsList := v.([]any); curIsList {
+			if refList, refIsList := nativeVal.([]any); refIsList && hasNative {
+				f.FM[a.Field.Name] = mergeList(cur, refList)
+				f.hasFM = true
+				return nil
+			}
+		}
 		switch cur := v.(type) {
 		case int:
-			n, err := strconv.ParseInt(*a.Value, 10, 64)
+			n, err := strconv.ParseInt(val, 10, 64)
 			if err != nil {
-				return fmt.Errorf("field %q: += requires int value, got %q", a.Field.Name, *a.Value)
+				return fmt.Errorf("field %q: += requires int value, got %q", a.Field.Name, val)
 			}
 			f.FM[a.Field.Name] = cur + int(n)
 		case int64:
-			n, err := strconv.ParseInt(*a.Value, 10, 64)
+			n, err := strconv.ParseInt(val, 10, 64)
 			if err != nil {
-				return fmt.Errorf("field %q: += requires int value, got %q", a.Field.Name, *a.Value)
+				return fmt.Errorf("field %q: += requires int value, got %q", a.Field.Name, val)
 			}
 			f.FM[a.Field.Name] = cur + n
 		case float64:
-			n, err := strconv.ParseFloat(*a.Value, 64)
+			n, err := strconv.ParseFloat(val, 64)
 			if err != nil {
-				return fmt.Errorf("field %q: += requires number value, got %q", a.Field.Name, *a.Value)
+				return fmt.Errorf("field %q: += requires number value, got %q", a.Field.Name, val)
 			}
 			f.FM[a.Field.Name] = cur + n
 		case string:
-			f.FM[a.Field.Name] = cur + *a.Value
+			f.FM[a.Field.Name] = cur + val
 		case []any:
 			for _, item := range cur {
-				if fmtValue(item) == *a.Value {
-					return nil // already present, treat as set
+				if fmtValue(item) == val {
+					return nil // already present
 				}
 			}
-			f.FM[a.Field.Name] = append(cur, *a.Value)
+			appendVal := any(val)
+			if hasNative {
+				appendVal = nativeVal
+			}
+			f.FM[a.Field.Name] = append(cur, appendVal)
 		default:
 			return fmt.Errorf("field %q: += not supported for this type", a.Field.Name)
 		}
@@ -353,29 +392,37 @@ func (f *File) Apply(a Assignment) error {
 		if !ok {
 			return nil
 		}
+		// List subtract when both sides are lists.
+		if cur, curIsList := v.([]any); curIsList {
+			if refList, refIsList := nativeVal.([]any); refIsList && hasNative {
+				f.FM[a.Field.Name] = subtractList(cur, refList)
+				f.hasFM = true
+				return nil
+			}
+		}
 		switch cur := v.(type) {
 		case int:
-			n, err := strconv.ParseInt(*a.Value, 10, 64)
+			n, err := strconv.ParseInt(val, 10, 64)
 			if err != nil {
-				return fmt.Errorf("field %q: -= requires int value, got %q", a.Field.Name, *a.Value)
+				return fmt.Errorf("field %q: -= requires int value, got %q", a.Field.Name, val)
 			}
 			f.FM[a.Field.Name] = cur - int(n)
 		case int64:
-			n, err := strconv.ParseInt(*a.Value, 10, 64)
+			n, err := strconv.ParseInt(val, 10, 64)
 			if err != nil {
-				return fmt.Errorf("field %q: -= requires int value, got %q", a.Field.Name, *a.Value)
+				return fmt.Errorf("field %q: -= requires int value, got %q", a.Field.Name, val)
 			}
 			f.FM[a.Field.Name] = cur - n
 		case float64:
-			n, err := strconv.ParseFloat(*a.Value, 64)
+			n, err := strconv.ParseFloat(val, 64)
 			if err != nil {
-				return fmt.Errorf("field %q: -= requires number value, got %q", a.Field.Name, *a.Value)
+				return fmt.Errorf("field %q: -= requires number value, got %q", a.Field.Name, val)
 			}
 			f.FM[a.Field.Name] = cur - n
 		case []any:
 			result := make([]any, 0, len(cur))
 			for _, item := range cur {
-				if fmtValue(item) != *a.Value {
+				if fmtValue(item) != val {
 					result = append(result, item)
 				}
 			}
@@ -386,6 +433,39 @@ func (f *File) Apply(a Assignment) error {
 		f.hasFM = true
 	}
 	return nil
+}
+
+func mergeList(dst, src []any) []any {
+	result := make([]any, len(dst))
+	copy(result, dst)
+	for _, item := range src {
+		itemStr := fmtValue(item)
+		found := false
+		for _, e := range result {
+			if fmtValue(e) == itemStr {
+				found = true
+				break
+			}
+		}
+		if !found {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func subtractList(dst, src []any) []any {
+	exclude := make(map[string]bool, len(src))
+	for _, item := range src {
+		exclude[fmtValue(item)] = true
+	}
+	result := make([]any, 0, len(dst))
+	for _, item := range dst {
+		if !exclude[fmtValue(item)] {
+			result = append(result, item)
+		}
+	}
+	return result
 }
 
 func castValue(v any, f Field) (any, error) {

@@ -113,9 +113,10 @@ const (
 
 // Assignment is used in `update set` clauses.
 type Assignment struct {
-	Field Field
-	Op    AssignOp
-	Value *string // nil = cast to Field.Type
+	Field      Field
+	Op         AssignOp
+	Value      *string // nil = cast to Field.Type
+	ValueIsRef bool    // true = Value is a field name, not a literal
 }
 
 // Expression is an OR of AND-groups.
@@ -175,30 +176,54 @@ func ParseComparison(s string) (Comparison, error) {
 	return Comparison{Neg: neg, Field: f, Value: &v}, nil
 }
 
+// parseAssignmentValue distinguishes a field reference from a literal value.
+// Quoted strings ("...") become string literals with quotes stripped.
+// null, true, false, numbers, and dates (starting with a digit or -digit) are literals.
+// Everything else is treated as a field reference.
+func parseAssignmentValue(s string) (value string, isRef bool) {
+	if len(s) == 0 {
+		return s, false
+	}
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		return s[1 : len(s)-1], false
+	}
+	switch s {
+	case "null", "true", "false":
+		return s, false
+	}
+	if s[0] >= '0' && s[0] <= '9' {
+		return s, false
+	}
+	if len(s) > 1 && s[0] == '-' && s[1] >= '0' && s[1] <= '9' {
+		return s, false
+	}
+	return s, true
+}
+
 func ParseAssignment(s string) (Assignment, error) {
 	if i := strings.Index(s, "+="); i >= 0 {
 		f, err := ParseField(s[:i])
 		if err != nil {
 			return Assignment{}, err
 		}
-		v := s[i+2:]
-		return Assignment{Field: f, Op: OpAdd, Value: &v}, nil
+		v, isRef := parseAssignmentValue(s[i+2:])
+		return Assignment{Field: f, Op: OpAdd, Value: &v, ValueIsRef: isRef}, nil
 	}
 	if i := strings.Index(s, "-="); i >= 0 {
 		f, err := ParseField(s[:i])
 		if err != nil {
 			return Assignment{}, err
 		}
-		v := s[i+2:]
-		return Assignment{Field: f, Op: OpSub, Value: &v}, nil
+		v, isRef := parseAssignmentValue(s[i+2:])
+		return Assignment{Field: f, Op: OpSub, Value: &v, ValueIsRef: isRef}, nil
 	}
 	if i := strings.IndexByte(s, '='); i >= 0 {
 		f, err := ParseField(s[:i])
 		if err != nil {
 			return Assignment{}, err
 		}
-		v := s[i+1:]
-		return Assignment{Field: f, Op: OpSet, Value: &v}, nil
+		v, isRef := parseAssignmentValue(s[i+1:])
+		return Assignment{Field: f, Op: OpSet, Value: &v, ValueIsRef: isRef}, nil
 	}
 	f, err := ParseField(s)
 	if err != nil {

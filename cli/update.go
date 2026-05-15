@@ -17,10 +17,17 @@ disk. Field order is always sorted alphabetically after a write.
 
 Assignment forms:
 
-  field:type      Cast field to type; creates it as null if absent. Skipped when type is any.
-  field=value     Set field to value. Use null to clear the field.
-  field+=value    Numbers: add. Strings: append. Lists: append if not already present.
-  field-=value    Numbers: subtract. Lists: remove if present.`,
+  field:type        Cast field to type; creates it as null if absent. Skipped when type is any.
+  field="string"    Set field to a literal string value.
+  field=value       Set field to the value of another field (field reference).
+  field=null        Clear the field (set to null).
+  field+=value      Numbers: add. Strings: append. Lists: append if not already present.
+  field+="value"    Lists: append literal string if not already present.
+  field+=ref        Lists: merge (set union).
+  field-="value"    Lists: remove literal string if present.
+  field-=ref        Lists: subtract (set difference).
+
+A missing field reference defaults to null for = and is a no-op for += and -=.`,
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			stmt, err := newUpdateStatement(args)

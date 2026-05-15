@@ -19,7 +19,7 @@ func TestUpdateArgs(t *testing.T) {
 			name: "set replaces field value",
 			file: tfTitleOld,
 			args: func(path string) []string {
-				return []string{path, "set", "title=NewTitle"}
+				return []string{path, "set", `title="NewTitle"`}
 			},
 			wantFM: map[string]string{"title": "NewTitle"},
 		},
@@ -35,7 +35,7 @@ func TestUpdateArgs(t *testing.T) {
 			name: "add appends to list field",
 			file: tfTagsBaking,
 			args: func(path string) []string {
-				return []string{path, "set", "tags+=cooking"}
+				return []string{path, "set", `tags+="cooking"`}
 			},
 			wantFM: map[string]string{"tags": "[baking, cooking]"},
 		},
@@ -51,7 +51,7 @@ func TestUpdateArgs(t *testing.T) {
 			name: "where clause skips non-matching file",
 			file: tfRecipeUnpublished,
 			args: func(path string) []string {
-				return []string{path, "set", "title=Modified", "where", "published=true"}
+				return []string{path, "set", `title="Modified"`, "where", "published=true"}
 			},
 			wantFM: map[string]string{"title": "Recipe", "published": "false"},
 		},

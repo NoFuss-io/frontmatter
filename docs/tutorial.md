@@ -43,4 +43,3 @@ fm update tutorial/* set diet+=vegetarian where vegetarian=true or veggie=true
 ```sh
 fm alter tutorial/* drop vegan, vegetarian, veggie
 ```
-
