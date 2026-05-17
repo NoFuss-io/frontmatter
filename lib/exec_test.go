@@ -1,0 +1,527 @@
+package lib_test
+
+import (
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/backlin/frontmatter/lib"
+)
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+func vInt(n int64) lib.Value   { return lib.Value{Kind: lib.TypeInt, Data: n} }
+func vNum(n float64) lib.Value { return lib.Value{Kind: lib.TypeNumber, Data: n} }
+func vStr(s string) lib.Value  { return lib.Value{Kind: lib.TypeString, Data: s} }
+func vBool(b bool) lib.Value   { return lib.Value{Kind: lib.TypeBool, Data: b} }
+func vVoid() lib.Value         { return lib.Value{Void: true} }
+func vList(els ...lib.Value) lib.Value {
+	return lib.Value{Kind: lib.TypeList, Data: els}
+}
+
+func newDoc(fm map[string]any) *lib.Document {
+	return &lib.Document{FrontMatter: fm}
+}
+
+func valEq(a, b lib.Value) bool {
+	if a.Void != b.Void {
+		return false
+	}
+	if a.Void {
+		return true
+	}
+	if a.Kind != b.Kind {
+		return false
+	}
+	return reflect.DeepEqual(a.Data, b.Data)
+}
+
+func parseQ(t *testing.T, src string) lib.Query {
+	t.Helper()
+	q, err := lib.ParseQuery(strings.NewReader(src))
+	if err != nil {
+		t.Fatalf("ParseQuery(%q): %v", src, err)
+	}
+	return q
+}
+
+// ── Row 1: Cast ───────────────────────────────────────────────────────────────
+
+func TestCast(t *testing.T) {
+	tests := []struct {
+		name   string
+		v      lib.Value
+		target lib.FieldType
+		want   lib.Value
+	}{
+		{"same_type_noop", vInt(7), lib.TypeInt, vInt(7)},
+		{"to_any_preserves", vInt(7), lib.TypeAny, vInt(7)},
+		{"int_to_bool_1", vInt(1), lib.TypeBool, vBool(true)},
+		{"int_to_bool_0", vInt(0), lib.TypeBool, vBool(false)},
+		{"int_to_bool_2_err", vInt(2), lib.TypeBool, vVoid()},
+		{"string_to_int_ok", vStr("3"), lib.TypeInt, vInt(3)},
+		{"string_to_int_err", vStr("hello"), lib.TypeInt, vVoid()},
+		{"int_to_string", vInt(42), lib.TypeString, vStr("42")},
+		{"int_to_number", vInt(5), lib.TypeNumber, vNum(5)},
+		{"number_to_int_err", vNum(1.5), lib.TypeInt, vVoid()},
+		{"int_to_list", vInt(4), lib.TypeList, vList(vInt(4))},
+		{"list_to_int_single", vList(vInt(5)), lib.TypeInt, vInt(5)},
+		{"list_to_int_multi_err", vList(vInt(6), vInt(7)), lib.TypeInt, vVoid()},
+		{"void_to_any", vVoid(), lib.TypeAny, vVoid()},
+		{"void_to_int", vVoid(), lib.TypeInt, vVoid()},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := lib.Cast(tc.v, tc.target)
+			if !valEq(got, tc.want) {
+				t.Errorf("Cast(%+v, %v) = %+v, want %+v", tc.v, tc.target, got, tc.want)
+			}
+		})
+	}
+}
+
+// ── Row 2: LitExpr.Eval ───────────────────────────────────────────────────────
+
+func TestLitExpr_Eval(t *testing.T) {
+	tests := []struct {
+		name string
+		lit  lib.LitExpr
+		want lib.Value
+	}{
+		{"int_dec", lib.LitExpr{Kind: lib.LitInt, Value: "42"}, vInt(42)},
+		{"int_neg", lib.LitExpr{Kind: lib.LitInt, Value: "-7"}, vInt(-7)},
+		{"int_hex", lib.LitExpr{Kind: lib.LitInt, Value: "0xFF"}, vInt(255)},
+		{"numeric", lib.LitExpr{Kind: lib.LitNumeric, Value: "3.14"}, vNum(3.14)},
+		{"numeric_exp", lib.LitExpr{Kind: lib.LitNumeric, Value: "1.0e2"}, vNum(100)},
+		{"string", lib.LitExpr{Kind: lib.LitString, Value: "hello"}, vStr("hello")},
+		{"bool_true", lib.LitExpr{Kind: lib.LitBool, Value: "true"}, vBool(true)},
+		{"bool_false", lib.LitExpr{Kind: lib.LitBool, Value: "false"}, vBool(false)},
+		{"bool_TRUE", lib.LitExpr{Kind: lib.LitBool, Value: "TRUE"}, vBool(true)},
+		{"null", lib.LitExpr{Kind: lib.LitNull, Value: "null"}, vVoid()},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.lit.Eval(nil)
+			if !valEq(got, tc.want) {
+				t.Errorf("Eval() = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+// ── Row 3: FieldExpr.Eval ─────────────────────────────────────────────────────
+
+func TestFieldExpr_Eval(t *testing.T) {
+	d := newDoc(map[string]any{
+		"title":  "hello",
+		"count":  int64(5),
+		"price":  3.14,
+		"active": true,
+		"tags":   []any{"a", "b"},
+	})
+	tests := []struct {
+		name string
+		f    lib.Field
+		want lib.Value
+	}{
+		{"any_string", lib.Field{Name: "title", Type: lib.TypeAny}, vStr("hello")},
+		{"any_int", lib.Field{Name: "count", Type: lib.TypeAny}, vInt(5)},
+		{"any_bool", lib.Field{Name: "active", Type: lib.TypeAny}, vBool(true)},
+		{"missing", lib.Field{Name: "nope", Type: lib.TypeAny}, vVoid()},
+		{"typed_match", lib.Field{Name: "count", Type: lib.TypeInt}, vInt(5)},
+		{"typed_relax_int_to_string", lib.Field{Name: "count", Type: lib.TypeString}, vStr("5")},
+		{"typed_cast_fail_string_to_int", lib.Field{Name: "title", Type: lib.TypeInt}, vVoid()},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			e := lib.FieldExpr{Field: tc.f}
+			got := e.Eval(d)
+			if !valEq(got, tc.want) {
+				t.Errorf("Eval(%+v) = %+v, want %+v", tc.f, got, tc.want)
+			}
+		})
+	}
+}
+
+// ── Row 4: UnaryExpr.Eval ─────────────────────────────────────────────────────
+
+func TestUnaryExpr_Eval(t *testing.T) {
+	d := newDoc(map[string]any{"n": int64(5)})
+	missing := lib.FieldExpr{Field: lib.Field{Name: "missing"}}
+	bl := func(s string) lib.LitExpr { return lib.LitExpr{Kind: lib.LitBool, Value: s} }
+	il := func(s string) lib.LitExpr { return lib.LitExpr{Kind: lib.LitInt, Value: s} }
+
+	tests := []struct {
+		name string
+		e    lib.UnaryExpr
+		want lib.Value
+	}{
+		{"not_true", lib.UnaryExpr{Op: lib.UnaryNot, Operand: bl("true")}, vBool(false)},
+		{"not_false", lib.UnaryExpr{Op: lib.UnaryNot, Operand: bl("false")}, vBool(true)},
+		{"not_void", lib.UnaryExpr{Op: lib.UnaryNot, Operand: missing}, vBool(true)},
+		{"neg_int", lib.UnaryExpr{Op: lib.UnaryNeg, Operand: il("5")}, vInt(-5)},
+		{"neg_void", lib.UnaryExpr{Op: lib.UnaryNeg, Operand: missing}, vVoid()},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.e.Eval(d)
+			if !valEq(got, tc.want) {
+				t.Errorf("Eval() = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+// ── Row 5: BinExpr (and/or) ───────────────────────────────────────────────────
+
+func TestBinExpr_BoolOps(t *testing.T) {
+	bl := func(s string) lib.LitExpr { return lib.LitExpr{Kind: lib.LitBool, Value: s} }
+	missing := lib.FieldExpr{Field: lib.Field{Name: "missing"}}
+
+	tests := []struct {
+		name string
+		e    lib.BinExpr
+		want lib.Value
+	}{
+		{"and_tt", lib.BinExpr{Op: lib.BinAnd, Left: bl("true"), Right: bl("true")}, vBool(true)},
+		{"and_tf", lib.BinExpr{Op: lib.BinAnd, Left: bl("true"), Right: bl("false")}, vBool(false)},
+		{"and_ft", lib.BinExpr{Op: lib.BinAnd, Left: bl("false"), Right: bl("true")}, vBool(false)},
+		{"and_void_lhs", lib.BinExpr{Op: lib.BinAnd, Left: missing, Right: bl("true")}, vBool(false)},
+		{"and_void_rhs", lib.BinExpr{Op: lib.BinAnd, Left: bl("true"), Right: missing}, vBool(false)},
+		{"or_tf", lib.BinExpr{Op: lib.BinOr, Left: bl("true"), Right: bl("false")}, vBool(true)},
+		{"or_ff", lib.BinExpr{Op: lib.BinOr, Left: bl("false"), Right: bl("false")}, vBool(false)},
+		{"or_void_void", lib.BinExpr{Op: lib.BinOr, Left: missing, Right: missing}, vBool(false)},
+		{"or_void_true", lib.BinExpr{Op: lib.BinOr, Left: missing, Right: bl("true")}, vBool(true)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.e.Eval(newDoc(nil))
+			if !valEq(got, tc.want) {
+				t.Errorf("Eval() = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+// ── Row 6: BinExpr (arith) ────────────────────────────────────────────────────
+
+func TestBinExpr_Arith(t *testing.T) {
+	il := func(s string) lib.LitExpr { return lib.LitExpr{Kind: lib.LitInt, Value: s} }
+	nl := func(s string) lib.LitExpr { return lib.LitExpr{Kind: lib.LitNumeric, Value: s} }
+	missing := lib.FieldExpr{Field: lib.Field{Name: "missing"}}
+
+	tests := []struct {
+		name string
+		e    lib.BinExpr
+		want lib.Value
+	}{
+		{"add_ints", lib.BinExpr{Op: lib.BinAdd, Left: il("2"), Right: il("3")}, vInt(5)},
+		{"sub_ints", lib.BinExpr{Op: lib.BinSub, Left: il("10"), Right: il("4")}, vInt(6)},
+		{"mul_ints", lib.BinExpr{Op: lib.BinMul, Left: il("3"), Right: il("4")}, vInt(12)},
+		{"div_ints_exact", lib.BinExpr{Op: lib.BinDiv, Left: il("10"), Right: il("2")}, vInt(5)},
+		{"add_numerics", lib.BinExpr{Op: lib.BinAdd, Left: nl("1.5"), Right: nl("2.5")}, vNum(4.0)},
+		{"mix_int_numeric", lib.BinExpr{Op: lib.BinAdd, Left: il("1"), Right: nl("2.5")}, vNum(3.5)},
+		{"add_void_lhs", lib.BinExpr{Op: lib.BinAdd, Left: missing, Right: il("1")}, vVoid()},
+		{"add_void_rhs", lib.BinExpr{Op: lib.BinAdd, Left: il("1"), Right: missing}, vVoid()},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.e.Eval(newDoc(nil))
+			if !valEq(got, tc.want) {
+				t.Errorf("Eval() = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+// ── Row 7: BinExpr (comparison) ───────────────────────────────────────────────
+
+func TestBinExpr_Compare(t *testing.T) {
+	il := func(s string) lib.LitExpr { return lib.LitExpr{Kind: lib.LitInt, Value: s} }
+	sl := func(s string) lib.LitExpr { return lib.LitExpr{Kind: lib.LitString, Value: s} }
+	missing := lib.FieldExpr{Field: lib.Field{Name: "missing"}}
+
+	tests := []struct {
+		name string
+		e    lib.BinExpr
+		want lib.Value
+	}{
+		{"eq_ints_true", lib.BinExpr{Op: lib.BinEq, Left: il("1"), Right: il("1")}, vBool(true)},
+		{"eq_ints_false", lib.BinExpr{Op: lib.BinEq, Left: il("1"), Right: il("2")}, vBool(false)},
+		{"ne_ints", lib.BinExpr{Op: lib.BinNe, Left: il("1"), Right: il("2")}, vBool(true)},
+		{"lt", lib.BinExpr{Op: lib.BinLt, Left: il("1"), Right: il("2")}, vBool(true)},
+		{"le_eq", lib.BinExpr{Op: lib.BinLe, Left: il("2"), Right: il("2")}, vBool(true)},
+		{"gt_false", lib.BinExpr{Op: lib.BinGt, Left: il("1"), Right: il("2")}, vBool(false)},
+		{"ge_eq", lib.BinExpr{Op: lib.BinGe, Left: il("2"), Right: il("2")}, vBool(true)},
+		{"eq_strings", lib.BinExpr{Op: lib.BinEq, Left: sl("a"), Right: sl("a")}, vBool(true)},
+		{"eq_void_lhs", lib.BinExpr{Op: lib.BinEq, Left: missing, Right: il("1")}, vBool(false)},
+		{"eq_void_rhs", lib.BinExpr{Op: lib.BinEq, Left: il("1"), Right: missing}, vBool(false)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.e.Eval(newDoc(nil))
+			if !valEq(got, tc.want) {
+				t.Errorf("Eval() = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+// ── Row 8: Assign.Apply ───────────────────────────────────────────────────────
+
+func TestAssign_Apply(t *testing.T) {
+	t.Run("set_literal", func(t *testing.T) {
+		d := newDoc(map[string]any{})
+		a := lib.Assign{
+			Field: lib.Field{Name: "title"},
+			Op:    lib.OpSet,
+			Value: lib.LitExpr{Kind: lib.LitString, Value: "hello"},
+		}
+		if err := a.Apply(d); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		if d.FrontMatter["title"] != "hello" {
+			t.Errorf("title = %v, want hello", d.FrontMatter["title"])
+		}
+	})
+	t.Run("set_typed_cast_ok", func(t *testing.T) {
+		d := newDoc(map[string]any{})
+		a := lib.Assign{
+			Field: lib.Field{Name: "n", Type: lib.TypeInt},
+			Op:    lib.OpSet,
+			Value: lib.LitExpr{Kind: lib.LitString, Value: "42"},
+		}
+		if err := a.Apply(d); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		if d.FrontMatter["n"] != int64(42) {
+			t.Errorf("n = %v (%T), want int64(42)", d.FrontMatter["n"], d.FrontMatter["n"])
+		}
+	})
+	t.Run("cast_only_creates_null", func(t *testing.T) {
+		d := newDoc(map[string]any{})
+		a := lib.Assign{
+			Field: lib.Field{Name: "foo", Type: lib.TypeInt},
+			Op:    lib.OpSet,
+			Value: nil,
+		}
+		if err := a.Apply(d); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		if _, ok := d.FrontMatter["foo"]; !ok {
+			t.Error("foo not created")
+		}
+		if d.FrontMatter["foo"] != nil {
+			t.Errorf("foo = %v, want nil", d.FrontMatter["foo"])
+		}
+	})
+	t.Run("set_null", func(t *testing.T) {
+		d := newDoc(map[string]any{"title": "hello"})
+		a := lib.Assign{
+			Field: lib.Field{Name: "title"},
+			Op:    lib.OpSet,
+			Value: lib.LitExpr{Kind: lib.LitNull, Value: "null"},
+		}
+		if err := a.Apply(d); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		if d.FrontMatter["title"] != nil {
+			t.Errorf("title = %v, want nil", d.FrontMatter["title"])
+		}
+	})
+	t.Run("add_to_list", func(t *testing.T) {
+		d := newDoc(map[string]any{"tags": []any{"a"}})
+		a := lib.Assign{
+			Field: lib.Field{Name: "tags"},
+			Op:    lib.OpAdd,
+			Value: lib.LitExpr{Kind: lib.LitString, Value: "b"},
+		}
+		if err := a.Apply(d); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		tags, ok := d.FrontMatter["tags"].([]any)
+		if !ok || len(tags) != 2 || tags[1] != "b" {
+			t.Errorf("tags = %+v, want [a b]", d.FrontMatter["tags"])
+		}
+	})
+	t.Run("sub_from_list", func(t *testing.T) {
+		d := newDoc(map[string]any{"tags": []any{"a", "b", "c"}})
+		a := lib.Assign{
+			Field: lib.Field{Name: "tags"},
+			Op:    lib.OpSub,
+			Value: lib.LitExpr{Kind: lib.LitString, Value: "b"},
+		}
+		if err := a.Apply(d); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		tags, _ := d.FrontMatter["tags"].([]any)
+		if len(tags) != 2 || tags[0] != "a" || tags[1] != "c" {
+			t.Errorf("tags = %+v, want [a c]", tags)
+		}
+	})
+	t.Run("cast_failure_errors", func(t *testing.T) {
+		d := newDoc(map[string]any{"src": "hello"})
+		a := lib.Assign{
+			Field: lib.Field{Name: "n", Type: lib.TypeInt},
+			Op:    lib.OpSet,
+			Value: lib.FieldExpr{Field: lib.Field{Name: "src", Type: lib.TypeString}},
+		}
+		if err := a.Apply(d); err == nil {
+			t.Error("expected cast-failure error, got nil")
+		}
+	})
+}
+
+// ── Row 9: SortTerm.Eval ──────────────────────────────────────────────────────
+
+func TestSortTerm_Eval(t *testing.T) {
+	d := newDoc(map[string]any{"title": "abc"})
+	s := lib.SortTerm{
+		Expr: lib.FieldExpr{Field: lib.Field{Name: "title"}},
+		Desc: false,
+	}
+	if got := s.Eval(d); !valEq(got, vStr("abc")) {
+		t.Errorf("Eval() = %+v, want %+v", got, vStr("abc"))
+	}
+}
+
+// ── Row 10: AlterQuery.Eval ───────────────────────────────────────────────────
+
+func TestAlterQuery_Eval(t *testing.T) {
+	t.Run("drop_one", func(t *testing.T) {
+		d := newDoc(map[string]any{"title": "x", "date": "2026-01-01"})
+		q := parseQ(t, "alter *.md drop title").(lib.AlterQuery)
+		if err := q.Eval(d); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := d.FrontMatter["title"]; ok {
+			t.Error("title still present")
+		}
+		if _, ok := d.FrontMatter["date"]; !ok {
+			t.Error("date should remain")
+		}
+	})
+	t.Run("drop_multi", func(t *testing.T) {
+		d := newDoc(map[string]any{"a": int64(1), "b": int64(2), "c": int64(3)})
+		q := parseQ(t, "alter *.md drop a, b").(lib.AlterQuery)
+		if err := q.Eval(d); err != nil {
+			t.Fatal(err)
+		}
+		if len(d.FrontMatter) != 1 || d.FrontMatter["c"] != int64(3) {
+			t.Errorf("FrontMatter = %+v, want {c:3}", d.FrontMatter)
+		}
+	})
+	t.Run("rename", func(t *testing.T) {
+		d := newDoc(map[string]any{"foo": "hello"})
+		q := parseQ(t, "alter *.md rename foo to bar").(lib.AlterQuery)
+		if err := q.Eval(d); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := d.FrontMatter["foo"]; ok {
+			t.Error("foo still present")
+		}
+		if d.FrontMatter["bar"] != "hello" {
+			t.Errorf("bar = %v, want hello", d.FrontMatter["bar"])
+		}
+	})
+	t.Run("where_skips", func(t *testing.T) {
+		d := newDoc(map[string]any{"published": false, "title": "x"})
+		q := parseQ(t, "alter *.md drop title where published = true").(lib.AlterQuery)
+		if err := q.Eval(d); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := d.FrontMatter["title"]; !ok {
+			t.Error("title should remain (where=false)")
+		}
+	})
+}
+
+// ── Row 11: UpdateQuery.Eval ──────────────────────────────────────────────────
+
+func TestUpdateQuery_Eval(t *testing.T) {
+	t.Run("set_one", func(t *testing.T) {
+		d := newDoc(map[string]any{})
+		q := parseQ(t, `update *.md set title = "hello"`).(lib.UpdateQuery)
+		if err := q.Eval(d); err != nil {
+			t.Fatal(err)
+		}
+		if d.FrontMatter["title"] != "hello" {
+			t.Errorf("title = %v", d.FrontMatter["title"])
+		}
+	})
+	t.Run("set_multi", func(t *testing.T) {
+		d := newDoc(map[string]any{})
+		q := parseQ(t, `update *.md set a = 1, b = 2`).(lib.UpdateQuery)
+		if err := q.Eval(d); err != nil {
+			t.Fatal(err)
+		}
+		if d.FrontMatter["a"] != int64(1) || d.FrontMatter["b"] != int64(2) {
+			t.Errorf("FrontMatter = %+v", d.FrontMatter)
+		}
+	})
+	t.Run("where_skips", func(t *testing.T) {
+		d := newDoc(map[string]any{"published": false})
+		q := parseQ(t, `update *.md set title = "x" where published = true`).(lib.UpdateQuery)
+		if err := q.Eval(d); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := d.FrontMatter["title"]; ok {
+			t.Error("title set despite where=false")
+		}
+	})
+}
+
+// ── Row 12: SelectQuery.Eval ──────────────────────────────────────────────────
+
+func TestSelectQuery_Eval(t *testing.T) {
+	t.Run("project_one", func(t *testing.T) {
+		d := newDoc(map[string]any{"title": "hello", "date": "2026-01-01"})
+		q := parseQ(t, "select title from *.md").(lib.SelectQuery)
+		row, err := q.Eval(d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(row) != 1 || !valEq(row[0], vStr("hello")) {
+			t.Errorf("row = %+v, want [hello]", row)
+		}
+	})
+	t.Run("project_multi", func(t *testing.T) {
+		d := newDoc(map[string]any{"a": "x", "b": int64(42)})
+		q := parseQ(t, "select a, b from *.md").(lib.SelectQuery)
+		row, err := q.Eval(d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(row) != 2 {
+			t.Fatalf("row = %+v, want 2 cols", row)
+		}
+		if !valEq(row[0], vStr("x")) {
+			t.Errorf("row[0] = %+v, want %+v", row[0], vStr("x"))
+		}
+		if !valEq(row[1], vInt(42)) {
+			t.Errorf("row[1] = %+v, want %+v", row[1], vInt(42))
+		}
+	})
+	t.Run("where_returns_nil", func(t *testing.T) {
+		d := newDoc(map[string]any{"published": false, "title": "x"})
+		q := parseQ(t, "select title from *.md where published = true").(lib.SelectQuery)
+		row, err := q.Eval(d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if row != nil {
+			t.Errorf("row = %+v, want nil (where=false)", row)
+		}
+	})
+	t.Run("missing_field_void", func(t *testing.T) {
+		d := newDoc(map[string]any{})
+		q := parseQ(t, "select title from *.md").(lib.SelectQuery)
+		row, err := q.Eval(d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(row) != 1 || !row[0].Void {
+			t.Errorf("row = %+v, want [void]", row)
+		}
+	})
+}

@@ -97,7 +97,10 @@ type Assign struct {
 // --- Expression nodes ---
 
 // Expr is the expression tree node interface.
-type Expr interface{ expr() }
+type Expr interface {
+	expr()
+	Eval(doc *Document) Value
+}
 
 // BinExpr is a binary operation: Left Op Right.
 type BinExpr struct {
