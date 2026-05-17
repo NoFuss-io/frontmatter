@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -733,7 +734,75 @@ func (e *FieldExpr) Parse(r io.Reader) error {
 }
 
 func (a *Assign) Parse(r io.Reader) error {
-	return errNotImplemented
+	return a.parse(bufio.NewReader(r))
+}
+
+func (a *Assign) parse(r *bufio.Reader) error {
+	skipWS(r)
+	if err := a.Field.parse(r); err != nil {
+		return err
+	}
+
+	skipWS(r)
+	b, _ := r.Peek(2)
+	var op AssignOp
+	var n int
+	switch {
+	case len(b) >= 2 && b[0] == '+' && b[1] == '=':
+		op, n = OpAdd, 2
+	case len(b) >= 2 && b[0] == '-' && b[1] == '=':
+		op, n = OpSub, 2
+	case len(b) >= 1 && b[0] == '=':
+		op, n = OpSet, 1
+	default:
+		// Cast-only form: no operator, no value.
+		a.Op = OpSet
+		a.Value = nil
+		return nil
+	}
+	consumeBytes(r, n)
+
+	e, err := parseOrExpr(r)
+	if err != nil {
+		return err
+	}
+	a.Op = op
+	a.Value = e
+
+	if lit, ok := e.(LitExpr); ok {
+		if err := validateLitAssign(a.Field, lit); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateLitAssign rejects assignments where a literal value cannot possibly
+// be cast to the field's declared type. Only catches statically obvious errors;
+// runtime cast failures are handled per-clause.
+func validateLitAssign(f Field, lit LitExpr) error {
+	if lit.Kind == LitNull || f.Type == TypeAny {
+		return nil
+	}
+	if lit.Kind != LitString {
+		return nil
+	}
+	switch f.Type {
+	case TypeInt:
+		if _, err := strconv.ParseInt(lit.Value, 0, 64); err != nil {
+			return fmt.Errorf("cannot assign string %q to int field %q", lit.Value, f.Name)
+		}
+	case TypeNumber:
+		if _, err := strconv.ParseFloat(lit.Value, 64); err != nil {
+			return fmt.Errorf("cannot assign string %q to number field %q", lit.Value, f.Name)
+		}
+	case TypeBool:
+		s := strings.ToLower(lit.Value)
+		if s != "true" && s != "false" {
+			return fmt.Errorf("cannot assign string %q to bool field %q", lit.Value, f.Name)
+		}
+	}
+	return nil
 }
 
 func (s *SortTerm) Parse(r io.Reader) error {
