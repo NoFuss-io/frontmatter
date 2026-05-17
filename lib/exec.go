@@ -140,7 +140,29 @@ func castToString(v Value) Value {
 
 // ── Expressions ───────────────────────────────────────────────────────────────
 
-func (LitExpr) Eval(*FrontMatter) Value   { return Value{Void: true} }
+func (e LitExpr) Eval(_ *FrontMatter) Value {
+	switch e.Kind {
+	case LitInt:
+		n, err := strconv.ParseInt(e.Value, 0, 64)
+		if err != nil {
+			return Value{Void: true}
+		}
+		return Value{Kind: TypeInt, Data: n}
+	case LitNumeric:
+		f, err := strconv.ParseFloat(e.Value, 64)
+		if err != nil {
+			return Value{Void: true}
+		}
+		return Value{Kind: TypeNumber, Data: f}
+	case LitString:
+		return Value{Kind: TypeString, Data: e.Value}
+	case LitBool:
+		return Value{Kind: TypeBool, Data: strings.ToLower(e.Value) == "true"}
+	case LitNull:
+		return Value{Void: true}
+	}
+	return Value{Void: true}
+}
 func (FieldExpr) Eval(*FrontMatter) Value { return Value{Void: true} }
 func (UnaryExpr) Eval(*FrontMatter) Value { return Value{Void: true} }
 func (BinExpr) Eval(*FrontMatter) Value   { return Value{Void: true} }
