@@ -163,7 +163,49 @@ func (e LitExpr) Eval(_ *FrontMatter) Value {
 	}
 	return Value{Void: true}
 }
-func (FieldExpr) Eval(*FrontMatter) Value { return Value{Void: true} }
+func (e FieldExpr) Eval(fm *FrontMatter) Value {
+	if fm == nil {
+		return Value{Void: true}
+	}
+	raw, ok := (*fm)[e.Field.Name]
+	if !ok {
+		return Value{Void: true}
+	}
+	v := valueFromAny(raw)
+	if e.Field.Type == TypeAny {
+		return v
+	}
+	return Cast(v, e.Field.Type)
+}
+
+// valueFromAny converts a raw Go value (from YAML-decoded frontmatter) into a
+// typed Value. Unknown Go types fall through as TypeAny with Data preserved.
+func valueFromAny(x any) Value {
+	if x == nil {
+		return Value{Void: true}
+	}
+	switch v := x.(type) {
+	case string:
+		return Value{Kind: TypeString, Data: v}
+	case bool:
+		return Value{Kind: TypeBool, Data: v}
+	case int:
+		return Value{Kind: TypeInt, Data: int64(v)}
+	case int64:
+		return Value{Kind: TypeInt, Data: v}
+	case float64:
+		return Value{Kind: TypeNumber, Data: v}
+	case float32:
+		return Value{Kind: TypeNumber, Data: float64(v)}
+	case []any:
+		els := make([]Value, len(v))
+		for i, e := range v {
+			els[i] = valueFromAny(e)
+		}
+		return Value{Kind: TypeList, Data: els}
+	}
+	return Value{Kind: TypeAny, Data: x}
+}
 func (UnaryExpr) Eval(*FrontMatter) Value { return Value{Void: true} }
 func (BinExpr) Eval(*FrontMatter) Value   { return Value{Void: true} }
 
