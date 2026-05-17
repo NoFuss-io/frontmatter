@@ -2,6 +2,7 @@ package lib
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -408,9 +409,122 @@ func (s SortTerm) Eval(fm *FrontMatter) Value { return s.Expr.Eval(fm) }
 // ── Assignment ────────────────────────────────────────────────────────────────
 
 // Apply evaluates a.Value (if present), casts to a.Field.Type, and writes the
-// result into doc.FrontMatter under a.Field.Name. A runtime cast failure is
-// returned as an error so the caller can halt the current file per Manual.md.
-func (Assign) Apply(*FrontMatter) error { return errEvalNotImplemented }
+// result into fm under a.Field.Name. A runtime cast failure is returned as
+// an error so the caller can halt the current file per Manual.md.
+func (a Assign) Apply(fm *FrontMatter) error {
+	if fm == nil {
+		return errors.New("nil frontmatter")
+	}
+	name := a.Field.Name
+
+	if a.Value == nil {
+		// Cast-only form: ensure field exists; cast if it does.
+		cur, ok := (*fm)[name]
+		if !ok {
+			(*fm)[name] = nil
+			return nil
+		}
+		if a.Field.Type == TypeAny {
+			return nil
+		}
+		v := valueFromAny(cur)
+		c := Cast(v, a.Field.Type)
+		if c.Void && !v.Void {
+			return fmt.Errorf("cannot cast field %q to %v", name, a.Field.Type)
+		}
+		(*fm)[name] = anyFromValue(c)
+		return nil
+	}
+
+	v := a.Value.Eval(fm)
+	if a.Field.Type != TypeAny {
+		c := Cast(v, a.Field.Type)
+		if c.Void && !v.Void {
+			return fmt.Errorf("cannot cast value to %v for field %q", a.Field.Type, name)
+		}
+		v = c
+	}
+
+	switch a.Op {
+	case OpSet:
+		(*fm)[name] = anyFromValue(v)
+	case OpAdd:
+		return applyListAdd(fm, name, v)
+	case OpSub:
+		return applyListSub(fm, name, v)
+	}
+	return nil
+}
+
+// anyFromValue lowers a Value into the raw Go value used in FrontMatter maps.
+func anyFromValue(v Value) any {
+	if v.Void {
+		return nil
+	}
+	if v.Kind == TypeList {
+		els := v.Data.([]Value)
+		out := make([]any, len(els))
+		for i, e := range els {
+			out[i] = anyFromValue(e)
+		}
+		return out
+	}
+	return v.Data
+}
+
+func applyListAdd(fm *FrontMatter, name string, v Value) error {
+	cur, ok := (*fm)[name]
+	var list []any
+	if ok {
+		if l, isList := cur.([]any); isList {
+			list = l
+		} else {
+			list = []any{cur}
+		}
+	}
+	if v.Kind == TypeList {
+		for _, e := range v.Data.([]Value) {
+			list = append(list, anyFromValue(e))
+		}
+	} else {
+		list = append(list, anyFromValue(v))
+	}
+	(*fm)[name] = list
+	return nil
+}
+
+func applyListSub(fm *FrontMatter, name string, v Value) error {
+	cur, ok := (*fm)[name]
+	if !ok {
+		return nil
+	}
+	list, isList := cur.([]any)
+	if !isList {
+		return nil
+	}
+	var toRemove []Value
+	if v.Kind == TypeList {
+		toRemove = v.Data.([]Value)
+	} else {
+		toRemove = []Value{v}
+	}
+	out := make([]any, 0, len(list))
+	for _, x := range list {
+		xv := valueFromAny(x)
+		drop := false
+		for _, rm := range toRemove {
+			if scalarEq(xv, rm) {
+				drop = true
+				break
+			}
+		}
+		if !drop {
+			out = append(out, x)
+		}
+	}
+	(*fm)[name] = out
+	return nil
+}
 
 // ── Queries ───────────────────────────────────────────────────────────────────
 
