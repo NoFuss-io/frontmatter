@@ -206,7 +206,40 @@ func valueFromAny(x any) Value {
 	}
 	return Value{Kind: TypeAny, Data: x}
 }
-func (UnaryExpr) Eval(*FrontMatter) Value { return Value{Void: true} }
+func (e UnaryExpr) Eval(fm *FrontMatter) Value {
+	v := e.Operand.Eval(fm)
+	switch e.Op {
+	case UnaryNot:
+		return Value{Kind: TypeBool, Data: !truthy(v)}
+	case UnaryNeg:
+		if v.Void {
+			return Value{Void: true}
+		}
+		switch v.Kind {
+		case TypeInt:
+			return Value{Kind: TypeInt, Data: -v.Data.(int64)}
+		case TypeNumber:
+			return Value{Kind: TypeNumber, Data: -v.Data.(float64)}
+		}
+	}
+	return Value{Void: true}
+}
+
+// truthy returns the boolean view of v. Void is falsey; non-bool values are
+// passed through castToBool, with cast failure also treated as falsey.
+func truthy(v Value) bool {
+	if v.Void {
+		return false
+	}
+	if v.Kind == TypeBool {
+		return v.Data.(bool)
+	}
+	b := castToBool(v)
+	if b.Void {
+		return false
+	}
+	return b.Data.(bool)
+}
 func (BinExpr) Eval(*FrontMatter) Value   { return Value{Void: true} }
 
 // SortTerm.Eval is a thin wrapper around the underlying expression.
