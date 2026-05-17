@@ -1,6 +1,6 @@
 ---
 category: Side Dish
-size: 2 h
+time: 2 h
 vegan: true
 ---
 
