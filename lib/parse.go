@@ -477,7 +477,247 @@ func readHexChars(r *bufio.Reader, n int) (int64, error) {
 
 // ParseExpr reads an expression from r and returns the appropriate Expr node.
 func ParseExpr(r io.Reader) (Expr, error) {
-	return nil, errNotImplemented
+	return parseOrExpr(bufio.NewReader(r))
+}
+
+func parseOrExpr(r *bufio.Reader) (Expr, error) {
+	left, err := parseAndExpr(r)
+	if err != nil {
+		return nil, err
+	}
+	for {
+		skipWS(r)
+		kw := peekKeyword(r)
+		if strings.ToLower(kw) != "or" {
+			return left, nil
+		}
+		consumeBytes(r, len(kw))
+		right, err := parseAndExpr(r)
+		if err != nil {
+			return nil, err
+		}
+		left = BinExpr{Op: BinOr, Left: left, Right: right}
+	}
+}
+
+func parseAndExpr(r *bufio.Reader) (Expr, error) {
+	left, err := parseNotExpr(r)
+	if err != nil {
+		return nil, err
+	}
+	for {
+		skipWS(r)
+		kw := peekKeyword(r)
+		if strings.ToLower(kw) != "and" {
+			return left, nil
+		}
+		consumeBytes(r, len(kw))
+		right, err := parseNotExpr(r)
+		if err != nil {
+			return nil, err
+		}
+		left = BinExpr{Op: BinAnd, Left: left, Right: right}
+	}
+}
+
+func parseNotExpr(r *bufio.Reader) (Expr, error) {
+	skipWS(r)
+	kw := peekKeyword(r)
+	if strings.ToLower(kw) == "not" {
+		consumeBytes(r, len(kw))
+		inner, err := parseComparison(r)
+		if err != nil {
+			return nil, err
+		}
+		return UnaryExpr{Op: UnaryNot, Operand: inner}, nil
+	}
+	return parseComparison(r)
+}
+
+func parseComparison(r *bufio.Reader) (Expr, error) {
+	left, err := parseArith(r)
+	if err != nil {
+		return nil, err
+	}
+	skipWS(r)
+	b, _ := r.Peek(2)
+	var op BinOp
+	var n int
+	switch {
+	case len(b) >= 2 && b[0] == '!' && b[1] == '=':
+		op, n = BinNe, 2
+	case len(b) >= 2 && b[0] == '<' && b[1] == '=':
+		op, n = BinLe, 2
+	case len(b) >= 2 && b[0] == '>' && b[1] == '=':
+		op, n = BinGe, 2
+	case len(b) >= 1 && b[0] == '=':
+		op, n = BinEq, 1
+	case len(b) >= 1 && b[0] == '<':
+		op, n = BinLt, 1
+	case len(b) >= 1 && b[0] == '>':
+		op, n = BinGt, 1
+	default:
+		return left, nil
+	}
+	consumeBytes(r, n)
+	right, err := parseArith(r)
+	if err != nil {
+		return nil, err
+	}
+	return BinExpr{Op: op, Left: left, Right: right}, nil
+}
+
+func parseArith(r *bufio.Reader) (Expr, error) {
+	left, err := parseTerm(r)
+	if err != nil {
+		return nil, err
+	}
+	for {
+		skipWS(r)
+		b, _ := r.Peek(1)
+		if len(b) == 0 || (b[0] != '+' && b[0] != '-') {
+			return left, nil
+		}
+		op := BinAdd
+		if b[0] == '-' {
+			op = BinSub
+		}
+		consumeBytes(r, 1)
+		right, err := parseTerm(r)
+		if err != nil {
+			return nil, err
+		}
+		left = BinExpr{Op: op, Left: left, Right: right}
+	}
+}
+
+func parseTerm(r *bufio.Reader) (Expr, error) {
+	left, err := parseFactor(r)
+	if err != nil {
+		return nil, err
+	}
+	for {
+		skipWS(r)
+		b, _ := r.Peek(1)
+		if len(b) == 0 || (b[0] != '*' && b[0] != '/') {
+			return left, nil
+		}
+		op := BinMul
+		if b[0] == '/' {
+			op = BinDiv
+		}
+		consumeBytes(r, 1)
+		right, err := parseFactor(r)
+		if err != nil {
+			return nil, err
+		}
+		left = BinExpr{Op: op, Left: left, Right: right}
+	}
+}
+
+func parseFactor(r *bufio.Reader) (Expr, error) {
+	skipWS(r)
+	b, _ := r.Peek(2)
+	if len(b) >= 1 && b[0] == '-' {
+		// Negative-number literal: leave the '-' for LitExpr to consume.
+		if len(b) >= 2 && ((b[1] >= '0' && b[1] <= '9') || b[1] == '.') {
+			return parsePrimary(r)
+		}
+		consumeBytes(r, 1)
+		operand, err := parseFactor(r)
+		if err != nil {
+			return nil, err
+		}
+		return UnaryExpr{Op: UnaryNeg, Operand: operand}, nil
+	}
+	return parsePrimary(r)
+}
+
+func parsePrimary(r *bufio.Reader) (Expr, error) {
+	skipWS(r)
+	b, _ := r.Peek(2)
+	if len(b) == 0 {
+		return nil, fmt.Errorf("expected expression: unexpected EOF")
+	}
+	b0 := b[0]
+	switch {
+	case b0 == '(':
+		consumeBytes(r, 1)
+		e, err := parseOrExpr(r)
+		if err != nil {
+			return nil, err
+		}
+		skipWS(r)
+		ch, _, err := r.ReadRune()
+		if err != nil || ch != ')' {
+			return nil, fmt.Errorf("expected ')'")
+		}
+		return e, nil
+	case b0 == '"' || b0 == '\'' || (b0 >= '0' && b0 <= '9') || b0 == '.':
+		var lit LitExpr
+		if err := lit.parse(r); err != nil {
+			return nil, err
+		}
+		return lit, nil
+	case (b0 == 'r' || b0 == 'R') && len(b) >= 2 && (b[1] == '"' || b[1] == '\''):
+		var lit LitExpr
+		if err := lit.parse(r); err != nil {
+			return nil, err
+		}
+		return lit, nil
+	case b0 == '`':
+		var f Field
+		if err := f.parse(r); err != nil {
+			return nil, err
+		}
+		return FieldExpr{Field: f}, nil
+	case isIdentStart(b0):
+		word := peekKeyword(r)
+		switch strings.ToLower(word) {
+		case "true", "false", "null":
+			var lit LitExpr
+			if err := lit.parse(r); err != nil {
+				return nil, err
+			}
+			return lit, nil
+		case "and", "or", "not":
+			return nil, fmt.Errorf("unexpected keyword %q", word)
+		}
+		var f Field
+		if err := f.parse(r); err != nil {
+			return nil, err
+		}
+		return FieldExpr{Field: f}, nil
+	}
+	return nil, fmt.Errorf("unexpected character %q", b0)
+}
+
+// peekKeyword returns the next ASCII identifier without consuming it.
+// Returns "" if the next byte is not an identifier start.
+func peekKeyword(r *bufio.Reader) string {
+	b, _ := r.Peek(16)
+	if len(b) == 0 || !isIdentStart(b[0]) {
+		return ""
+	}
+	j := 1
+	for j < len(b) && isIdentCont(b[j]) {
+		j++
+	}
+	return string(b[:j])
+}
+
+func isIdentStart(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
+}
+
+func isIdentCont(c byte) bool {
+	return isIdentStart(c) || (c >= '0' && c <= '9')
+}
+
+func consumeBytes(r *bufio.Reader, n int) {
+	for i := 0; i < n; i++ {
+		_, _, _ = r.ReadRune()
+	}
 }
 
 func (e *BinExpr) Parse(r io.Reader) error {
