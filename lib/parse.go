@@ -193,6 +193,130 @@ func (p *RenamePair) parse(r *bufio.Reader) error {
 	return nil
 }
 
+// ── Clause helpers ────────────────────────────────────────────────────────────
+
+// expectKeyword consumes a specific keyword (case-insensitive) and errors otherwise.
+func expectKeyword(r *bufio.Reader, kw string) error {
+	skipWS(r)
+	w := peekKeyword(r)
+	if strings.ToLower(w) != kw {
+		return fmt.Errorf("expected %q, got %q", kw, w)
+	}
+	consumeBytes(r, len(w))
+	return nil
+}
+
+// atStopKeyword returns true if the next token is one of stopKws (case-insensitive)
+// and is followed by whitespace or EOF (so it's not a prefix of a longer ident).
+func atStopKeyword(r *bufio.Reader, stopKws []string) bool {
+	b, _ := r.Peek(32)
+	if len(b) == 0 || !isIdentStart(b[0]) {
+		return false
+	}
+	j := 1
+	for j < len(b) && isIdentCont(b[j]) {
+		j++
+	}
+	word := strings.ToLower(string(b[:j]))
+	for _, kw := range stopKws {
+		if word == kw {
+			return j == len(b) || unicode.IsSpace(rune(b[j]))
+		}
+	}
+	return false
+}
+
+// readGlobs reads whitespace-separated glob tokens until EOF or a stop keyword.
+func readGlobs(r *bufio.Reader, stopKws ...string) []string {
+	var out []string
+	for {
+		skipWS(r)
+		b, _ := r.Peek(1)
+		if len(b) == 0 {
+			break
+		}
+		if atStopKeyword(r, stopKws) {
+			break
+		}
+		var sb strings.Builder
+		for {
+			b, _ := r.Peek(1)
+			if len(b) == 0 || unicode.IsSpace(rune(b[0])) {
+				break
+			}
+			ch, _, _ := r.ReadRune()
+			sb.WriteRune(ch)
+		}
+		if sb.Len() > 0 {
+			out = append(out, sb.String())
+		}
+	}
+	return out
+}
+
+// readFieldList reads a comma-separated list of Field values, stopping at EOF or a stop keyword.
+func readFieldList(r *bufio.Reader, stopKws ...string) ([]Field, error) {
+	var out []Field
+	for {
+		skipWS(r)
+		b, _ := r.Peek(1)
+		if len(b) == 0 || atStopKeyword(r, stopKws) {
+			break
+		}
+		var f Field
+		if err := f.parse(r); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+		skipWS(r)
+		b, _ = r.Peek(1)
+		if len(b) == 0 || b[0] != ',' {
+			break
+		}
+		consumeBytes(r, 1)
+	}
+	return out, nil
+}
+
+// readRenamePairs reads a comma-separated list of RenamePair values, stopping at EOF or a stop keyword.
+func readRenamePairs(r *bufio.Reader, stopKws ...string) ([]RenamePair, error) {
+	var out []RenamePair
+	for {
+		skipWS(r)
+		b, _ := r.Peek(1)
+		if len(b) == 0 || atStopKeyword(r, stopKws) {
+			break
+		}
+		var p RenamePair
+		if err := p.parse(r); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+		skipWS(r)
+		b, _ = r.Peek(1)
+		if len(b) == 0 || b[0] != ',' {
+			break
+		}
+		consumeBytes(r, 1)
+	}
+	return out, nil
+}
+
+// parseOptionalWhere consumes an optional "where <expr>" clause.
+func parseOptionalWhere(r *bufio.Reader, dst *Expr) error {
+	skipWS(r)
+	if strings.ToLower(peekKeyword(r)) != "where" {
+		return nil
+	}
+	consumeBytes(r, 5)
+	e, err := parseOrExpr(r)
+	if err != nil {
+		return err
+	}
+	*dst = e
+	return nil
+}
+
 // ── Queries ───────────────────────────────────────────────────────────────────
 
 // ParseQuery reads a full query from r and returns a SelectQuery, UpdateQuery, or AlterQuery.
@@ -209,7 +333,50 @@ func (q *UpdateQuery) Parse(r io.Reader) error {
 }
 
 func (q *AlterQuery) Parse(r io.Reader) error {
-	return errNotImplemented
+	return q.parse(bufio.NewReader(r))
+}
+
+func (q *AlterQuery) parse(r *bufio.Reader) error {
+	if err := expectKeyword(r, "alter"); err != nil {
+		return err
+	}
+
+	globs := readGlobs(r, "drop", "rename")
+	if len(globs) == 0 {
+		return fmt.Errorf("expected glob after 'alter'")
+	}
+	q.From = globs
+
+	skipWS(r)
+	kw := peekKeyword(r)
+	switch strings.ToLower(kw) {
+	case "drop":
+		consumeBytes(r, len(kw))
+		q.Op = AlterDrop
+		fields, err := readFieldList(r, "where")
+		if err != nil {
+			return err
+		}
+		if len(fields) == 0 {
+			return fmt.Errorf("expected field after 'drop'")
+		}
+		q.Drop = fields
+	case "rename":
+		consumeBytes(r, len(kw))
+		q.Op = AlterRename
+		pairs, err := readRenamePairs(r, "where")
+		if err != nil {
+			return err
+		}
+		if len(pairs) == 0 {
+			return fmt.Errorf("expected rename pair after 'rename'")
+		}
+		q.Rename = pairs
+	default:
+		return fmt.Errorf("expected 'drop' or 'rename' after globs")
+	}
+
+	return parseOptionalWhere(r, &q.Where)
 }
 
 // ── LitExpr ───────────────────────────────────────────────────────────────────
