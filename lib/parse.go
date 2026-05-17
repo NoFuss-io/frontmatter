@@ -278,6 +278,30 @@ func readFieldList(r *bufio.Reader, stopKws ...string) ([]Field, error) {
 	return out, nil
 }
 
+// readAssignList reads a comma-separated list of Assign values, stopping at EOF or a stop keyword.
+func readAssignList(r *bufio.Reader, stopKws ...string) ([]Assign, error) {
+	var out []Assign
+	for {
+		skipWS(r)
+		b, _ := r.Peek(1)
+		if len(b) == 0 || atStopKeyword(r, stopKws) {
+			break
+		}
+		var a Assign
+		if err := a.parse(r); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+		skipWS(r)
+		b, _ = r.Peek(1)
+		if len(b) == 0 || b[0] != ',' {
+			break
+		}
+		consumeBytes(r, 1)
+	}
+	return out, nil
+}
+
 // readRenamePairs reads a comma-separated list of RenamePair values, stopping at EOF or a stop keyword.
 func readRenamePairs(r *bufio.Reader, stopKws ...string) ([]RenamePair, error) {
 	var out []RenamePair
@@ -329,7 +353,34 @@ func (q *SelectQuery) Parse(r io.Reader) error {
 }
 
 func (q *UpdateQuery) Parse(r io.Reader) error {
-	return errNotImplemented
+	return q.parse(bufio.NewReader(r))
+}
+
+func (q *UpdateQuery) parse(r *bufio.Reader) error {
+	if err := expectKeyword(r, "update"); err != nil {
+		return err
+	}
+
+	globs := readGlobs(r, "set")
+	if len(globs) == 0 {
+		return fmt.Errorf("expected glob after 'update'")
+	}
+	q.From = globs
+
+	if err := expectKeyword(r, "set"); err != nil {
+		return err
+	}
+
+	assigns, err := readAssignList(r, "where")
+	if err != nil {
+		return err
+	}
+	if len(assigns) == 0 {
+		return fmt.Errorf("expected assignment after 'set'")
+	}
+	q.Set = assigns
+
+	return parseOptionalWhere(r, &q.Where)
 }
 
 func (q *AlterQuery) Parse(r io.Reader) error {
