@@ -384,13 +384,13 @@ func TestSortTerm_Eval(t *testing.T) {
 	}
 }
 
-// ── Row 10: AlterQuery.Eval ───────────────────────────────────────────────────
+// ── Row 10: AlterQuery.Apply ──────────────────────────────────────────────────
 
-func TestAlterQuery_Eval(t *testing.T) {
+func TestAlterQuery_Apply(t *testing.T) {
 	t.Run("drop_one", func(t *testing.T) {
 		fm := lib.FrontMatter{"title": "x", "date": "2026-01-01"}
 		q := parseQ(t, "alter *.md drop title").(lib.AlterQuery)
-		if err := q.Eval(&fm); err != nil {
+		if err := q.Apply(&fm); err != nil {
 			t.Fatal(err)
 		}
 		if _, ok := fm["title"]; ok {
@@ -403,7 +403,7 @@ func TestAlterQuery_Eval(t *testing.T) {
 	t.Run("drop_multi", func(t *testing.T) {
 		fm := lib.FrontMatter{"a": int64(1), "b": int64(2), "c": int64(3)}
 		q := parseQ(t, "alter *.md drop a, b").(lib.AlterQuery)
-		if err := q.Eval(&fm); err != nil {
+		if err := q.Apply(&fm); err != nil {
 			t.Fatal(err)
 		}
 		if len(fm) != 1 || fm["c"] != int64(3) {
@@ -413,7 +413,7 @@ func TestAlterQuery_Eval(t *testing.T) {
 	t.Run("rename", func(t *testing.T) {
 		fm := lib.FrontMatter{"foo": "hello"}
 		q := parseQ(t, "alter *.md rename foo to bar").(lib.AlterQuery)
-		if err := q.Eval(&fm); err != nil {
+		if err := q.Apply(&fm); err != nil {
 			t.Fatal(err)
 		}
 		if _, ok := fm["foo"]; ok {
@@ -426,7 +426,7 @@ func TestAlterQuery_Eval(t *testing.T) {
 	t.Run("where_skips", func(t *testing.T) {
 		fm := lib.FrontMatter{"published": false, "title": "x"}
 		q := parseQ(t, "alter *.md drop title where published = true").(lib.AlterQuery)
-		if err := q.Eval(&fm); err != nil {
+		if err := q.Apply(&fm); err != nil {
 			t.Fatal(err)
 		}
 		if _, ok := fm["title"]; !ok {
@@ -435,13 +435,13 @@ func TestAlterQuery_Eval(t *testing.T) {
 	})
 }
 
-// ── Row 11: UpdateQuery.Eval ──────────────────────────────────────────────────
+// ── Row 11: UpdateQuery.Apply ─────────────────────────────────────────────────
 
-func TestUpdateQuery_Eval(t *testing.T) {
+func TestUpdateQuery_Apply(t *testing.T) {
 	t.Run("set_one", func(t *testing.T) {
 		fm := lib.FrontMatter{}
 		q := parseQ(t, `update *.md set title = "hello"`).(lib.UpdateQuery)
-		if err := q.Eval(&fm); err != nil {
+		if err := q.Apply(&fm); err != nil {
 			t.Fatal(err)
 		}
 		if fm["title"] != "hello" {
@@ -451,7 +451,7 @@ func TestUpdateQuery_Eval(t *testing.T) {
 	t.Run("set_multi", func(t *testing.T) {
 		fm := lib.FrontMatter{}
 		q := parseQ(t, `update *.md set a = 1, b = 2`).(lib.UpdateQuery)
-		if err := q.Eval(&fm); err != nil {
+		if err := q.Apply(&fm); err != nil {
 			t.Fatal(err)
 		}
 		if fm["a"] != int64(1) || fm["b"] != int64(2) {
@@ -461,7 +461,7 @@ func TestUpdateQuery_Eval(t *testing.T) {
 	t.Run("where_skips", func(t *testing.T) {
 		fm := lib.FrontMatter{"published": false}
 		q := parseQ(t, `update *.md set title = "x" where published = true`).(lib.UpdateQuery)
-		if err := q.Eval(&fm); err != nil {
+		if err := q.Apply(&fm); err != nil {
 			t.Fatal(err)
 		}
 		if _, ok := fm["title"]; ok {

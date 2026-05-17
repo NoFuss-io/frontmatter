@@ -532,8 +532,8 @@ func applyListSub(fm *FrontMatter, name string, v Value) error {
 // Returns nil Row if where is falsey or evaluates to void.
 func (SelectQuery) Eval(*FrontMatter) (Row, error) { return nil, errEvalNotImplemented }
 
-// Eval evaluates the where clause; if truthy, applies each Assign to doc.
-func (UpdateQuery) Eval(*FrontMatter) error { return errEvalNotImplemented }
+// Apply evaluates the where clause; if truthy, applies each Assign to fm.
+func (UpdateQuery) Apply(*FrontMatter) error { return errEvalNotImplemented }
 
-// Eval evaluates the where clause; if truthy, drops or renames fields on doc.
-func (AlterQuery) Eval(*FrontMatter) error { return errEvalNotImplemented }
+// Apply evaluates the where clause; if truthy, drops or renames fields on fm.
+func (AlterQuery) Apply(*FrontMatter) error { return errEvalNotImplemented }

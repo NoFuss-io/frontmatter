@@ -22,10 +22,11 @@ type Expr interface {
 // Assign: mutates doc.FrontMatter; error halts current file per Manual.md.
 func (a *Assign) Apply(doc *Document) error
 
-// Per-document query eval. SelectQuery also fills a Row.
-func (q *SelectQuery) Eval(doc *Document) (Row, error) // Row = map[string]Value
-func (q *UpdateQuery) Eval(doc *Document) error
-func (q *AlterQuery)  Eval(doc *Document) error
+// Per-document query eval. SelectQuery returns a projected Row; the mutating
+// queries follow the Apply convention used by Assign.
+func (q *SelectQuery) Eval(fm *FrontMatter) (Row, error) // Row = []Value
+func (q *UpdateQuery) Apply(fm *FrontMatter) error
+func (q *AlterQuery)  Apply(fm *FrontMatter) error
 ```
 
 Multi-document orchestration (glob expansion, sort across docs, limit) wraps
@@ -45,8 +46,8 @@ per-doc eval at a higher layer and is intentionally out of scope here.
 | 7 | BinExpr.Eval (comparison)    | Medium     | Type relaxation; list set-membership; equality vs ordering         |
 | 8 | Assign.Apply                 | Medium     | Eval RHS, cast to field type, mutate map; +=/-= list & scalar      |
 | 9 | SortTerm.Eval                | Trivial    | Wraps Expr.Eval; used by external sort comparator                  |
-|10 | AlterQuery.Eval              | Medium     | Drop/rename map entries; optional where filter via #5–7            |
-|11 | UpdateQuery.Eval             | Medium     | Where filter; iterate Assign list via #8                           |
+|10 | AlterQuery.Apply             | Medium     | Drop/rename map entries; optional where filter via #5–7            |
+|11 | UpdateQuery.Apply            | Medium     | Where filter; iterate Assign list via #8                           |
 |12 | SelectQuery.Eval (per-doc)   | Hard       | Where filter; project Fields list into Row; no sort/limit here     |
 ```
 
