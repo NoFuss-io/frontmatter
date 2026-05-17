@@ -27,29 +27,29 @@ func Cast(v Value, target FieldType) Value {
 
 // ── Expressions ───────────────────────────────────────────────────────────────
 
-func (LitExpr) Eval(*Document) Value   { return Value{Void: true} }
-func (FieldExpr) Eval(*Document) Value { return Value{Void: true} }
-func (UnaryExpr) Eval(*Document) Value { return Value{Void: true} }
-func (BinExpr) Eval(*Document) Value   { return Value{Void: true} }
+func (LitExpr) Eval(*FrontMatter) Value   { return Value{Void: true} }
+func (FieldExpr) Eval(*FrontMatter) Value { return Value{Void: true} }
+func (UnaryExpr) Eval(*FrontMatter) Value { return Value{Void: true} }
+func (BinExpr) Eval(*FrontMatter) Value   { return Value{Void: true} }
 
 // SortTerm.Eval is a thin wrapper around the underlying expression.
-func (s SortTerm) Eval(doc *Document) Value { return s.Expr.Eval(doc) }
+func (s SortTerm) Eval(fm *FrontMatter) Value { return s.Expr.Eval(fm) }
 
 // ── Assignment ────────────────────────────────────────────────────────────────
 
 // Apply evaluates a.Value (if present), casts to a.Field.Type, and writes the
 // result into doc.FrontMatter under a.Field.Name. A runtime cast failure is
 // returned as an error so the caller can halt the current file per Manual.md.
-func (Assign) Apply(*Document) error { return errEvalNotImplemented }
+func (Assign) Apply(*FrontMatter) error { return errEvalNotImplemented }
 
 // ── Queries ───────────────────────────────────────────────────────────────────
 
 // Eval evaluates the where clause; if truthy, projects Fields into a Row.
 // Returns nil Row if where is falsey or evaluates to void.
-func (SelectQuery) Eval(*Document) (Row, error) { return nil, errEvalNotImplemented }
+func (SelectQuery) Eval(*FrontMatter) (Row, error) { return nil, errEvalNotImplemented }
 
 // Eval evaluates the where clause; if truthy, applies each Assign to doc.
-func (UpdateQuery) Eval(*Document) error { return errEvalNotImplemented }
+func (UpdateQuery) Eval(*FrontMatter) error { return errEvalNotImplemented }
 
 // Eval evaluates the where clause; if truthy, drops or renames fields on doc.
-func (AlterQuery) Eval(*Document) error { return errEvalNotImplemented }
+func (AlterQuery) Eval(*FrontMatter) error { return errEvalNotImplemented }

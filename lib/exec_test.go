@@ -19,10 +19,6 @@ func vList(els ...lib.Value) lib.Value {
 	return lib.Value{Kind: lib.TypeList, Data: els}
 }
 
-func newDoc(fm map[string]any) *lib.Document {
-	return &lib.Document{FrontMatter: fm}
-}
-
 func valEq(a, b lib.Value) bool {
 	if a.Void != b.Void {
 		return false
@@ -112,13 +108,13 @@ func TestLitExpr_Eval(t *testing.T) {
 // ── Row 3: FieldExpr.Eval ─────────────────────────────────────────────────────
 
 func TestFieldExpr_Eval(t *testing.T) {
-	d := newDoc(map[string]any{
+	fm := lib.FrontMatter{
 		"title":  "hello",
 		"count":  int64(5),
 		"price":  3.14,
 		"active": true,
 		"tags":   []any{"a", "b"},
-	})
+	}
 	tests := []struct {
 		name string
 		f    lib.Field
@@ -135,7 +131,7 @@ func TestFieldExpr_Eval(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			e := lib.FieldExpr{Field: tc.f}
-			got := e.Eval(d)
+			got := e.Eval(&fm)
 			if !valEq(got, tc.want) {
 				t.Errorf("Eval(%+v) = %+v, want %+v", tc.f, got, tc.want)
 			}
@@ -146,7 +142,7 @@ func TestFieldExpr_Eval(t *testing.T) {
 // ── Row 4: UnaryExpr.Eval ─────────────────────────────────────────────────────
 
 func TestUnaryExpr_Eval(t *testing.T) {
-	d := newDoc(map[string]any{"n": int64(5)})
+	fm := lib.FrontMatter{"n": int64(5)}
 	missing := lib.FieldExpr{Field: lib.Field{Name: "missing"}}
 	bl := func(s string) lib.LitExpr { return lib.LitExpr{Kind: lib.LitBool, Value: s} }
 	il := func(s string) lib.LitExpr { return lib.LitExpr{Kind: lib.LitInt, Value: s} }
@@ -164,7 +160,7 @@ func TestUnaryExpr_Eval(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.e.Eval(d)
+			got := tc.e.Eval(&fm)
 			if !valEq(got, tc.want) {
 				t.Errorf("Eval() = %+v, want %+v", got, tc.want)
 			}
@@ -177,6 +173,7 @@ func TestUnaryExpr_Eval(t *testing.T) {
 func TestBinExpr_BoolOps(t *testing.T) {
 	bl := func(s string) lib.LitExpr { return lib.LitExpr{Kind: lib.LitBool, Value: s} }
 	missing := lib.FieldExpr{Field: lib.Field{Name: "missing"}}
+	fm := lib.FrontMatter{}
 
 	tests := []struct {
 		name string
@@ -195,7 +192,7 @@ func TestBinExpr_BoolOps(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.e.Eval(newDoc(nil))
+			got := tc.e.Eval(&fm)
 			if !valEq(got, tc.want) {
 				t.Errorf("Eval() = %+v, want %+v", got, tc.want)
 			}
@@ -209,6 +206,7 @@ func TestBinExpr_Arith(t *testing.T) {
 	il := func(s string) lib.LitExpr { return lib.LitExpr{Kind: lib.LitInt, Value: s} }
 	nl := func(s string) lib.LitExpr { return lib.LitExpr{Kind: lib.LitNumeric, Value: s} }
 	missing := lib.FieldExpr{Field: lib.Field{Name: "missing"}}
+	fm := lib.FrontMatter{}
 
 	tests := []struct {
 		name string
@@ -226,7 +224,7 @@ func TestBinExpr_Arith(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.e.Eval(newDoc(nil))
+			got := tc.e.Eval(&fm)
 			if !valEq(got, tc.want) {
 				t.Errorf("Eval() = %+v, want %+v", got, tc.want)
 			}
@@ -240,6 +238,7 @@ func TestBinExpr_Compare(t *testing.T) {
 	il := func(s string) lib.LitExpr { return lib.LitExpr{Kind: lib.LitInt, Value: s} }
 	sl := func(s string) lib.LitExpr { return lib.LitExpr{Kind: lib.LitString, Value: s} }
 	missing := lib.FieldExpr{Field: lib.Field{Name: "missing"}}
+	fm := lib.FrontMatter{}
 
 	tests := []struct {
 		name string
@@ -259,7 +258,7 @@ func TestBinExpr_Compare(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.e.Eval(newDoc(nil))
+			got := tc.e.Eval(&fm)
 			if !valEq(got, tc.want) {
 				t.Errorf("Eval() = %+v, want %+v", got, tc.want)
 			}
@@ -271,102 +270,102 @@ func TestBinExpr_Compare(t *testing.T) {
 
 func TestAssign_Apply(t *testing.T) {
 	t.Run("set_literal", func(t *testing.T) {
-		d := newDoc(map[string]any{})
+		fm := lib.FrontMatter{}
 		a := lib.Assign{
 			Field: lib.Field{Name: "title"},
 			Op:    lib.OpSet,
 			Value: lib.LitExpr{Kind: lib.LitString, Value: "hello"},
 		}
-		if err := a.Apply(d); err != nil {
+		if err := a.Apply(&fm); err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
-		if d.FrontMatter["title"] != "hello" {
-			t.Errorf("title = %v, want hello", d.FrontMatter["title"])
+		if fm["title"] != "hello" {
+			t.Errorf("title = %v, want hello", fm["title"])
 		}
 	})
 	t.Run("set_typed_cast_ok", func(t *testing.T) {
-		d := newDoc(map[string]any{})
+		fm := lib.FrontMatter{}
 		a := lib.Assign{
 			Field: lib.Field{Name: "n", Type: lib.TypeInt},
 			Op:    lib.OpSet,
 			Value: lib.LitExpr{Kind: lib.LitString, Value: "42"},
 		}
-		if err := a.Apply(d); err != nil {
+		if err := a.Apply(&fm); err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
-		if d.FrontMatter["n"] != int64(42) {
-			t.Errorf("n = %v (%T), want int64(42)", d.FrontMatter["n"], d.FrontMatter["n"])
+		if fm["n"] != int64(42) {
+			t.Errorf("n = %v (%T), want int64(42)", fm["n"], fm["n"])
 		}
 	})
 	t.Run("cast_only_creates_null", func(t *testing.T) {
-		d := newDoc(map[string]any{})
+		fm := lib.FrontMatter{}
 		a := lib.Assign{
 			Field: lib.Field{Name: "foo", Type: lib.TypeInt},
 			Op:    lib.OpSet,
 			Value: nil,
 		}
-		if err := a.Apply(d); err != nil {
+		if err := a.Apply(&fm); err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
-		if _, ok := d.FrontMatter["foo"]; !ok {
+		if _, ok := fm["foo"]; !ok {
 			t.Error("foo not created")
 		}
-		if d.FrontMatter["foo"] != nil {
-			t.Errorf("foo = %v, want nil", d.FrontMatter["foo"])
+		if fm["foo"] != nil {
+			t.Errorf("foo = %v, want nil", fm["foo"])
 		}
 	})
 	t.Run("set_null", func(t *testing.T) {
-		d := newDoc(map[string]any{"title": "hello"})
+		fm := lib.FrontMatter{"title": "hello"}
 		a := lib.Assign{
 			Field: lib.Field{Name: "title"},
 			Op:    lib.OpSet,
 			Value: lib.LitExpr{Kind: lib.LitNull, Value: "null"},
 		}
-		if err := a.Apply(d); err != nil {
+		if err := a.Apply(&fm); err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
-		if d.FrontMatter["title"] != nil {
-			t.Errorf("title = %v, want nil", d.FrontMatter["title"])
+		if fm["title"] != nil {
+			t.Errorf("title = %v, want nil", fm["title"])
 		}
 	})
 	t.Run("add_to_list", func(t *testing.T) {
-		d := newDoc(map[string]any{"tags": []any{"a"}})
+		fm := lib.FrontMatter{"tags": []any{"a"}}
 		a := lib.Assign{
 			Field: lib.Field{Name: "tags"},
 			Op:    lib.OpAdd,
 			Value: lib.LitExpr{Kind: lib.LitString, Value: "b"},
 		}
-		if err := a.Apply(d); err != nil {
+		if err := a.Apply(&fm); err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
-		tags, ok := d.FrontMatter["tags"].([]any)
+		tags, ok := fm["tags"].([]any)
 		if !ok || len(tags) != 2 || tags[1] != "b" {
-			t.Errorf("tags = %+v, want [a b]", d.FrontMatter["tags"])
+			t.Errorf("tags = %+v, want [a b]", fm["tags"])
 		}
 	})
 	t.Run("sub_from_list", func(t *testing.T) {
-		d := newDoc(map[string]any{"tags": []any{"a", "b", "c"}})
+		fm := lib.FrontMatter{"tags": []any{"a", "b", "c"}}
 		a := lib.Assign{
 			Field: lib.Field{Name: "tags"},
 			Op:    lib.OpSub,
 			Value: lib.LitExpr{Kind: lib.LitString, Value: "b"},
 		}
-		if err := a.Apply(d); err != nil {
+		if err := a.Apply(&fm); err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
-		tags, _ := d.FrontMatter["tags"].([]any)
+		tags, _ := fm["tags"].([]any)
 		if len(tags) != 2 || tags[0] != "a" || tags[1] != "c" {
 			t.Errorf("tags = %+v, want [a c]", tags)
 		}
 	})
 	t.Run("cast_failure_errors", func(t *testing.T) {
-		d := newDoc(map[string]any{"src": "hello"})
+		fm := lib.FrontMatter{"src": "hello"}
 		a := lib.Assign{
 			Field: lib.Field{Name: "n", Type: lib.TypeInt},
 			Op:    lib.OpSet,
 			Value: lib.FieldExpr{Field: lib.Field{Name: "src", Type: lib.TypeString}},
 		}
-		if err := a.Apply(d); err == nil {
+		if err := a.Apply(&fm); err == nil {
 			t.Error("expected cast-failure error, got nil")
 		}
 	})
@@ -375,12 +374,12 @@ func TestAssign_Apply(t *testing.T) {
 // ── Row 9: SortTerm.Eval ──────────────────────────────────────────────────────
 
 func TestSortTerm_Eval(t *testing.T) {
-	d := newDoc(map[string]any{"title": "abc"})
+	fm := lib.FrontMatter{"title": "abc"}
 	s := lib.SortTerm{
 		Expr: lib.FieldExpr{Field: lib.Field{Name: "title"}},
 		Desc: false,
 	}
-	if got := s.Eval(d); !valEq(got, vStr("abc")) {
+	if got := s.Eval(&fm); !valEq(got, vStr("abc")) {
 		t.Errorf("Eval() = %+v, want %+v", got, vStr("abc"))
 	}
 }
@@ -389,48 +388,48 @@ func TestSortTerm_Eval(t *testing.T) {
 
 func TestAlterQuery_Eval(t *testing.T) {
 	t.Run("drop_one", func(t *testing.T) {
-		d := newDoc(map[string]any{"title": "x", "date": "2026-01-01"})
+		fm := lib.FrontMatter{"title": "x", "date": "2026-01-01"}
 		q := parseQ(t, "alter *.md drop title").(lib.AlterQuery)
-		if err := q.Eval(d); err != nil {
+		if err := q.Eval(&fm); err != nil {
 			t.Fatal(err)
 		}
-		if _, ok := d.FrontMatter["title"]; ok {
+		if _, ok := fm["title"]; ok {
 			t.Error("title still present")
 		}
-		if _, ok := d.FrontMatter["date"]; !ok {
+		if _, ok := fm["date"]; !ok {
 			t.Error("date should remain")
 		}
 	})
 	t.Run("drop_multi", func(t *testing.T) {
-		d := newDoc(map[string]any{"a": int64(1), "b": int64(2), "c": int64(3)})
+		fm := lib.FrontMatter{"a": int64(1), "b": int64(2), "c": int64(3)}
 		q := parseQ(t, "alter *.md drop a, b").(lib.AlterQuery)
-		if err := q.Eval(d); err != nil {
+		if err := q.Eval(&fm); err != nil {
 			t.Fatal(err)
 		}
-		if len(d.FrontMatter) != 1 || d.FrontMatter["c"] != int64(3) {
-			t.Errorf("FrontMatter = %+v, want {c:3}", d.FrontMatter)
+		if len(fm) != 1 || fm["c"] != int64(3) {
+			t.Errorf("FrontMatter = %+v, want {c:3}", fm)
 		}
 	})
 	t.Run("rename", func(t *testing.T) {
-		d := newDoc(map[string]any{"foo": "hello"})
+		fm := lib.FrontMatter{"foo": "hello"}
 		q := parseQ(t, "alter *.md rename foo to bar").(lib.AlterQuery)
-		if err := q.Eval(d); err != nil {
+		if err := q.Eval(&fm); err != nil {
 			t.Fatal(err)
 		}
-		if _, ok := d.FrontMatter["foo"]; ok {
+		if _, ok := fm["foo"]; ok {
 			t.Error("foo still present")
 		}
-		if d.FrontMatter["bar"] != "hello" {
-			t.Errorf("bar = %v, want hello", d.FrontMatter["bar"])
+		if fm["bar"] != "hello" {
+			t.Errorf("bar = %v, want hello", fm["bar"])
 		}
 	})
 	t.Run("where_skips", func(t *testing.T) {
-		d := newDoc(map[string]any{"published": false, "title": "x"})
+		fm := lib.FrontMatter{"published": false, "title": "x"}
 		q := parseQ(t, "alter *.md drop title where published = true").(lib.AlterQuery)
-		if err := q.Eval(d); err != nil {
+		if err := q.Eval(&fm); err != nil {
 			t.Fatal(err)
 		}
-		if _, ok := d.FrontMatter["title"]; !ok {
+		if _, ok := fm["title"]; !ok {
 			t.Error("title should remain (where=false)")
 		}
 	})
@@ -440,32 +439,32 @@ func TestAlterQuery_Eval(t *testing.T) {
 
 func TestUpdateQuery_Eval(t *testing.T) {
 	t.Run("set_one", func(t *testing.T) {
-		d := newDoc(map[string]any{})
+		fm := lib.FrontMatter{}
 		q := parseQ(t, `update *.md set title = "hello"`).(lib.UpdateQuery)
-		if err := q.Eval(d); err != nil {
+		if err := q.Eval(&fm); err != nil {
 			t.Fatal(err)
 		}
-		if d.FrontMatter["title"] != "hello" {
-			t.Errorf("title = %v", d.FrontMatter["title"])
+		if fm["title"] != "hello" {
+			t.Errorf("title = %v", fm["title"])
 		}
 	})
 	t.Run("set_multi", func(t *testing.T) {
-		d := newDoc(map[string]any{})
+		fm := lib.FrontMatter{}
 		q := parseQ(t, `update *.md set a = 1, b = 2`).(lib.UpdateQuery)
-		if err := q.Eval(d); err != nil {
+		if err := q.Eval(&fm); err != nil {
 			t.Fatal(err)
 		}
-		if d.FrontMatter["a"] != int64(1) || d.FrontMatter["b"] != int64(2) {
-			t.Errorf("FrontMatter = %+v", d.FrontMatter)
+		if fm["a"] != int64(1) || fm["b"] != int64(2) {
+			t.Errorf("FrontMatter = %+v", fm)
 		}
 	})
 	t.Run("where_skips", func(t *testing.T) {
-		d := newDoc(map[string]any{"published": false})
+		fm := lib.FrontMatter{"published": false}
 		q := parseQ(t, `update *.md set title = "x" where published = true`).(lib.UpdateQuery)
-		if err := q.Eval(d); err != nil {
+		if err := q.Eval(&fm); err != nil {
 			t.Fatal(err)
 		}
-		if _, ok := d.FrontMatter["title"]; ok {
+		if _, ok := fm["title"]; ok {
 			t.Error("title set despite where=false")
 		}
 	})
@@ -475,9 +474,9 @@ func TestUpdateQuery_Eval(t *testing.T) {
 
 func TestSelectQuery_Eval(t *testing.T) {
 	t.Run("project_one", func(t *testing.T) {
-		d := newDoc(map[string]any{"title": "hello", "date": "2026-01-01"})
+		fm := lib.FrontMatter{"title": "hello", "date": "2026-01-01"}
 		q := parseQ(t, "select title from *.md").(lib.SelectQuery)
-		row, err := q.Eval(d)
+		row, err := q.Eval(&fm)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -486,9 +485,9 @@ func TestSelectQuery_Eval(t *testing.T) {
 		}
 	})
 	t.Run("project_multi", func(t *testing.T) {
-		d := newDoc(map[string]any{"a": "x", "b": int64(42)})
+		fm := lib.FrontMatter{"a": "x", "b": int64(42)}
 		q := parseQ(t, "select a, b from *.md").(lib.SelectQuery)
-		row, err := q.Eval(d)
+		row, err := q.Eval(&fm)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -503,9 +502,9 @@ func TestSelectQuery_Eval(t *testing.T) {
 		}
 	})
 	t.Run("where_returns_nil", func(t *testing.T) {
-		d := newDoc(map[string]any{"published": false, "title": "x"})
+		fm := lib.FrontMatter{"published": false, "title": "x"}
 		q := parseQ(t, "select title from *.md where published = true").(lib.SelectQuery)
-		row, err := q.Eval(d)
+		row, err := q.Eval(&fm)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -514,9 +513,9 @@ func TestSelectQuery_Eval(t *testing.T) {
 		}
 	})
 	t.Run("missing_field_void", func(t *testing.T) {
-		d := newDoc(map[string]any{})
+		fm := lib.FrontMatter{}
 		q := parseQ(t, "select title from *.md").(lib.SelectQuery)
-		row, err := q.Eval(d)
+		row, err := q.Eval(&fm)
 		if err != nil {
 			t.Fatal(err)
 		}
