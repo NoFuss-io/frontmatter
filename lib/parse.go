@@ -420,7 +420,33 @@ func parseOptionalWhere(r *bufio.Reader, dst *Expr) error {
 
 // ParseQuery reads a full query from r and returns a SelectQuery, UpdateQuery, or AlterQuery.
 func ParseQuery(r io.Reader) (Query, error) {
-	return nil, errNotImplemented
+	br := bufio.NewReader(r)
+	skipWS(br)
+	kw := peekKeyword(br)
+	switch strings.ToLower(kw) {
+	case "select":
+		var q SelectQuery
+		if err := q.parse(br); err != nil {
+			return nil, err
+		}
+		return q, nil
+	case "update":
+		var q UpdateQuery
+		if err := q.parse(br); err != nil {
+			return nil, err
+		}
+		return q, nil
+	case "alter":
+		var q AlterQuery
+		if err := q.parse(br); err != nil {
+			return nil, err
+		}
+		return q, nil
+	}
+	if kw == "" {
+		return nil, fmt.Errorf("expected query keyword (select|update|alter)")
+	}
+	return nil, fmt.Errorf("unknown query keyword %q", kw)
 }
 
 func (q *SelectQuery) Parse(r io.Reader) error {
