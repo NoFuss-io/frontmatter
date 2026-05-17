@@ -278,6 +278,81 @@ func readFieldList(r *bufio.Reader, stopKws ...string) ([]Field, error) {
 	return out, nil
 }
 
+// readExprList reads a comma-separated list of expressions, stopping at EOF or a stop keyword.
+func readExprList(r *bufio.Reader, stopKws ...string) ([]Expr, error) {
+	var out []Expr
+	for {
+		skipWS(r)
+		b, _ := r.Peek(1)
+		if len(b) == 0 || atStopKeyword(r, stopKws) {
+			break
+		}
+		e, err := parseOrExpr(r)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+		skipWS(r)
+		b, _ = r.Peek(1)
+		if len(b) == 0 || b[0] != ',' {
+			break
+		}
+		consumeBytes(r, 1)
+	}
+	return out, nil
+}
+
+// readSortTermList reads a comma-separated list of SortTerm values, stopping at EOF or a stop keyword.
+func readSortTermList(r *bufio.Reader, stopKws ...string) ([]SortTerm, error) {
+	var out []SortTerm
+	for {
+		skipWS(r)
+		b, _ := r.Peek(1)
+		if len(b) == 0 || atStopKeyword(r, stopKws) {
+			break
+		}
+		var t SortTerm
+		if err := t.parse(r); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+		skipWS(r)
+		b, _ = r.Peek(1)
+		if len(b) == 0 || b[0] != ',' {
+			break
+		}
+		consumeBytes(r, 1)
+	}
+	return out, nil
+}
+
+// readIntLit reads an optional-sign decimal integer.
+func readIntLit(r *bufio.Reader) (int, error) {
+	skipWS(r)
+	var sb strings.Builder
+	if b, _ := r.Peek(1); len(b) > 0 && b[0] == '-' {
+		consumeBytes(r, 1)
+		sb.WriteByte('-')
+	}
+	for {
+		b, _ := r.Peek(1)
+		if len(b) == 0 || b[0] < '0' || b[0] > '9' {
+			break
+		}
+		consumeBytes(r, 1)
+		sb.WriteByte(b[0])
+	}
+	s := sb.String()
+	if s == "" || s == "-" {
+		return 0, fmt.Errorf("expected integer")
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, fmt.Errorf("invalid integer %q: %w", s, err)
+	}
+	return n, nil
+}
+
 // readAssignList reads a comma-separated list of Assign values, stopping at EOF or a stop keyword.
 func readAssignList(r *bufio.Reader, stopKws ...string) ([]Assign, error) {
 	var out []Assign
@@ -349,7 +424,67 @@ func ParseQuery(r io.Reader) (Query, error) {
 }
 
 func (q *SelectQuery) Parse(r io.Reader) error {
-	return errNotImplemented
+	return q.parse(bufio.NewReader(r))
+}
+
+func (q *SelectQuery) parse(r *bufio.Reader) error {
+	if err := expectKeyword(r, "select"); err != nil {
+		return err
+	}
+
+	fields, err := readExprList(r, "from")
+	if err != nil {
+		return err
+	}
+	if len(fields) == 0 {
+		return fmt.Errorf("expected field after 'select'")
+	}
+	q.Fields = fields
+
+	if err := expectKeyword(r, "from"); err != nil {
+		return err
+	}
+
+	globs := readGlobs(r, "where", "sort", "limit")
+	if len(globs) == 0 {
+		return fmt.Errorf("expected glob after 'from'")
+	}
+	q.From = globs
+
+	if err := parseOptionalWhere(r, &q.Where); err != nil {
+		return err
+	}
+
+	skipWS(r)
+	if strings.ToLower(peekKeyword(r)) == "sort" {
+		consumeBytes(r, 4)
+		if err := expectKeyword(r, "by"); err != nil {
+			return err
+		}
+		terms, err := readSortTermList(r, "limit")
+		if err != nil {
+			return err
+		}
+		if len(terms) == 0 {
+			return fmt.Errorf("expected sort term after 'sort by'")
+		}
+		q.SortBy = terms
+	}
+
+	skipWS(r)
+	if strings.ToLower(peekKeyword(r)) == "limit" {
+		consumeBytes(r, 5)
+		n, err := readIntLit(r)
+		if err != nil {
+			return fmt.Errorf("limit: %w", err)
+		}
+		if n < 0 {
+			return fmt.Errorf("limit must be non-negative, got %d", n)
+		}
+		q.Limit = n
+	}
+
+	return nil
 }
 
 func (q *UpdateQuery) Parse(r io.Reader) error {
