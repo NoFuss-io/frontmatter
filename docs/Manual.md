@@ -150,18 +150,135 @@ Scalar may be cast to a single-element list and vice versa.
 | Missing     | int      | Void     |
 
 ## Expressions
-Composed of literals, fields, operators and grouping parentheses.
 
-Operator precedence follows BigQuery ([docs](https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/operators#operator_precedence)):
-1. Unary `-`
-2. `*`
-3. `/`
-4. `+`
-5. `-`
-6. [[#Comparisons|Comparison operators]]
-7. `not`
-8. `and`
-9. `or`
+An expression is recursively composed of [fields](#fields), [literals](#literals), operators, and grouping parentheses.
+
+```ebnf
+expression = or_expr
+or_expr    = and_expr { "or" and_expr }
+and_expr   = not_expr { "and" not_expr }
+not_expr   = [ "not" ] comparison
+comparison = arith { comp_op arith }
+arith      = term { ( "+" | "-" ) term }
+term       = factor { ( "*" | "/" ) factor }
+factor     = [ "-" ] primary
+primary    = "(" expression ")" | field | literal
+```
+
+Parentheses override precedence: `a or (b and c)` evaluates `b and c` first.
+
+Operator precedence (highest to lowest), following BigQuery ([docs](https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/operators#operator_precedence)):
+
+| Precedence | Operator |
+|-----------:|:---------|
+| 1 | Unary `-` |
+| 2 | `*`, `/` |
+| 3 | `+`, `-` |
+| 4 | Comparison operators |
+| 5 | `not` |
+| 6 | `and` |
+| 7 | `or` |
+
+### Atoms
+
+Atoms are the leaf nodes of an expression — either a field reference or a literal.
+
+**Field** (`identifier[:type]`): reads the value from the current file's frontmatter and optionally casts it (see [Fields](#fields)). Evaluates to **void** if the field does not exist or casting fails.
+
+**Literal**: a constant value embedded directly in the query (see [Literals](#literals)). Literals always exist; they never produce void.
+
+```
+title                -- field, any type
+price:number         -- field cast to number
+`created-at`:date    -- quoted-identifier field cast to date
+42                   -- integer literal
+"hello world"        -- string literal
+true                 -- boolean literal
+```
+
+Void propagates through arithmetic — any operation with a void operand produces void. In a boolean context (comparisons, `where`) void is falsey.
+
+### Literals
+
+#### String literals
+
+Strings can be enclosed in single quotes (`'`), double quotes (`"`), or triple-quoted variants (`'''` or `"""`). Triple-quoted strings can span multiple lines and contain unescaped single or double quotes respectively.
+
+```
+'hello world'
+"hello world"
+'''multi
+line'''
+"""also
+multi-line"""
+```
+
+Prefix `r` or `R` creates a raw string where backslash sequences are not interpreted:
+
+```
+r'C:\Users\name'
+R"no\escape"
+```
+
+Escape sequences in non-raw strings:
+
+| Sequence | Description |
+|:---------|:------------|
+| `\a` | Bell |
+| `\b` | Backspace |
+| `\f` | Form feed |
+| `\n` | Newline |
+| `\r` | Carriage return |
+| `\t` | Tab |
+| `\v` | Vertical tab |
+| `\\` | Backslash |
+| `\'` | Single quote |
+| `\"` | Double quote |
+| `` \` `` | Backtick |
+| `\?` | Question mark |
+| `\NNN` | Octal (3 digits, range `000`–`377`) |
+| `\xNN` | Hex (2 digits) |
+| `\uNNNN` | Unicode codepoint (4 hex digits) |
+| `\UNNNNNNNN` | Unicode codepoint (8 hex digits) |
+
+#### Integer literals
+
+Decimal or hexadecimal:
+
+```
+42
+-7
+0xFF
+0x1A2B
+```
+
+#### Numeric literals
+
+Decimal with optional fractional part and exponent:
+
+```
+3.14
+-2.5
+1.0e10
+6.022E-23
+```
+
+#### Boolean literals
+
+`true` and `false` (case insensitive).
+
+#### Null literal
+
+`null` (case insensitive). Represents absence of a value.
+
+#### Date and datetime literals
+
+`fm` does not use BigQuery's typed literal syntax (`DATE '...'`, `DATETIME '...'`). Instead, date and datetime values are encoded as plain strings matching ISO 8601 format, and type is controlled via the field type annotation:
+
+```
+created:date = 2026-05-17
+modified:datetime = 2026-05-17T21:02:30
+```
 
 ### Boolean expressions
 ```
