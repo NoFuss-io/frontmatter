@@ -248,8 +248,108 @@ func (e BinExpr) Eval(fm *FrontMatter) Value {
 		return Value{Kind: TypeBool, Data: truthy(e.Left.Eval(fm)) || truthy(e.Right.Eval(fm))}
 	case BinAdd, BinSub, BinMul, BinDiv:
 		return arith(e.Op, e.Left.Eval(fm), e.Right.Eval(fm))
+	case BinEq, BinNe, BinLt, BinLe, BinGt, BinGe:
+		return compare(e.Op, e.Left.Eval(fm), e.Right.Eval(fm))
 	}
 	return Value{Void: true}
+}
+
+// compare implements =, !=, <, <=, >, >=. Void operands → false.
+// Lists participate in set equality (= / !=) or set membership (list >= scalar,
+// scalar <= list); ordering operators require numeric coercion of both sides.
+func compare(op BinOp, l, r Value) Value {
+	if l.Void || r.Void {
+		return Value{Kind: TypeBool, Data: false}
+	}
+	if l.Kind == TypeList || r.Kind == TypeList {
+		return compareList(op, l, r)
+	}
+	switch op {
+	case BinEq:
+		return Value{Kind: TypeBool, Data: scalarEq(l, r)}
+	case BinNe:
+		return Value{Kind: TypeBool, Data: !scalarEq(l, r)}
+	}
+	lf, rf := Cast(l, TypeNumber), Cast(r, TypeNumber)
+	if lf.Void || rf.Void {
+		return Value{Kind: TypeBool, Data: false}
+	}
+	a, b := lf.Data.(float64), rf.Data.(float64)
+	var result bool
+	switch op {
+	case BinLt:
+		result = a < b
+	case BinLe:
+		result = a <= b
+	case BinGt:
+		result = a > b
+	case BinGe:
+		result = a >= b
+	}
+	return Value{Kind: TypeBool, Data: result}
+}
+
+func scalarEq(l, r Value) bool {
+	if l.Kind == r.Kind {
+		return l.Data == r.Data
+	}
+	lf, rf := Cast(l, TypeNumber), Cast(r, TypeNumber)
+	if !lf.Void && !rf.Void {
+		return lf.Data.(float64) == rf.Data.(float64)
+	}
+	ls, rs := Cast(l, TypeString), Cast(r, TypeString)
+	if !ls.Void && !rs.Void {
+		return ls.Data.(string) == rs.Data.(string)
+	}
+	return false
+}
+
+func compareList(op BinOp, l, r Value) Value {
+	switch {
+	case l.Kind == TypeList && r.Kind == TypeList:
+		eq := listSetEq(l.Data.([]Value), r.Data.([]Value))
+		switch op {
+		case BinEq:
+			return Value{Kind: TypeBool, Data: eq}
+		case BinNe:
+			return Value{Kind: TypeBool, Data: !eq}
+		}
+	case l.Kind == TypeList && op == BinGe:
+		return Value{Kind: TypeBool, Data: listContains(l.Data.([]Value), r)}
+	case r.Kind == TypeList && op == BinLe:
+		return Value{Kind: TypeBool, Data: listContains(r.Data.([]Value), l)}
+	}
+	return Value{Kind: TypeBool, Data: false}
+}
+
+func listSetEq(a, b []Value) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	used := make([]bool, len(b))
+	for _, x := range a {
+		found := false
+		for i, y := range b {
+			if !used[i] && scalarEq(x, y) {
+				used[i] = true
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func listContains(list []Value, v Value) bool {
+	for _, x := range list {
+		if scalarEq(x, v) {
+			return true
+		}
+	}
+	return false
 }
 
 // arith performs +, -, *, / with numeric coercion. Both ints stays int unless
