@@ -1,6 +1,11 @@
 package lib
 
-import "errors"
+import (
+	"errors"
+	"math"
+	"strconv"
+	"strings"
+)
 
 // Value is the runtime value produced by evaluating an expression.
 // Void marks absence: a missing field or a cast that could not produce a value.
@@ -20,8 +25,116 @@ var errEvalNotImplemented = errors.New("eval not implemented")
 // Cast converts v to target. Returns a Void Value if the conversion is not
 // possible (e.g. string "hello" → int).
 func Cast(v Value, target FieldType) Value {
-	_ = v
-	_ = target
+	if v.Void {
+		return Value{Void: true}
+	}
+	if target == TypeAny || target == v.Kind {
+		return v
+	}
+	if target == TypeList {
+		return Value{Kind: TypeList, Data: []Value{v}}
+	}
+	if v.Kind == TypeList {
+		els, ok := v.Data.([]Value)
+		if !ok || len(els) != 1 {
+			return Value{Void: true}
+		}
+		return Cast(els[0], target)
+	}
+	switch target {
+	case TypeBool:
+		return castToBool(v)
+	case TypeInt:
+		return castToInt(v)
+	case TypeNumber:
+		return castToNumber(v)
+	case TypeString:
+		return castToString(v)
+	}
+	return Value{Void: true}
+}
+
+func castToBool(v Value) Value {
+	switch v.Kind {
+	case TypeInt:
+		switch v.Data.(int64) {
+		case 0:
+			return Value{Kind: TypeBool, Data: false}
+		case 1:
+			return Value{Kind: TypeBool, Data: true}
+		}
+	case TypeNumber:
+		switch v.Data.(float64) {
+		case 0:
+			return Value{Kind: TypeBool, Data: false}
+		case 1:
+			return Value{Kind: TypeBool, Data: true}
+		}
+	case TypeString:
+		switch strings.ToLower(v.Data.(string)) {
+		case "true":
+			return Value{Kind: TypeBool, Data: true}
+		case "false":
+			return Value{Kind: TypeBool, Data: false}
+		}
+	}
+	return Value{Void: true}
+}
+
+func castToInt(v Value) Value {
+	switch v.Kind {
+	case TypeBool:
+		if v.Data.(bool) {
+			return Value{Kind: TypeInt, Data: int64(1)}
+		}
+		return Value{Kind: TypeInt, Data: int64(0)}
+	case TypeNumber:
+		f := v.Data.(float64)
+		if f != math.Trunc(f) {
+			return Value{Void: true}
+		}
+		return Value{Kind: TypeInt, Data: int64(f)}
+	case TypeString:
+		n, err := strconv.ParseInt(v.Data.(string), 0, 64)
+		if err != nil {
+			return Value{Void: true}
+		}
+		return Value{Kind: TypeInt, Data: n}
+	}
+	return Value{Void: true}
+}
+
+func castToNumber(v Value) Value {
+	switch v.Kind {
+	case TypeInt:
+		return Value{Kind: TypeNumber, Data: float64(v.Data.(int64))}
+	case TypeBool:
+		if v.Data.(bool) {
+			return Value{Kind: TypeNumber, Data: float64(1)}
+		}
+		return Value{Kind: TypeNumber, Data: float64(0)}
+	case TypeString:
+		f, err := strconv.ParseFloat(v.Data.(string), 64)
+		if err != nil {
+			return Value{Void: true}
+		}
+		return Value{Kind: TypeNumber, Data: f}
+	}
+	return Value{Void: true}
+}
+
+func castToString(v Value) Value {
+	switch v.Kind {
+	case TypeInt:
+		return Value{Kind: TypeString, Data: strconv.FormatInt(v.Data.(int64), 10)}
+	case TypeNumber:
+		return Value{Kind: TypeString, Data: strconv.FormatFloat(v.Data.(float64), 'g', -1, 64)}
+	case TypeBool:
+		if v.Data.(bool) {
+			return Value{Kind: TypeString, Data: "true"}
+		}
+		return Value{Kind: TypeString, Data: "false"}
+	}
 	return Value{Void: true}
 }
 
