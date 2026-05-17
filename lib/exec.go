@@ -240,7 +240,15 @@ func truthy(v Value) bool {
 	}
 	return b.Data.(bool)
 }
-func (BinExpr) Eval(*FrontMatter) Value   { return Value{Void: true} }
+func (e BinExpr) Eval(fm *FrontMatter) Value {
+	switch e.Op {
+	case BinAnd:
+		return Value{Kind: TypeBool, Data: truthy(e.Left.Eval(fm)) && truthy(e.Right.Eval(fm))}
+	case BinOr:
+		return Value{Kind: TypeBool, Data: truthy(e.Left.Eval(fm)) || truthy(e.Right.Eval(fm))}
+	}
+	return Value{Void: true}
+}
 
 // SortTerm.Eval is a thin wrapper around the underlying expression.
 func (s SortTerm) Eval(fm *FrontMatter) Value { return s.Expr.Eval(fm) }
