@@ -737,5 +737,25 @@ func (a *Assign) Parse(r io.Reader) error {
 }
 
 func (s *SortTerm) Parse(r io.Reader) error {
-	return errNotImplemented
+	return s.parse(bufio.NewReader(r))
+}
+
+func (s *SortTerm) parse(r *bufio.Reader) error {
+	e, err := parseOrExpr(r)
+	if err != nil {
+		return err
+	}
+	s.Expr = e
+
+	skipWS(r)
+	kw := peekKeyword(r)
+	switch strings.ToLower(kw) {
+	case "asc":
+		consumeBytes(r, len(kw))
+		s.Desc = false
+	case "desc":
+		consumeBytes(r, len(kw))
+		s.Desc = true
+	}
+	return nil
 }
