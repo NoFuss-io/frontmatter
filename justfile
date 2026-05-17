@@ -1,4 +1,7 @@
-default: build
+_default: _help
+
+_help:
+    just --list
 
 build:
     go build -o fm ./cli

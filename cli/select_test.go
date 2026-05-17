@@ -14,9 +14,9 @@ func TestSelectOutput(t *testing.T) {
 		name       string
 		files      []testFile
 		args       func(dir string) []string
-		wantOut    []string   // substrings that must appear in output
-		wantAbsent []string   // substrings that must not appear in output
-		wantOrder  [2]string  // if both non-empty, wantOrder[0] must precede wantOrder[1]
+		wantOut    []string  // substrings that must appear in output
+		wantAbsent []string  // substrings that must not appear in output
+		wantOrder  [2]string // if both non-empty, wantOrder[0] must precede wantOrder[1]
 		wantErr    bool
 	}{
 		{

@@ -7,9 +7,9 @@ type Query interface{ query() }
 type SelectQuery struct {
 	Fields []Expr
 	From   []string
-	Where  Expr       // nil if absent
+	Where  Expr // nil if absent
 	SortBy []SortTerm
-	Limit  int        // 0 = no limit
+	Limit  int // 0 = no limit
 }
 
 func (SelectQuery) query() {}
@@ -38,7 +38,7 @@ func (AlterQuery) query() {}
 type AlterOp int
 
 const (
-	AlterDrop   AlterOp = iota
+	AlterDrop AlterOp = iota
 	AlterRename
 )
 
@@ -46,16 +46,16 @@ const (
 type FieldType int
 
 const (
-	TypeAny    FieldType = iota // default when no type annotation is given
-	TypeString                  // string
-	TypeBool                    // bool
-	TypeInt                     // int
-	TypeNumber                  // numeric (float)
-	TypeDate                    // date (YYYY-MM-DD)
-	TypeDatetime                // datetime (ISO 8601 local time)
-	TypeLink                    // [[ref]] or [[ref|title]]
-	TypeMdLink                  // [title](ref)
-	TypeList                    // list[:elemtype]
+	TypeAny      FieldType = iota // default when no type annotation is given
+	TypeString                    // string
+	TypeBool                      // bool
+	TypeInt                       // int
+	TypeNumber                    // numeric (float)
+	TypeDate                      // date (YYYY-MM-DD)
+	TypeDatetime                  // datetime (ISO 8601 local time)
+	TypeLink                      // [[ref]] or [[ref|title]]
+	TypeMdLink                    // [title](ref)
+	TypeList                      // list[:elemtype]
 )
 
 // Field is a field reference with an optional type annotation: identifier[:type].
@@ -73,6 +73,7 @@ const (
 	OpAdd                 // +=
 	OpSub                 // -=
 )
+
 // RenamePair is one rename in an alter...rename clause.
 type RenamePair struct {
 	From string

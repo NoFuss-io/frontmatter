@@ -77,29 +77,29 @@ var (
 	tfGamma = testFile{"c.md", "---\ntitle: Gamma\n---\n"}
 
 	// select statement: single-file cases
-	tfStew            = testFile{"test.md", "---\ntitle: Stew\ndate: 2024-03-10\n---\nBody.\n"}
-	tfCakePublished   = testFile{"test.md", "---\ntitle: Cake\npublished: true\n---\n"}
+	tfStew             = testFile{"test.md", "---\ntitle: Stew\ndate: 2024-03-10\n---\nBody.\n"}
+	tfCakePublished    = testFile{"test.md", "---\ntitle: Cake\npublished: true\n---\n"}
 	tfDraftUnpublished = testFile{"test.md", "---\ntitle: Draft\npublished: false\n---\n"}
-	tfRatingExcellent = testFile{"test.md", "---\nrating: excellent\n---\n"}
-	tfNoDate          = testFile{"test.md", "---\ntitle: NoDates\n---\n"}
+	tfRatingExcellent  = testFile{"test.md", "---\nrating: excellent\n---\n"}
+	tfNoDate           = testFile{"test.md", "---\ntitle: NoDates\n---\n"}
 
 	// update args
-	tfTitleOld         = testFile{"test.md", "---\ntitle: Old\n---\n"}
-	tfCountFive        = testFile{"test.md", "---\ncount: 5\n---\n"}
-	tfTagsBaking       = testFile{"test.md", "---\ntags:\n  - baking\n---\n"}
-	tfDraftHello       = testFile{"test.md", "---\ndraft: true\ntitle: Hello\n---\n"} // also used by alter
+	tfTitleOld          = testFile{"test.md", "---\ntitle: Old\n---\n"}
+	tfCountFive         = testFile{"test.md", "---\ncount: 5\n---\n"}
+	tfTagsBaking        = testFile{"test.md", "---\ntags:\n  - baking\n---\n"}
+	tfDraftHello        = testFile{"test.md", "---\ndraft: true\ntitle: Hello\n---\n"} // also used by alter
 	tfRecipeUnpublished = testFile{"test.md", "---\ntitle: Recipe\npublished: false\n---\n"}
 
 	// update statement
-	tfTitleOriginal      = testFile{"test.md", "---\ntitle: Original\n---\n"}
-	tfScoreTen           = testFile{"test.md", "---\nscore: 10\n---\n"}
-	tfTagsCooking        = testFile{"test.md", "---\ntags:\n  - cooking\n---\n"}
-	tfTagsCookingVegan   = testFile{"test.md", "---\ntags:\n  - cooking\n  - vegan\n---\n"}
-	tfTagsThree          = testFile{"test.md", "---\ntags:\n  - cooking\n  - vegan\n  - quick\n---\n"}
+	tfTitleOriginal    = testFile{"test.md", "---\ntitle: Original\n---\n"}
+	tfScoreTen         = testFile{"test.md", "---\nscore: 10\n---\n"}
+	tfTagsCooking      = testFile{"test.md", "---\ntags:\n  - cooking\n---\n"}
+	tfTagsCookingVegan = testFile{"test.md", "---\ntags:\n  - cooking\n  - vegan\n---\n"}
+	tfTagsThree        = testFile{"test.md", "---\ntags:\n  - cooking\n  - vegan\n  - quick\n---\n"}
 
 	// alter (shared between TestAlterArgs and TestAlterStatement)
-	tfDraftPublished   = testFile{"test.md", "---\ndraft: true\npublished: true\n---\n"}
+	tfDraftPublished    = testFile{"test.md", "---\ndraft: true\npublished: true\n---\n"}
 	tfDraftNotPublished = testFile{"test.md", "---\ndraft: true\npublished: false\n---\n"}
-	tfIntRatingPie     = testFile{"test.md", "---\nrating: 4\ntitle: Pie\n---\n"}
-	tfStrRatingPie     = testFile{"test.md", "---\nrating: excellent\ntitle: Pie\n---\n"}
+	tfIntRatingPie      = testFile{"test.md", "---\nrating: 4\ntitle: Pie\n---\n"}
+	tfStrRatingPie      = testFile{"test.md", "---\nrating: excellent\ntitle: Pie\n---\n"}
 )

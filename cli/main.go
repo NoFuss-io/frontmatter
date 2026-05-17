@@ -44,4 +44,3 @@ Commands follow a SQL-inspired syntax:
 func writeErr(f *File, err error) {
 	fmt.Fprintf(os.Stderr, "error writing %s: %v\n", f.Path, err)
 }
-
