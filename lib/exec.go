@@ -246,8 +246,60 @@ func (e BinExpr) Eval(fm *FrontMatter) Value {
 		return Value{Kind: TypeBool, Data: truthy(e.Left.Eval(fm)) && truthy(e.Right.Eval(fm))}
 	case BinOr:
 		return Value{Kind: TypeBool, Data: truthy(e.Left.Eval(fm)) || truthy(e.Right.Eval(fm))}
+	case BinAdd, BinSub, BinMul, BinDiv:
+		return arith(e.Op, e.Left.Eval(fm), e.Right.Eval(fm))
 	}
 	return Value{Void: true}
+}
+
+// arith performs +, -, *, / with numeric coercion. Both ints stays int unless
+// division has a non-zero remainder, in which case it promotes to number.
+// Any void operand → void; division by zero → void.
+func arith(op BinOp, l, r Value) Value {
+	if l.Void || r.Void {
+		return Value{Void: true}
+	}
+	if l.Kind == TypeInt && r.Kind == TypeInt {
+		a, b := l.Data.(int64), r.Data.(int64)
+		var n int64
+		switch op {
+		case BinAdd:
+			n = a + b
+		case BinSub:
+			n = a - b
+		case BinMul:
+			n = a * b
+		case BinDiv:
+			if b == 0 {
+				return Value{Void: true}
+			}
+			if a%b != 0 {
+				return Value{Kind: TypeNumber, Data: float64(a) / float64(b)}
+			}
+			n = a / b
+		}
+		return Value{Kind: TypeInt, Data: n}
+	}
+	lf, rf := Cast(l, TypeNumber), Cast(r, TypeNumber)
+	if lf.Void || rf.Void {
+		return Value{Void: true}
+	}
+	a, b := lf.Data.(float64), rf.Data.(float64)
+	var f float64
+	switch op {
+	case BinAdd:
+		f = a + b
+	case BinSub:
+		f = a - b
+	case BinMul:
+		f = a * b
+	case BinDiv:
+		if b == 0 {
+			return Value{Void: true}
+		}
+		f = a / b
+	}
+	return Value{Kind: TypeNumber, Data: f}
 }
 
 // SortTerm.Eval is a thin wrapper around the underlying expression.
