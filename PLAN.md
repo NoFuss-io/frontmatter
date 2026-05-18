@@ -34,7 +34,6 @@ per-doc eval at a higher layer and is intentionally out of scope here.
 
 ## Ranking
 
-```
 | # | Target                       | Complexity | Why                                                                |
 |--:|------------------------------|------------|--------------------------------------------------------------------|
 | 1 | Value type + cast helpers    | Simple     | Foundational; pure functions over FieldType; no Document needed    |
@@ -49,7 +48,6 @@ per-doc eval at a higher layer and is intentionally out of scope here.
 |10 | AlterQuery.Apply             | Medium     | Drop/rename map entries; optional where filter via #5–7            |
 |11 | UpdateQuery.Apply            | Medium     | Where filter; iterate Assign list via #8                           |
 |12 | SelectQuery.Eval (per-doc)   | Hard       | Where filter; project Fields list into Row; no sort/limit here     |
-```
 
 Build order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12
 

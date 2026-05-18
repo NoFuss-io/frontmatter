@@ -530,10 +530,47 @@ func applyListSub(fm *FrontMatter, name string, v Value) error {
 
 // Eval evaluates the where clause; if truthy, projects Fields into a Row.
 // Returns nil Row if where is falsey or evaluates to void.
-func (SelectQuery) Eval(*FrontMatter) (Row, error) { return nil, errEvalNotImplemented }
+func (q SelectQuery) Eval(fm *FrontMatter) (Row, error) {
+	if q.Where != nil && !truthy(q.Where.Eval(fm)) {
+		return nil, nil
+	}
+	row := make(Row, len(q.Fields))
+	for i, f := range q.Fields {
+		row[i] = f.Eval(fm)
+	}
+	return row, nil
+}
 
 // Apply evaluates the where clause; if truthy, applies each Assign to fm.
-func (UpdateQuery) Apply(*FrontMatter) error { return errEvalNotImplemented }
+func (q UpdateQuery) Apply(fm *FrontMatter) error {
+	if q.Where != nil && !truthy(q.Where.Eval(fm)) {
+		return nil
+	}
+	for _, a := range q.Set {
+		if err := a.Apply(fm); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // Apply evaluates the where clause; if truthy, drops or renames fields on fm.
-func (AlterQuery) Apply(*FrontMatter) error { return errEvalNotImplemented }
+func (q AlterQuery) Apply(fm *FrontMatter) error {
+	if q.Where != nil && !truthy(q.Where.Eval(fm)) {
+		return nil
+	}
+	switch q.Op {
+	case AlterDrop:
+		for _, f := range q.Drop {
+			delete(*fm, f.Name)
+		}
+	case AlterRename:
+		for _, p := range q.Rename {
+			if v, ok := (*fm)[p.From]; ok {
+				(*fm)[p.To] = v
+				delete(*fm, p.From)
+			}
+		}
+	}
+	return nil
+}
