@@ -22,24 +22,54 @@ type Value struct {
 // The slice index matches the order of SelectQuery.Fields.
 type Row []Value
 
+// String returns a formatted representation of v like bool(true) or string("haha").
+func (v Value) String() string {
+	if v.Void {
+		return "void"
+	}
+	switch v.Kind {
+	case TypeBool, TypeAny:
+		return fmt.Sprintf("%s(%v)", v.Kind.String(), v.Data)
+	case TypeInt:
+		return fmt.Sprintf("%s(%d)", v.Kind.String(), v.Data)
+	case TypeNumber:
+		return fmt.Sprintf("%s(%g)", v.Kind.String(), v.Data)
+	case TypeString:
+		return fmt.Sprintf("%s(%q)", v.Kind.String(), v.Data)
+	case TypeDate:
+		return fmt.Sprintf("%s(%q)", v.Kind.String(), v.Data.(time.Time).Format("2006-01-02"))
+	case TypeDatetime:
+		return fmt.Sprintf("%s(%q)", v.Kind.String(), v.Data.(time.Time).Format("2006-01-02T15:04:05"))
+	case TypeLink, TypeMdLink:
+		return fmt.Sprintf("%s(%q)", v.Kind.String(), v.Data)
+	case TypeList:
+		els := v.Data.([]Value)
+		parts := make([]string, len(els))
+		for i, e := range els {
+			parts[i] = e.String()
+		}
+		return fmt.Sprintf("%s(%v)", v.Kind.String(), parts)
+	}
+	return "unknown"
+}
+
 var errEvalNotImplemented = errors.New("eval not implemented")
 
-// Cast converts v to target. Returns a Void Value if the conversion is not
-// possible (e.g. string "hello" → int).
-func Cast(v Value, target FieldType) Value {
+// Cast converts v to target. Returns error if conversion is not possible.
+func Cast(v Value, target FieldType) (Value, error) {
 	if v.Void {
-		return Value{Void: true}
+		return Value{}, fmt.Errorf("cannot cast void to %s", target)
 	}
 	if target == TypeAny || target == v.Kind {
-		return v
+		return v, nil
 	}
 	if target == TypeList {
-		return Value{Kind: TypeList, Data: []Value{v}}
+		return Value{Kind: TypeList, Data: []Value{v}}, nil
 	}
 	if v.Kind == TypeList {
 		els, ok := v.Data.([]Value)
 		if !ok || len(els) != 1 {
-			return Value{Void: true}
+			return Value{}, fmt.Errorf("cannot cast list with %d elements to %s", len(els), target)
 		}
 		return Cast(els[0], target)
 	}
@@ -61,124 +91,121 @@ func Cast(v Value, target FieldType) Value {
 	case TypeMdLink:
 		return castToMdLink(v)
 	}
-	return Value{Void: true}
+	return Value{}, fmt.Errorf("unknown target type %v", target)
 }
 
-func castToBool(v Value) Value {
+func castToBool(v Value) (Value, error) {
 	switch v.Kind {
 	case TypeInt:
 		switch v.Data.(int64) {
 		case 0:
-			return Value{Kind: TypeBool, Data: false}
+			return Value{Kind: TypeBool, Data: false}, nil
 		case 1:
-			return Value{Kind: TypeBool, Data: true}
+			return Value{Kind: TypeBool, Data: true}, nil
 		}
 	case TypeNumber:
 		switch v.Data.(float64) {
 		case 0:
-			return Value{Kind: TypeBool, Data: false}
+			return Value{Kind: TypeBool, Data: false}, nil
 		case 1:
-			return Value{Kind: TypeBool, Data: true}
+			return Value{Kind: TypeBool, Data: true}, nil
 		}
 	case TypeString:
 		switch strings.ToLower(v.Data.(string)) {
 		case "true":
-			return Value{Kind: TypeBool, Data: true}
+			return Value{Kind: TypeBool, Data: true}, nil
 		case "false":
-			return Value{Kind: TypeBool, Data: false}
+			return Value{Kind: TypeBool, Data: false}, nil
 		}
 	}
-	return Value{Void: true}
+	return Value{}, fmt.Errorf("cannot cast %s to bool", v.Kind)
 }
 
-func castToInt(v Value) Value {
+func castToInt(v Value) (Value, error) {
 	switch v.Kind {
 	case TypeBool:
 		if v.Data.(bool) {
-			return Value{Kind: TypeInt, Data: int64(1)}
+			return Value{Kind: TypeInt, Data: int64(1)}, nil
 		}
-		return Value{Kind: TypeInt, Data: int64(0)}
+		return Value{Kind: TypeInt, Data: int64(0)}, nil
 	case TypeNumber:
 		f := v.Data.(float64)
 		if f != math.Trunc(f) {
-			return Value{Void: true}
+			return Value{}, fmt.Errorf("cannot cast %g to int: not a whole number", f)
 		}
-		return Value{Kind: TypeInt, Data: int64(f)}
+		return Value{Kind: TypeInt, Data: int64(f)}, nil
 	case TypeString:
 		n, err := strconv.ParseInt(v.Data.(string), 0, 64)
 		if err != nil {
-			return Value{Void: true}
+			return Value{}, fmt.Errorf("cannot cast string %q to int: %w", v.Data.(string), err)
 		}
-		return Value{Kind: TypeInt, Data: n}
+		return Value{Kind: TypeInt, Data: n}, nil
 	}
-	return Value{Void: true}
+	return Value{}, fmt.Errorf("cannot cast %s to int", v.Kind)
 }
 
-func castToNumber(v Value) Value {
+func castToNumber(v Value) (Value, error) {
 	switch v.Kind {
 	case TypeInt:
-		return Value{Kind: TypeNumber, Data: float64(v.Data.(int64))}
+		return Value{Kind: TypeNumber, Data: float64(v.Data.(int64))}, nil
 	case TypeBool:
 		if v.Data.(bool) {
-			return Value{Kind: TypeNumber, Data: float64(1)}
+			return Value{Kind: TypeNumber, Data: float64(1)}, nil
 		}
-		return Value{Kind: TypeNumber, Data: float64(0)}
+		return Value{Kind: TypeNumber, Data: float64(0)}, nil
 	case TypeString:
 		f, err := strconv.ParseFloat(v.Data.(string), 64)
 		if err != nil {
-			return Value{Void: true}
+			return Value{}, fmt.Errorf("cannot cast string %q to number: %w", v.Data.(string), err)
 		}
-		return Value{Kind: TypeNumber, Data: f}
+		return Value{Kind: TypeNumber, Data: f}, nil
 	}
-	return Value{Void: true}
+	return Value{}, fmt.Errorf("cannot cast %s to number", v.Kind)
 }
 
-func castToString(v Value) Value {
+func castToString(v Value) (Value, error) {
 	switch v.Kind {
 	case TypeInt:
-		return Value{Kind: TypeString, Data: strconv.FormatInt(v.Data.(int64), 10)}
+		return Value{Kind: TypeString, Data: strconv.FormatInt(v.Data.(int64), 10)}, nil
 	case TypeNumber:
-		return Value{Kind: TypeString, Data: strconv.FormatFloat(v.Data.(float64), 'g', -1, 64)}
+		return Value{Kind: TypeString, Data: strconv.FormatFloat(v.Data.(float64), 'g', -1, 64)}, nil
 	case TypeBool:
 		if v.Data.(bool) {
-			return Value{Kind: TypeString, Data: "true"}
+			return Value{Kind: TypeString, Data: "true"}, nil
 		}
-		return Value{Kind: TypeString, Data: "false"}
+		return Value{Kind: TypeString, Data: "false"}, nil
 	case TypeDate:
-		return Value{Kind: TypeString, Data: v.Data.(time.Time).Format("2006-01-02")}
+		return Value{Kind: TypeString, Data: v.Data.(time.Time).Format("2006-01-02")}, nil
 	case TypeDatetime:
-		return Value{Kind: TypeString, Data: v.Data.(time.Time).Format("2006-01-02T15:04:05")}
+		return Value{Kind: TypeString, Data: v.Data.(time.Time).Format("2006-01-02T15:04:05")}, nil
 	case TypeLink, TypeMdLink:
-		return Value{Kind: TypeString, Data: v.Data.(string)}
+		return Value{Kind: TypeString, Data: v.Data.(string)}, nil
 	}
-	return Value{Void: true}
+	return Value{}, fmt.Errorf("cannot cast %s to string", v.Kind)
 }
 
-func castToDate(v Value) Value {
+func castToDate(v Value) (Value, error) {
 	switch v.Kind {
-	case TypeDatetime:
-		t := v.Data.(time.Time)
-		return Value{Kind: TypeDate, Data: time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())}
 	case TypeString:
 		t, err := time.Parse("2006-01-02", v.Data.(string))
 		if err != nil {
-			return Value{Void: true}
+			return Value{}, fmt.Errorf("cannot cast string %q to date: %w", v.Data.(string), err)
 		}
-		return Value{Kind: TypeDate, Data: t}
+		return Value{Kind: TypeDate, Data: t}, nil
 	}
-	return Value{Void: true}
+	return Value{}, fmt.Errorf("cannot cast %s to date", v.Kind)
 }
 
-func castToDatetime(v Value) Value {
+func castToDatetime(v Value) (Value, error) {
 	switch v.Kind {
 	case TypeString:
 		t, err := time.Parse("2006-01-02T15:04:05", v.Data.(string))
 		if err != nil {
-			return Value{Void: true}
+			return Value{}, fmt.Errorf("cannot cast string %q to datetime: %w", v.Data.(string), err)
 		}
-		return Value{Kind: TypeDatetime, Data: t}
+		return Value{Kind: TypeDatetime, Data: t}, nil
 	}
-	return Value{Void: true}
+	return Value{}, fmt.Errorf("cannot cast %s to datetime", v.Kind)
 }
 
 // parseWikiLink parses [[ref]] or [[ref|title]], returns ref, title, ok.
@@ -208,58 +235,58 @@ func parseMdLink(s string) (ref, title string, ok bool) {
 	return s[i+2 : len(s)-1], s[1:i], true
 }
 
-func castToLink(v Value) Value {
+func castToLink(v Value) (Value, error) {
 	switch v.Kind {
 	case TypeLink:
-		return v
+		return v, nil
 	case TypeMdLink:
 		ref, title, _ := parseMdLink(v.Data.(string))
 		if title == "" || title == ref {
-			return Value{Kind: TypeLink, Data: fmt.Sprintf("[[%s]]", ref)}
+			return Value{Kind: TypeLink, Data: fmt.Sprintf("[[%s]]", ref)}, nil
 		}
-		return Value{Kind: TypeLink, Data: fmt.Sprintf("[[%s|%s]]", ref, title)}
+		return Value{Kind: TypeLink, Data: fmt.Sprintf("[[%s|%s]]", ref, title)}, nil
 	case TypeString:
 		s := v.Data.(string)
 		if _, _, ok := parseWikiLink(s); ok {
-			return Value{Kind: TypeLink, Data: s}
+			return Value{Kind: TypeLink, Data: s}, nil
 		}
 		ref, title, ok := parseMdLink(s)
 		if !ok {
-			return Value{Void: true}
+			return Value{}, fmt.Errorf("cannot cast string %q to link: invalid format", s)
 		}
 		if title == "" || title == ref {
-			return Value{Kind: TypeLink, Data: fmt.Sprintf("[[%s]]", ref)}
+			return Value{Kind: TypeLink, Data: fmt.Sprintf("[[%s]]", ref)}, nil
 		}
-		return Value{Kind: TypeLink, Data: fmt.Sprintf("[[%s|%s]]", ref, title)}
+		return Value{Kind: TypeLink, Data: fmt.Sprintf("[[%s|%s]]", ref, title)}, nil
 	}
-	return Value{Void: true}
+	return Value{}, fmt.Errorf("cannot cast %s to link", v.Kind)
 }
 
-func castToMdLink(v Value) Value {
+func castToMdLink(v Value) (Value, error) {
 	switch v.Kind {
 	case TypeMdLink:
-		return v
+		return v, nil
 	case TypeLink:
 		ref, title, _ := parseWikiLink(v.Data.(string))
 		if title == "" {
-			return Value{Kind: TypeMdLink, Data: fmt.Sprintf("[%s](%s)", ref, ref)}
+			return Value{Kind: TypeMdLink, Data: fmt.Sprintf("[%s](%s)", ref, ref)}, nil
 		}
-		return Value{Kind: TypeMdLink, Data: fmt.Sprintf("[%s](%s)", title, ref)}
+		return Value{Kind: TypeMdLink, Data: fmt.Sprintf("[%s](%s)", title, ref)}, nil
 	case TypeString:
 		s := v.Data.(string)
 		if _, _, ok := parseMdLink(s); ok {
-			return Value{Kind: TypeMdLink, Data: s}
+			return Value{Kind: TypeMdLink, Data: s}, nil
 		}
 		ref, title, ok := parseWikiLink(s)
 		if !ok {
-			return Value{Void: true}
+			return Value{}, fmt.Errorf("cannot cast string %q to mdlink: invalid format", s)
 		}
 		if title == "" {
-			return Value{Kind: TypeMdLink, Data: fmt.Sprintf("[%s](%s)", ref, ref)}
+			return Value{Kind: TypeMdLink, Data: fmt.Sprintf("[%s](%s)", ref, ref)}, nil
 		}
-		return Value{Kind: TypeMdLink, Data: fmt.Sprintf("[%s](%s)", title, ref)}
+		return Value{Kind: TypeMdLink, Data: fmt.Sprintf("[%s](%s)", title, ref)}, nil
 	}
-	return Value{Void: true}
+	return Value{}, fmt.Errorf("cannot cast %s to mdlink", v.Kind)
 }
 
 // ── Expressions ───────────────────────────────────────────────────────────────
@@ -299,7 +326,11 @@ func (e FieldExpr) Eval(fm *FrontMatter) Value {
 	if e.Field.Type == TypeAny {
 		return v
 	}
-	return CastField(v, e.Field)
+	c, err := CastField(v, e.Field)
+	if err != nil {
+		return Value{Void: true}
+	}
+	return c
 }
 
 // valueFromAny converts a raw Go value (from YAML-decoded frontmatter) into a
@@ -354,8 +385,7 @@ func (e UnaryExpr) Eval(fm *FrontMatter) Value {
 	return Value{Void: true}
 }
 
-// truthy returns the boolean view of v. Void is falsey; non-bool values are
-// passed through castToBool, with cast failure also treated as falsey.
+// truthy returns the boolean view of v. Void and cast failures are falsey.
 func truthy(v Value) bool {
 	if v.Void {
 		return false
@@ -363,8 +393,8 @@ func truthy(v Value) bool {
 	if v.Kind == TypeBool {
 		return v.Data.(bool)
 	}
-	b := castToBool(v)
-	if b.Void {
+	b, err := castToBool(v)
+	if err != nil || b.Void {
 		return false
 	}
 	return b.Data.(bool)
@@ -384,6 +414,7 @@ func (e BinExpr) Eval(fm *FrontMatter) Value {
 }
 
 // compare implements =, !=, <, <=, >, >=. Void operands → false.
+// Cast failures also → false.
 // Lists participate in set equality (= / !=) or set membership (list >= scalar,
 // scalar <= list); ordering operators require numeric coercion of both sides.
 func compare(op BinOp, l, r Value) Value {
@@ -399,8 +430,9 @@ func compare(op BinOp, l, r Value) Value {
 	case BinNe:
 		return Value{Kind: TypeBool, Data: !scalarEq(l, r)}
 	}
-	lf, rf := Cast(l, TypeNumber), Cast(r, TypeNumber)
-	if lf.Void || rf.Void {
+	lf, errL := Cast(l, TypeNumber)
+	rf, errR := Cast(r, TypeNumber)
+	if errL != nil || errR != nil || lf.Void || rf.Void {
 		return Value{Kind: TypeBool, Data: false}
 	}
 	a, b := lf.Data.(float64), rf.Data.(float64)
@@ -425,12 +457,14 @@ func scalarEq(l, r Value) bool {
 		}
 		return l.Data == r.Data
 	}
-	lf, rf := Cast(l, TypeNumber), Cast(r, TypeNumber)
-	if !lf.Void && !rf.Void {
+	lf, errL := Cast(l, TypeNumber)
+	rf, errR := Cast(r, TypeNumber)
+	if errL == nil && errR == nil && !lf.Void && !rf.Void {
 		return lf.Data.(float64) == rf.Data.(float64)
 	}
-	ls, rs := Cast(l, TypeString), Cast(r, TypeString)
-	if !ls.Void && !rs.Void {
+	ls, errL := Cast(l, TypeString)
+	rs, errR := Cast(r, TypeString)
+	if errL == nil && errR == nil && !ls.Void && !rs.Void {
 		return ls.Data.(string) == rs.Data.(string)
 	}
 	return false
@@ -486,7 +520,7 @@ func listContains(list []Value, v Value) bool {
 
 // arith performs +, -, *, / with numeric coercion. Both ints stays int unless
 // division has a non-zero remainder, in which case it promotes to number.
-// Any void operand → void; division by zero → void.
+// Any void operand, cast failure, or division by zero → void.
 func arith(op BinOp, l, r Value) Value {
 	if l.Void || r.Void {
 		return Value{Void: true}
@@ -512,8 +546,9 @@ func arith(op BinOp, l, r Value) Value {
 		}
 		return Value{Kind: TypeInt, Data: n}
 	}
-	lf, rf := Cast(l, TypeNumber), Cast(r, TypeNumber)
-	if lf.Void || rf.Void {
+	lf, errL := Cast(l, TypeNumber)
+	rf, errR := Cast(r, TypeNumber)
+	if errL != nil || errR != nil || lf.Void || rf.Void {
 		return Value{Void: true}
 	}
 	a, b := lf.Data.(float64), rf.Data.(float64)
@@ -535,26 +570,25 @@ func arith(op BinOp, l, r Value) Value {
 }
 
 // CastField casts v to the type described by f. For list fields with a declared
-// element type, each element is cast to that type; a single failing element
-// makes the whole cast void.
-func CastField(v Value, f Field) Value {
+// element type, each element is cast to that type; an error in any element fails the cast.
+func CastField(v Value, f Field) (Value, error) {
 	if f.Type != TypeList || f.ElemType == nil {
 		return Cast(v, f.Type)
 	}
-	listVal := Cast(v, TypeList)
-	if listVal.Void {
-		return Value{Void: true}
+	listVal, err := Cast(v, TypeList)
+	if err != nil {
+		return Value{}, err
 	}
 	els := listVal.Data.([]Value)
 	out := make([]Value, len(els))
 	for i, e := range els {
-		c := Cast(e, *f.ElemType)
-		if c.Void && !e.Void {
-			return Value{Void: true}
+		c, err := Cast(e, *f.ElemType)
+		if err != nil {
+			return Value{}, fmt.Errorf("element %d: %w", i, err)
 		}
 		out[i] = c
 	}
-	return Value{Kind: TypeList, Data: out}
+	return Value{Kind: TypeList, Data: out}, nil
 }
 
 // SortTerm.Eval is a thin wrapper around the underlying expression.
@@ -582,9 +616,9 @@ func (a Assign) Apply(fm *FrontMatter) error {
 			return nil
 		}
 		v := valueFromAny(cur)
-		c := CastField(v, a.Field)
-		if c.Void && !v.Void {
-			return fmt.Errorf("cannot cast field %q to %v", name, a.Field.Type)
+		c, err := CastField(v, a.Field)
+		if err != nil {
+			return fmt.Errorf("cannot cast field %q: %w", name, err)
 		}
 		(*fm)[name] = anyFromValue(c)
 		return nil
@@ -592,9 +626,9 @@ func (a Assign) Apply(fm *FrontMatter) error {
 
 	v := a.Value.Eval(fm)
 	if a.Field.Type != TypeAny {
-		c := CastField(v, a.Field)
-		if c.Void && !v.Void {
-			return fmt.Errorf("cannot cast value to %v for field %q", a.Field.Type, name)
+		c, err := CastField(v, a.Field)
+		if err != nil {
+			return fmt.Errorf("cannot cast value to %v for field %q: %w", a.Field.Type, name, err)
 		}
 		v = c
 	}

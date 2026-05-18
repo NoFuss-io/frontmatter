@@ -58,6 +58,32 @@ const (
 	TypeList                      // list[:elemtype]
 )
 
+func (f FieldType) String() string {
+	switch f {
+	case TypeBool:
+		return "bool"
+	case TypeInt:
+		return "int"
+	case TypeNumber:
+		return "number"
+	case TypeString:
+		return "string"
+	case TypeDate:
+		return "date"
+	case TypeDatetime:
+		return "datetime"
+	case TypeLink:
+		return "link"
+	case TypeMdLink:
+		return "mdlink"
+	case TypeList:
+		return "list"
+	case TypeAny:
+		return "any"
+	}
+	return "unknown"
+}
+
 // Field is a field reference with an optional type annotation: identifier[:type].
 type Field struct {
 	Name     string

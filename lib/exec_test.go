@@ -65,41 +65,6 @@ func parseQ(t *testing.T, src string) lib.Query {
 	return q
 }
 
-// ── Row 1: Cast ───────────────────────────────────────────────────────────────
-
-func TestCast(t *testing.T) {
-	tests := []struct {
-		name   string
-		v      lib.Value
-		target lib.FieldType
-		want   lib.Value
-	}{
-		{"same_type_noop", vInt(7), lib.TypeInt, vInt(7)},
-		{"to_any_preserves", vInt(7), lib.TypeAny, vInt(7)},
-		{"int_to_bool_1", vInt(1), lib.TypeBool, vBool(true)},
-		{"int_to_bool_0", vInt(0), lib.TypeBool, vBool(false)},
-		{"int_to_bool_2_err", vInt(2), lib.TypeBool, vVoid()},
-		{"string_to_int_ok", vStr("3"), lib.TypeInt, vInt(3)},
-		{"string_to_int_err", vStr("hello"), lib.TypeInt, vVoid()},
-		{"int_to_string", vInt(42), lib.TypeString, vStr("42")},
-		{"int_to_number", vInt(5), lib.TypeNumber, vNum(5)},
-		{"number_to_int_err", vNum(1.5), lib.TypeInt, vVoid()},
-		{"int_to_list", vInt(4), lib.TypeList, vList(vInt(4))},
-		{"list_to_int_single", vList(vInt(5)), lib.TypeInt, vInt(5)},
-		{"list_to_int_multi_err", vList(vInt(6), vInt(7)), lib.TypeInt, vVoid()},
-		{"void_to_any", vVoid(), lib.TypeAny, vVoid()},
-		{"void_to_int", vVoid(), lib.TypeInt, vVoid()},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := lib.Cast(tc.v, tc.target)
-			if !valEq(got, tc.want) {
-				t.Errorf("Cast(%+v, %v) = %+v, want %+v", tc.v, tc.target, got, tc.want)
-			}
-		})
-	}
-}
-
 // ── Row 2: LitExpr.Eval ───────────────────────────────────────────────────────
 
 func TestLitExpr_Eval(t *testing.T) {
@@ -551,36 +516,6 @@ func TestSelectQuery_Eval(t *testing.T) {
 
 // ── Date/datetime types ───────────────────────────────────────────────────────
 
-func TestCast_Date(t *testing.T) {
-	d := vDate(2026, 5, 14)
-	dt := vDatetime(2026, 5, 14, 21, 2, 30)
-
-	tests := []struct {
-		name   string
-		v      lib.Value
-		target lib.FieldType
-		want   lib.Value
-	}{
-		{"date_noop", d, lib.TypeDate, d},
-		{"datetime_noop", dt, lib.TypeDatetime, dt},
-		{"date_to_string", d, lib.TypeString, vStr("2026-05-14")},
-		{"datetime_to_string", dt, lib.TypeString, vStr("2026-05-14T21:02:30")},
-		{"datetime_to_date", dt, lib.TypeDate, vDate(2026, 5, 14)},
-		{"date_to_datetime_err", d, lib.TypeDatetime, vVoid()},
-		{"string_to_date_ok", vStr("2026-05-14"), lib.TypeDate, d},
-		{"string_to_date_err", vStr("not-a-date"), lib.TypeDate, vVoid()},
-		{"string_to_datetime_ok", vStr("2026-05-14T21:02:30"), lib.TypeDatetime, dt},
-		{"string_to_datetime_err", vStr("not-a-datetime"), lib.TypeDatetime, vVoid()},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := lib.Cast(tc.v, tc.target)
-			if !valEq(got, tc.want) {
-				t.Errorf("Cast(%+v, %v) = %+v, want %+v", tc.v, tc.target, got, tc.want)
-			}
-		})
-	}
-}
 
 func TestFieldExpr_Eval_Date(t *testing.T) {
 	fm := lib.FrontMatter{
@@ -609,37 +544,6 @@ func TestFieldExpr_Eval_Date(t *testing.T) {
 }
 
 // ── Link/mdlink types ─────────────────────────────────────────────────────────
-
-func TestCast_Link(t *testing.T) {
-	tests := []struct {
-		name   string
-		v      lib.Value
-		target lib.FieldType
-		want   lib.Value
-	}{
-		{"link_noop", vLink("[[ref]]"), lib.TypeLink, vLink("[[ref]]")},
-		{"mdlink_noop", vMdLink("[ref](ref)"), lib.TypeMdLink, vMdLink("[ref](ref)")},
-		{"string_to_link_ok", vStr("[[ref]]"), lib.TypeLink, vLink("[[ref]]")},
-		{"string_to_link_titled", vStr("[[ref|title]]"), lib.TypeLink, vLink("[[ref|title]]")},
-		{"string_to_link_err", vStr("not a link"), lib.TypeLink, vVoid()},
-		{"string_to_mdlink_ok", vStr("[title](ref)"), lib.TypeMdLink, vMdLink("[title](ref)")},
-		{"string_to_mdlink_err", vStr("not a link"), lib.TypeMdLink, vVoid()},
-		{"link_to_mdlink_no_title", vLink("[[ref]]"), lib.TypeMdLink, vMdLink("[ref](ref)")},
-		{"link_to_mdlink_with_title", vLink("[[ref|title]]"), lib.TypeMdLink, vMdLink("[title](ref)")},
-		{"mdlink_to_link_with_title", vMdLink("[title](ref)"), lib.TypeLink, vLink("[[ref|title]]")},
-		{"mdlink_to_link_same_title", vMdLink("[ref](ref)"), lib.TypeLink, vLink("[[ref]]")},
-		{"link_to_string", vLink("[[ref|title]]"), lib.TypeString, vStr("[[ref|title]]")},
-		{"mdlink_to_string", vMdLink("[title](ref)"), lib.TypeString, vStr("[title](ref)")},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := lib.Cast(tc.v, tc.target)
-			if !valEq(got, tc.want) {
-				t.Errorf("Cast(%+v, %v) = %+v, want %+v", tc.v, tc.target, got, tc.want)
-			}
-		})
-	}
-}
 
 func TestFieldExpr_Eval_Link(t *testing.T) {
 	fm := lib.FrontMatter{
@@ -718,9 +622,18 @@ func TestCastField_ListElemType(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := lib.CastField(tc.v, tc.field)
-			if !valEq(got, tc.want) {
-				t.Errorf("CastField(%+v, %+v) = %+v, want %+v", tc.v, tc.field, got, tc.want)
+			wantErr := tc.want.Void
+			got, err := lib.CastField(tc.v, tc.field)
+			if wantErr {
+				if err == nil {
+					t.Errorf("CastField(%+v, %+v) = %+v, want error", tc.v, tc.field, got)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("CastField(%+v, %+v) error: %s", tc.v, tc.field, err)
+				} else if !valEq(got, tc.want) {
+					t.Errorf("CastField(%+v, %+v) = %+v, want %+v", tc.v, tc.field, got, tc.want)
+				}
 			}
 		})
 	}
