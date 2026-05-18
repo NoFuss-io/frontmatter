@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/backlin/frontmatter/lib"
 )
@@ -18,6 +19,14 @@ func vVoid() lib.Value         { return lib.Value{Void: true} }
 func vList(els ...lib.Value) lib.Value {
 	return lib.Value{Kind: lib.TypeList, Data: els}
 }
+func vDate(y, m, d int) lib.Value {
+	return lib.Value{Kind: lib.TypeDate, Data: time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC)}
+}
+func vDatetime(y, mo, d, h, mn, s int) lib.Value {
+	return lib.Value{Kind: lib.TypeDatetime, Data: time.Date(y, time.Month(mo), d, h, mn, s, 0, time.UTC)}
+}
+func vLink(s string) lib.Value   { return lib.Value{Kind: lib.TypeLink, Data: s} }
+func vMdLink(s string) lib.Value { return lib.Value{Kind: lib.TypeMdLink, Data: s} }
 
 func valEq(a, b lib.Value) bool {
 	if a.Void != b.Void {
@@ -28,6 +37,21 @@ func valEq(a, b lib.Value) bool {
 	}
 	if a.Kind != b.Kind {
 		return false
+	}
+	if a.Kind == lib.TypeDate || a.Kind == lib.TypeDatetime {
+		return a.Data.(time.Time).Equal(b.Data.(time.Time))
+	}
+	if a.Kind == lib.TypeList {
+		as, bs := a.Data.([]lib.Value), b.Data.([]lib.Value)
+		if len(as) != len(bs) {
+			return false
+		}
+		for i := range as {
+			if !valEq(as[i], bs[i]) {
+				return false
+			}
+		}
+		return true
 	}
 	return reflect.DeepEqual(a.Data, b.Data)
 }
@@ -523,4 +547,63 @@ func TestSelectQuery_Eval(t *testing.T) {
 			t.Errorf("row = %+v, want [void]", row)
 		}
 	})
+}
+
+// ── Date/datetime types ───────────────────────────────────────────────────────
+
+func TestCast_Date(t *testing.T) {
+	d := vDate(2026, 5, 14)
+	dt := vDatetime(2026, 5, 14, 21, 2, 30)
+
+	tests := []struct {
+		name   string
+		v      lib.Value
+		target lib.FieldType
+		want   lib.Value
+	}{
+		{"date_noop", d, lib.TypeDate, d},
+		{"datetime_noop", dt, lib.TypeDatetime, dt},
+		{"date_to_string", d, lib.TypeString, vStr("2026-05-14")},
+		{"datetime_to_string", dt, lib.TypeString, vStr("2026-05-14T21:02:30")},
+		{"datetime_to_date", dt, lib.TypeDate, vDate(2026, 5, 14)},
+		{"date_to_datetime_err", d, lib.TypeDatetime, vVoid()},
+		{"string_to_date_ok", vStr("2026-05-14"), lib.TypeDate, d},
+		{"string_to_date_err", vStr("not-a-date"), lib.TypeDate, vVoid()},
+		{"string_to_datetime_ok", vStr("2026-05-14T21:02:30"), lib.TypeDatetime, dt},
+		{"string_to_datetime_err", vStr("not-a-datetime"), lib.TypeDatetime, vVoid()},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := lib.Cast(tc.v, tc.target)
+			if !valEq(got, tc.want) {
+				t.Errorf("Cast(%+v, %v) = %+v, want %+v", tc.v, tc.target, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestFieldExpr_Eval_Date(t *testing.T) {
+	fm := lib.FrontMatter{
+		"created":  time.Date(2026, 5, 14, 0, 0, 0, 0, time.UTC),
+		"modified": time.Date(2026, 5, 14, 21, 2, 30, 0, time.UTC),
+	}
+	tests := []struct {
+		name string
+		f    lib.Field
+		want lib.Value
+	}{
+		{"time_as_date", lib.Field{Name: "created", Type: lib.TypeDate}, vDate(2026, 5, 14)},
+		{"time_as_datetime", lib.Field{Name: "modified", Type: lib.TypeDatetime}, vDatetime(2026, 5, 14, 21, 2, 30)},
+		{"time_any_detects_date", lib.Field{Name: "created", Type: lib.TypeAny}, vDate(2026, 5, 14)},
+		{"time_any_detects_datetime", lib.Field{Name: "modified", Type: lib.TypeAny}, vDatetime(2026, 5, 14, 21, 2, 30)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			e := lib.FieldExpr{Field: tc.f}
+			got := e.Eval(&fm)
+			if !valEq(got, tc.want) {
+				t.Errorf("Eval(%+v) = %+v, want %+v", tc.f, got, tc.want)
+			}
+		})
+	}
 }

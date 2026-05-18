@@ -6,6 +6,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Value is the runtime value produced by evaluating an expression.
@@ -51,6 +52,10 @@ func Cast(v Value, target FieldType) Value {
 		return castToNumber(v)
 	case TypeString:
 		return castToString(v)
+	case TypeDate:
+		return castToDate(v)
+	case TypeDatetime:
+		return castToDatetime(v)
 	}
 	return Value{Void: true}
 }
@@ -135,6 +140,37 @@ func castToString(v Value) Value {
 			return Value{Kind: TypeString, Data: "true"}
 		}
 		return Value{Kind: TypeString, Data: "false"}
+	case TypeDate:
+		return Value{Kind: TypeString, Data: v.Data.(time.Time).Format("2006-01-02")}
+	case TypeDatetime:
+		return Value{Kind: TypeString, Data: v.Data.(time.Time).Format("2006-01-02T15:04:05")}
+	}
+	return Value{Void: true}
+}
+
+func castToDate(v Value) Value {
+	switch v.Kind {
+	case TypeDatetime:
+		t := v.Data.(time.Time)
+		return Value{Kind: TypeDate, Data: time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())}
+	case TypeString:
+		t, err := time.Parse("2006-01-02", v.Data.(string))
+		if err != nil {
+			return Value{Void: true}
+		}
+		return Value{Kind: TypeDate, Data: t}
+	}
+	return Value{Void: true}
+}
+
+func castToDatetime(v Value) Value {
+	switch v.Kind {
+	case TypeString:
+		t, err := time.Parse("2006-01-02T15:04:05", v.Data.(string))
+		if err != nil {
+			return Value{Void: true}
+		}
+		return Value{Kind: TypeDatetime, Data: t}
 	}
 	return Value{Void: true}
 }
@@ -204,6 +240,11 @@ func valueFromAny(x any) Value {
 			els[i] = valueFromAny(e)
 		}
 		return Value{Kind: TypeList, Data: els}
+	case time.Time:
+		if v.Hour() == 0 && v.Minute() == 0 && v.Second() == 0 && v.Nanosecond() == 0 {
+			return Value{Kind: TypeDate, Data: v}
+		}
+		return Value{Kind: TypeDatetime, Data: v}
 	}
 	return Value{Kind: TypeAny, Data: x}
 }
@@ -292,6 +333,9 @@ func compare(op BinOp, l, r Value) Value {
 
 func scalarEq(l, r Value) bool {
 	if l.Kind == r.Kind {
+		if l.Kind == TypeDate || l.Kind == TypeDatetime {
+			return l.Data.(time.Time).Equal(r.Data.(time.Time))
+		}
 		return l.Data == r.Data
 	}
 	lf, rf := Cast(l, TypeNumber), Cast(r, TypeNumber)
