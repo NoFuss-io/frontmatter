@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -51,4 +52,17 @@ func ReadFile(path string) (*File, error) {
 	}
 	f.Body = rest[end+5:]
 	return f, nil
+}
+
+func (f *File) Write() error {
+	var buf bytes.Buffer
+	buf.WriteString("---\n")
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(f.FrontMatter); err != nil {
+		return err
+	}
+	buf.WriteString("---\n")
+	buf.WriteString(f.Body)
+	return os.WriteFile(f.Path, buf.Bytes(), 0644)
 }
