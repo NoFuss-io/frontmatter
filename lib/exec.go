@@ -56,6 +56,10 @@ func Cast(v Value, target FieldType) Value {
 		return castToDate(v)
 	case TypeDatetime:
 		return castToDatetime(v)
+	case TypeLink:
+		return castToLink(v)
+	case TypeMdLink:
+		return castToMdLink(v)
 	}
 	return Value{Void: true}
 }
@@ -144,6 +148,8 @@ func castToString(v Value) Value {
 		return Value{Kind: TypeString, Data: v.Data.(time.Time).Format("2006-01-02")}
 	case TypeDatetime:
 		return Value{Kind: TypeString, Data: v.Data.(time.Time).Format("2006-01-02T15:04:05")}
+	case TypeLink, TypeMdLink:
+		return Value{Kind: TypeString, Data: v.Data.(string)}
 	}
 	return Value{Void: true}
 }
@@ -171,6 +177,87 @@ func castToDatetime(v Value) Value {
 			return Value{Void: true}
 		}
 		return Value{Kind: TypeDatetime, Data: t}
+	}
+	return Value{Void: true}
+}
+
+// parseWikiLink parses [[ref]] or [[ref|title]], returns ref, title, ok.
+func parseWikiLink(s string) (ref, title string, ok bool) {
+	if !strings.HasPrefix(s, "[[") || !strings.HasSuffix(s, "]]") || len(s) < 5 {
+		return "", "", false
+	}
+	inner := s[2 : len(s)-2]
+	if inner == "" {
+		return "", "", false
+	}
+	if i := strings.IndexByte(inner, '|'); i >= 0 {
+		return inner[:i], inner[i+1:], true
+	}
+	return inner, "", true
+}
+
+// parseMdLink parses [title](ref), returns ref, title, ok.
+func parseMdLink(s string) (ref, title string, ok bool) {
+	if len(s) < 4 || s[0] != '[' {
+		return "", "", false
+	}
+	i := strings.Index(s, "](")
+	if i < 0 || s[len(s)-1] != ')' {
+		return "", "", false
+	}
+	return s[i+2 : len(s)-1], s[1:i], true
+}
+
+func castToLink(v Value) Value {
+	switch v.Kind {
+	case TypeLink:
+		return v
+	case TypeMdLink:
+		ref, title, _ := parseMdLink(v.Data.(string))
+		if title == "" || title == ref {
+			return Value{Kind: TypeLink, Data: fmt.Sprintf("[[%s]]", ref)}
+		}
+		return Value{Kind: TypeLink, Data: fmt.Sprintf("[[%s|%s]]", ref, title)}
+	case TypeString:
+		s := v.Data.(string)
+		if _, _, ok := parseWikiLink(s); ok {
+			return Value{Kind: TypeLink, Data: s}
+		}
+		ref, title, ok := parseMdLink(s)
+		if !ok {
+			return Value{Void: true}
+		}
+		if title == "" || title == ref {
+			return Value{Kind: TypeLink, Data: fmt.Sprintf("[[%s]]", ref)}
+		}
+		return Value{Kind: TypeLink, Data: fmt.Sprintf("[[%s|%s]]", ref, title)}
+	}
+	return Value{Void: true}
+}
+
+func castToMdLink(v Value) Value {
+	switch v.Kind {
+	case TypeMdLink:
+		return v
+	case TypeLink:
+		ref, title, _ := parseWikiLink(v.Data.(string))
+		if title == "" {
+			return Value{Kind: TypeMdLink, Data: fmt.Sprintf("[%s](%s)", ref, ref)}
+		}
+		return Value{Kind: TypeMdLink, Data: fmt.Sprintf("[%s](%s)", title, ref)}
+	case TypeString:
+		s := v.Data.(string)
+		if _, _, ok := parseMdLink(s); ok {
+			return Value{Kind: TypeMdLink, Data: s}
+		}
+		ref, title, ok := parseWikiLink(s)
+		if !ok {
+			return Value{Void: true}
+		}
+		if title == "" {
+			return Value{Kind: TypeMdLink, Data: fmt.Sprintf("[%s](%s)", ref, ref)}
+		}
+		return Value{Kind: TypeMdLink, Data: fmt.Sprintf("[%s](%s)", title, ref)}
 	}
 	return Value{Void: true}
 }

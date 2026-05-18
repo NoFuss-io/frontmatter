@@ -607,3 +607,62 @@ func TestFieldExpr_Eval_Date(t *testing.T) {
 		})
 	}
 }
+
+// ── Link/mdlink types ─────────────────────────────────────────────────────────
+
+func TestCast_Link(t *testing.T) {
+	tests := []struct {
+		name   string
+		v      lib.Value
+		target lib.FieldType
+		want   lib.Value
+	}{
+		{"link_noop", vLink("[[ref]]"), lib.TypeLink, vLink("[[ref]]")},
+		{"mdlink_noop", vMdLink("[ref](ref)"), lib.TypeMdLink, vMdLink("[ref](ref)")},
+		{"string_to_link_ok", vStr("[[ref]]"), lib.TypeLink, vLink("[[ref]]")},
+		{"string_to_link_titled", vStr("[[ref|title]]"), lib.TypeLink, vLink("[[ref|title]]")},
+		{"string_to_link_err", vStr("not a link"), lib.TypeLink, vVoid()},
+		{"string_to_mdlink_ok", vStr("[title](ref)"), lib.TypeMdLink, vMdLink("[title](ref)")},
+		{"string_to_mdlink_err", vStr("not a link"), lib.TypeMdLink, vVoid()},
+		{"link_to_mdlink_no_title", vLink("[[ref]]"), lib.TypeMdLink, vMdLink("[ref](ref)")},
+		{"link_to_mdlink_with_title", vLink("[[ref|title]]"), lib.TypeMdLink, vMdLink("[title](ref)")},
+		{"mdlink_to_link_with_title", vMdLink("[title](ref)"), lib.TypeLink, vLink("[[ref|title]]")},
+		{"mdlink_to_link_same_title", vMdLink("[ref](ref)"), lib.TypeLink, vLink("[[ref]]")},
+		{"link_to_string", vLink("[[ref|title]]"), lib.TypeString, vStr("[[ref|title]]")},
+		{"mdlink_to_string", vMdLink("[title](ref)"), lib.TypeString, vStr("[title](ref)")},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := lib.Cast(tc.v, tc.target)
+			if !valEq(got, tc.want) {
+				t.Errorf("Cast(%+v, %v) = %+v, want %+v", tc.v, tc.target, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestFieldExpr_Eval_Link(t *testing.T) {
+	fm := lib.FrontMatter{
+		"source": "[[ref|title]]",
+		"url":    "[title](ref)",
+	}
+	tests := []struct {
+		name string
+		f    lib.Field
+		want lib.Value
+	}{
+		{"string_as_link", lib.Field{Name: "source", Type: lib.TypeLink}, vLink("[[ref|title]]")},
+		{"string_as_mdlink", lib.Field{Name: "url", Type: lib.TypeMdLink}, vMdLink("[title](ref)")},
+		{"link_to_mdlink", lib.Field{Name: "source", Type: lib.TypeMdLink}, vMdLink("[title](ref)")},
+		{"mdlink_to_link_via_field", lib.Field{Name: "url", Type: lib.TypeLink}, vLink("[[ref|title]]")},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			e := lib.FieldExpr{Field: tc.f}
+			got := e.Eval(&fm)
+			if !valEq(got, tc.want) {
+				t.Errorf("Eval(%+v) = %+v, want %+v", tc.f, got, tc.want)
+			}
+		})
+	}
+}
