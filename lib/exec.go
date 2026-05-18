@@ -299,7 +299,7 @@ func (e FieldExpr) Eval(fm *FrontMatter) Value {
 	if e.Field.Type == TypeAny {
 		return v
 	}
-	return Cast(v, e.Field.Type)
+	return CastField(v, e.Field)
 }
 
 // valueFromAny converts a raw Go value (from YAML-decoded frontmatter) into a
@@ -534,6 +534,29 @@ func arith(op BinOp, l, r Value) Value {
 	return Value{Kind: TypeNumber, Data: f}
 }
 
+// CastField casts v to the type described by f. For list fields with a declared
+// element type, each element is cast to that type; a single failing element
+// makes the whole cast void.
+func CastField(v Value, f Field) Value {
+	if f.Type != TypeList || f.ElemType == nil {
+		return Cast(v, f.Type)
+	}
+	listVal := Cast(v, TypeList)
+	if listVal.Void {
+		return Value{Void: true}
+	}
+	els := listVal.Data.([]Value)
+	out := make([]Value, len(els))
+	for i, e := range els {
+		c := Cast(e, *f.ElemType)
+		if c.Void && !e.Void {
+			return Value{Void: true}
+		}
+		out[i] = c
+	}
+	return Value{Kind: TypeList, Data: out}
+}
+
 // SortTerm.Eval is a thin wrapper around the underlying expression.
 func (s SortTerm) Eval(fm *FrontMatter) Value { return s.Expr.Eval(fm) }
 
@@ -559,7 +582,7 @@ func (a Assign) Apply(fm *FrontMatter) error {
 			return nil
 		}
 		v := valueFromAny(cur)
-		c := Cast(v, a.Field.Type)
+		c := CastField(v, a.Field)
 		if c.Void && !v.Void {
 			return fmt.Errorf("cannot cast field %q to %v", name, a.Field.Type)
 		}
@@ -569,7 +592,7 @@ func (a Assign) Apply(fm *FrontMatter) error {
 
 	v := a.Value.Eval(fm)
 	if a.Field.Type != TypeAny {
-		c := Cast(v, a.Field.Type)
+		c := CastField(v, a.Field)
 		if c.Void && !v.Void {
 			return fmt.Errorf("cannot cast value to %v for field %q", a.Field.Type, name)
 		}
