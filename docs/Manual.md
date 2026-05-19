@@ -1,41 +1,82 @@
+# `fm` Manual
 `fm` implements a subset of SQL with syntax tailored for Markdown front matter in YAML, such as that of [Obsidian documents' properties](https://obsidian.md/help/properties). Think of files as rows and fields as columns.
 
 
-# Usage
+## Usage
+
 ```sh
 fm [query] [flags]
 ```
 
+Query is input either as command line arguments or over stdin.
+
 Flags:
-- `--dry-run`: Simulates the operation without editing any files.
-- `--silent`: Suppress all output.
-- `-v`: Runs a `select` query on affected files and fields after `update` or `alter`.
+- `-h`, `--help`: Show help.
+- `-d`, `--dry-run`: Simulates the operation without editing any files.
+- `-s`, `--silent`: Suppress all output.
+- `-v`, `--verbose`: Runs a `select` query on affected files and fields after `update` or `alter`.
+- `-H`, `--include-hidden`: Include hidden files, see [glob expansion](Manual#Globs).
 
 Query is read from `stdin` if omitted.
 Query results and logs are written to `stdout`.
 Errors are written to `stderr` and return exit code 1.
 
-Parsing happens first. Any parse error (e.g. unrecognized type, malformed expression, static type error) halts the program before any file is touched.
 
-## Scripts
+### Query using command line argumnets
 
-Multiple statements may be combined into a script, separated by `;`.
-`--` starts a line comment that runs to the end of the line. Both `;`
-and `--` are ignored inside quoted strings and backtick identifiers.
+Done either as a single quoted argument, which is easiest to read:
 
-Statements run sequentially. If any statement fails the script halts
-and the remaining statements are not executed.
+```sh
+fm 'select url from pages/* where tags>="wiki"'
+```
 
-`--dry-run` is rejected for multi-statement scripts because there is no
-transactional layer: each statement re-reads files from disk, so later
-statements would not observe the mutations that earlier statements would
-have made.
+or as multiple arguments, which is convenient for tab completion
+but may require awkward quoting to bypass shell functionality:
+
+```sh
+fm select url from pages/* where tags '>="wiki"'
+```
+
+
+### Query using stdin
+
+Can be done by pipe
+
+```sh
+cat script.sql | fm
+```
+
+input redirection
 
 ```sh
 fm < script.sql
 ```
 
-# Mutations
+or manual input
+
+```sh
+fm
+```
+```sql
+alter pages/* drop url where deprecated;
+
+-- Confirm successful
+select url from pages/*
+```
+then send EOF with <kbd>Ctrl</kbd> <kbd>D</kbd>.
+
+
+### Output
+
+`fm` prints normal output to `stdout`.
+
+Execution errors, e.g. failed casting, are written to `stderr` and exits with code 2.
+
+Query parsing errors (e.g. recognized type, malformed expression, static type error)
+halt the program before touching any file and exists with code 1.
+
+
+#### File mutations
 
 Files are modified in-place without any transactional logic or backup.
 Version control (e.g. `git`) and `--dry-run` are recommended safe guards.
@@ -44,8 +85,12 @@ Fields are sorted on file update.
 
 Errors skips the file entirely and leaves it unchanged, but does not stop processing of other files.
 
-# Query
+
+## Syntax
+
 Syntax generally follows the BigQuery SQL dialect with some minor deviations (and much functionality left out).
+
+Semi-colons (`;`) separate multiple statements and double dash (`--`) creates comments (ignored).
 
 Keywords, operators, and functions are case insensitive. Field names are case sensitive.
 
@@ -53,7 +98,9 @@ Additional spacing and newlines may be added anywhere.
 
 Only frontmatter field names are queryable. File path, filename, and similar are not accessible.
 
-## Select query
+
+### Select query
+
 ```
 select <expression>[, <expression>]...
 from <glob>...
@@ -62,7 +109,7 @@ from <glob>...
 [limit <n>]
 ```
 
-Erroneous expressions produce different behavior depending on clause:
+Execution errors produce different behavior depending on clause:
 - `select`: Return ERROR.
 - `where`: Evaluate as falsey.
 - `sort by`: Evaluate to missing values.
@@ -73,18 +120,22 @@ Missing values sort last.
 
 `limit` is applied after `sort`.
 
-## Update query
+
+### Update query
+
 ```
 update <glob>...
 set <assignment>[, <assignment>]...
 [where <boolean expression>]
 ```
 
-Erroneous expressions produce different behavior depending on clause:
+Execution errors produce different behavior depending on clause:
 - `set`: Stops processing of current file (unchanged on disk).
 - `where`: Evaluate as falsey.
 
-## Alter query
+
+### Alter query
+
 ```
 alter <glob>...
 drop <field>[, <field>]...
@@ -97,16 +148,20 @@ rename <field> to <field>[, <field> to <field>]...
 [where <boolean expression>]
 ```
 
-Erroneous expressions produce different behavior depending on clause:
+Execution errors produce different behavior depending on clause:
 - `drop`, `rename`: Stops processing of current file (unchanged on disk).
 - `where`: Evaluate as falsey.
 
-## Fields
+
+### Fields
+
 ```
 identifier[:type]
 ```
 
-### Identifiers
+
+#### Identifiers
+
 Unquoted identifiers:
 
 - Must begin with a letter or an underscore (\_) character.
@@ -120,7 +175,8 @@ Quoted identifiers:
 - Have the same escape sequences as string literals.
 - If an identifier is the same as a reserved keyword, the identifier must be quoted. For example, the identifier `FROM` must be quoted.
 
-### Types
+
+#### Types
 
 | `fm` type     | Obsidian type                                                      | Example                     | Comment                                                                                                |
 | ------------- | ------------------------------------------------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -136,7 +192,9 @@ Quoted identifiers:
 | `any`         | n/a                                                                |                             | Default type if omitted. Allows any value to handle heterogeneous data across files or in a list.      |
 All types are nullable.
 
-### Evaluation & type casting
+
+#### Evaluation & type casting
+
 Field value is returned if field exists and type matches.
 
 Casted field value is returned if field exists and value is castable. Strict types are always castable to looser. Loose types can be casted to strict if value is of the correct format, otherwise errors (clause-specific behavior is documented in each section).
@@ -152,7 +210,8 @@ Cast from `datetime` to `date` is lossy (time part truncated).
 
 Scalar may be cast to a single-element list and vice versa. When casting to `list`, each element is coerced to `string`.
 
-#### Examples
+
+##### Examples
 
 | Field value | Cast     | Result   |
 | ----------- | -------- | -------- |
@@ -160,12 +219,12 @@ Scalar may be cast to a single-element list and vice versa. When casting to `lis
 | 2           | bool     | ERROR    |
 | "3"         | int      | 3        |
 | 4           | list     | \["4"]   |
-| \[5]        | int      | 5        |
-| \[6,7]      | int      | ERROR    |
-| \[7,8,"9"]  | list     | \["7","8","9"] |
-| Missing     | int      | Null     |
+| \["5"]        | int      | 5        |
+| \["6","7"]      | int      | ERROR    |
+| Null     | int      | Null     |
 
-## Expressions
+
+### Expressions
 
 An expression is recursively composed of [fields](#fields), [literals](#literals), operators, and grouping parentheses.
 
@@ -195,7 +254,8 @@ Operator precedence (highest to lowest), following BigQuery ([docs](https://docs
 | 6 | `and` |
 | 7 | `or` |
 
-### Atoms
+
+#### Atoms
 
 Atoms are the leaf nodes of an expression — either a field reference or a literal.
 
@@ -214,9 +274,10 @@ true                 -- boolean literal
 
 Null propagates through arithmetic — any operation with a null operand produces null. In a boolean context (comparisons, `where`) null is falsey.
 
-### Literals
 
-#### String literals
+#### Literals
+
+##### String literals
 
 Strings can be enclosed in single quotes (`'`), double quotes (`"`), or triple-quoted variants (`'''` or `"""`). Triple-quoted strings can span multiple lines and contain unescaped single or double quotes respectively.
 
@@ -257,7 +318,8 @@ Escape sequences in non-raw strings:
 | `\uNNNN` | Unicode codepoint (4 hex digits) |
 | `\UNNNNNNNN` | Unicode codepoint (8 hex digits) |
 
-#### Integer literals
+
+##### Integer literals
 
 Decimal or hexadecimal:
 
@@ -268,7 +330,8 @@ Decimal or hexadecimal:
 0x1A2B
 ```
 
-#### Numeric literals
+
+##### Numeric literals
 
 Decimal with optional fractional part and exponent:
 
@@ -279,15 +342,18 @@ Decimal with optional fractional part and exponent:
 6.022E-23
 ```
 
-#### Boolean literals
+
+##### Boolean literals
 
 `true` and `false` (case insensitive).
 
-#### Null literal
+
+##### Null literal
 
 `null` (case insensitive). Represents absence of a value.
 
-#### Date and datetime literals
+
+##### Date and datetime literals
 
 `fm` does not use BigQuery's typed literal syntax (`DATE '...'`, `DATETIME '...'`). Instead, date and datetime values are encoded as plain strings matching ISO 8601 format, and type is controlled via the field type annotation:
 
@@ -296,7 +362,9 @@ created:date = 2026-05-17
 modified:datetime = 2026-05-17T21:02:30
 ```
 
-### Boolean expressions
+
+#### Boolean expressions
+
 ```
 <field> [<op> <expression>]
 ```
@@ -315,19 +383,17 @@ Binary comparison is truthy if both operands exist (literals always exist), with
 
 | Example                             | Tests if                                                                                                                                                       |
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `url:string = https://fm.nofuss.io` | URL matches "https://fm.nofuss.io".                                                                                                                            |
-| `tags:list = recipe`                | Tags contain value "recipe"                                                                                                                                    |
-| `url: = source:`                    | URL matches the value of the source field.                                                                                                                     |
-| `price: = cost:`                    | Price = cost. Always ok regardless of types, since all types can be relaxed to `string` and tested for equality.                                               |
+| `url = "https://fm.nofuss.io"` | URL matches "https://fm.nofuss.io".                                                                                                                            |
+| `tags:list >= "recipe"`                | Tags contain value "recipe"                                                                                                                                    |
+| `url = source`                    | URL matches the value of the source field.                                                                                                                     |
+| `price = cost`                    | Price = cost. Always ok regardless of types, since all types can be relaxed to `string` and tested for equality.                                               |
 | `price:number > cost:number`        | Price > cost. `false` if casting fails.                                                                                                                        |
 | `price:int > cost:number`           | Dito. Price is first cast to `int`, then relaxed to `number` for the comparison. If price is 1.23 then whole expression is `falsey` since `int` casting fails. |
 | `price:string > cost:number`        | Static type error caught at parse; halts program. `>` does not accept strings.                                                                                 |
 
-QUESTION: Literal syntax — `https://fm.nofuss.io` and `recipe` are unquoted bare values. What if the literal contains spaces, `=`, `,`, parentheses, or shell metacharacters? Are double quotes / single quotes supported as literal delimiters? Same question for `from` glob arguments.
-QUESTION: `url: = source:` — both sides default to `any`. The prose says "always relaxed to string for equality". Is that the rule for `any = any`, or only when both fields exist with different concrete types? Make explicit.
-QUESTION: `tags:list = recipe` — example uses `=`, but the operator table above says list-vs-scalar set membership uses `>=`/`<=`, not `=`. Either the example is stale or the table is. Reconcile.
 
-## Assignment
+### Assignment
+
 ```
 <field> [<assignment operator> <expression>]
 ```
@@ -370,11 +436,24 @@ Statically invalid assignments raise parse errors and halt program before any fi
 > The string `"hello"` can never be assigned to an integer field, so program will not run.
 
 
-## Globs
-Can be a list of files or expressions to expand, identical to glob expansion in POSIX shells (e.g. bash or zsh).
+### Globs
 
-`fm` implements its own glob expansion (rather than just accepting list of files) to provide the same functionality on Windows and if called programmatically.
-QUESTION: POSIX glob, bash, and zsh differ. Does `fm` support `**` (recursive)? Brace expansion `{a,b}`? Character classes `[abc]`? Negation? Dotfiles? Document the exact supported subset.
-QUESTION: Are non-`.md` matches filtered out automatically, or treated as errors, or attempted as YAML frontmatter regardless of extension?
-QUESTION: Are symlinks followed? Hidden directories (e.g. `.obsidian/`) recursed?
-QUESTION: When called from a POSIX shell, the shell will glob-expand first; `fm`'s own expansion only runs on unmatched/quoted arguments. Spell out the interaction.
+Can be a list of files
+
+```sh
+fm select url from page/index.md page/account.md
+```
+
+or expressions to expand (hidden files are ignored)
+
+```sh
+fm select url from page/*.md
+```
+
+`fm` also implements its own glob expansion capability, 
+identical to glob expansion in POSIX shells (e.g. bash or zsh),
+to provide the same functionality when called programatically or run on Windows.
+
+```sh
+fm 'select url from page/*.md'  # Ok, even though shell won't expand it
+```

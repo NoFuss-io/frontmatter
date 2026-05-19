@@ -1,46 +1,46 @@
-# Markdown frontmatter editor `fm`
+# `fm`: Markdown frontmatter batch editor
 
 CLI that harmonizes, refactors, and batch edits yaml frontmatter in markdown files
 using SQL expressions.
 
-Great utility tool for [Obsidian](https://obsidian.md).
+Compatibile with [Obsidian](https://obsidian.md).
+
+- [Manual](https://fm.nofuss.io)
+- [Tutorial](./docs/tutorial.md)
+- [Blog post](https://nofuss.io/en/fm)
 
 
-## Agentic installation
+## Installation
 
 ```sh
-git clone git@github.com/backlin/fm.git
+git clone git@github.com/NoFuss-io/fm.git
 cd fm
+just install
 just install-skill
 ```
 
-## tl;dr
-
-- [Complete syntax](./docs/syntax.md)
-- [Tutorial](./docs/tutorial.md)
-
-In a nutshell:
+## In a nutshell
 
 ```sh
 fm \
-    SELECT <fields> \
+    SELECT <expression>, ... \
     FROM <files> \
-    WHERE <conditions> \
-    SORT BY <fields> \
+    WHERE <condition> \
+    SORT BY <expression>, ... \
     LIMIT <number>
 ```
 
 ```sh
-fm UPDATE <files> SET <assignments> WHERE <conditions>
+fm UPDATE <files> SET <assignment>, ... WHERE <condition>;
+fm ALTER <files> DROP <field>, ... WHERE <condition>;
+fm ALTER <files> RENAME <field> TO <field>, ... WHERE <condition>;
 ```
+
+For example:
 
 ```sh
-fm ALTER <files> DROP <fields> WHERE <conditions>
+fm select vegan, vegetarian from recipes/*
 ```
-
-### Example
-
-`fm select vegan, vegetarian from *`
 
 ```
 filename                                          vegan  vegetarian
@@ -56,17 +56,3 @@ Basilikakyckling.md
 Bechamelsås.md                                    false  true
 Belugabolognese.md                                true
 ```
-
-
-## Installation
-
-```sh
-go install github.com/backlin/frontmatter
-```
-
-
-# For next agentic session
-
-Verbose output mode.
-Assignment from other field.
-Unit tests.
