@@ -668,7 +668,7 @@ func anyFromValue(v Value) any {
 func applyListAdd(fm *FrontMatter, name string, v Value) error {
 	cur, ok := (*fm)[name]
 	var list []any
-	if ok {
+	if ok && cur != nil {
 		if l, isList := cur.([]any); isList {
 			list = l
 		} else {
@@ -688,7 +688,7 @@ func applyListAdd(fm *FrontMatter, name string, v Value) error {
 
 func applyListSub(fm *FrontMatter, name string, v Value) error {
 	cur, ok := (*fm)[name]
-	if !ok {
+	if !ok || cur == nil {
 		return nil
 	}
 	list, isList := cur.([]any)

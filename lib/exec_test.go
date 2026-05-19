@@ -347,6 +347,35 @@ func TestAssign_Apply(t *testing.T) {
 			t.Errorf("tags = %+v, want [a c]", tags)
 		}
 	})
+	t.Run("add_to_null_field", func(t *testing.T) {
+		fm := lib.FrontMatter{"tags": nil}
+		a := lib.Assign{
+			Field: lib.Field{Name: "tags"},
+			Op:    lib.OpAdd,
+			Value: lib.LitExpr{Kind: lib.LitString, Value: "x"},
+		}
+		if err := a.Apply(&fm); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		tags, ok := fm["tags"].([]any)
+		if !ok || len(tags) != 1 || tags[0] != "x" {
+			t.Errorf("tags = %+v, want [x]", fm["tags"])
+		}
+	})
+	t.Run("sub_from_null_field", func(t *testing.T) {
+		fm := lib.FrontMatter{"tags": nil}
+		a := lib.Assign{
+			Field: lib.Field{Name: "tags"},
+			Op:    lib.OpSub,
+			Value: lib.LitExpr{Kind: lib.LitString, Value: "x"},
+		}
+		if err := a.Apply(&fm); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		if fm["tags"] != nil {
+			t.Errorf("tags = %+v, want nil", fm["tags"])
+		}
+	})
 	t.Run("cast_failure_errors", func(t *testing.T) {
 		fm := lib.FrontMatter{"src": "hello"}
 		a := lib.Assign{
