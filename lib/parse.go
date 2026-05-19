@@ -22,8 +22,19 @@ func peekRune(r *bufio.Reader) (rune, error) {
 	return ch, err
 }
 
+// skipWS consumes whitespace and '--' line comments. A comment runs from '--'
+// to the next newline (or EOF) and is treated as a single whitespace separator.
 func skipWS(r *bufio.Reader) {
 	for {
+		if b, _ := r.Peek(2); len(b) >= 2 && b[0] == '-' && b[1] == '-' {
+			for {
+				ch, _, err := r.ReadRune()
+				if err != nil || ch == '\n' {
+					break
+				}
+			}
+			continue
+		}
 		ch, err := peekRune(r)
 		if err != nil || !unicode.IsSpace(ch) {
 			return
@@ -226,14 +237,15 @@ func atStopKeyword(r *bufio.Reader, stopKws []string) bool {
 	return false
 }
 
-// readGlobs reads whitespace-separated glob tokens until EOF or a stop keyword.
-// Tokens may be double- or single-quoted to include spaces (e.g. paths from shell expansion).
+// readGlobs reads whitespace-separated glob tokens until EOF, a stop keyword,
+// or a ';' statement terminator. Tokens may be double- or single-quoted to
+// include spaces (e.g. paths from shell expansion).
 func readGlobs(r *bufio.Reader, stopKws ...string) []string {
 	var out []string
 	for {
 		skipWS(r)
 		b, _ := r.Peek(1)
-		if len(b) == 0 {
+		if len(b) == 0 || b[0] == ';' {
 			break
 		}
 		if atStopKeyword(r, stopKws) {
@@ -259,7 +271,7 @@ func readGlobs(r *bufio.Reader, stopKws ...string) []string {
 		} else {
 			for {
 				b, _ := r.Peek(1)
-				if len(b) == 0 || unicode.IsSpace(rune(b[0])) {
+				if len(b) == 0 || unicode.IsSpace(rune(b[0])) || b[0] == ';' {
 					break
 				}
 				ch, _, _ := r.ReadRune()
@@ -279,7 +291,7 @@ func readFieldList(r *bufio.Reader, stopKws ...string) ([]Field, error) {
 	for {
 		skipWS(r)
 		b, _ := r.Peek(1)
-		if len(b) == 0 || atStopKeyword(r, stopKws) {
+		if len(b) == 0 || b[0] == ';' || atStopKeyword(r, stopKws) {
 			break
 		}
 		var f Field
@@ -303,7 +315,7 @@ func readExprList(r *bufio.Reader, stopKws ...string) ([]Expr, error) {
 	for {
 		skipWS(r)
 		b, _ := r.Peek(1)
-		if len(b) == 0 || atStopKeyword(r, stopKws) {
+		if len(b) == 0 || b[0] == ';' || atStopKeyword(r, stopKws) {
 			break
 		}
 		e, err := parseOrExpr(r)
@@ -327,7 +339,7 @@ func readSortTermList(r *bufio.Reader, stopKws ...string) ([]SortTerm, error) {
 	for {
 		skipWS(r)
 		b, _ := r.Peek(1)
-		if len(b) == 0 || atStopKeyword(r, stopKws) {
+		if len(b) == 0 || b[0] == ';' || atStopKeyword(r, stopKws) {
 			break
 		}
 		var t SortTerm
@@ -378,7 +390,7 @@ func readAssignList(r *bufio.Reader, stopKws ...string) ([]Assign, error) {
 	for {
 		skipWS(r)
 		b, _ := r.Peek(1)
-		if len(b) == 0 || atStopKeyword(r, stopKws) {
+		if len(b) == 0 || b[0] == ';' || atStopKeyword(r, stopKws) {
 			break
 		}
 		var a Assign
@@ -402,7 +414,7 @@ func readRenamePairs(r *bufio.Reader, stopKws ...string) ([]RenamePair, error) {
 	for {
 		skipWS(r)
 		b, _ := r.Peek(1)
-		if len(b) == 0 || atStopKeyword(r, stopKws) {
+		if len(b) == 0 || b[0] == ';' || atStopKeyword(r, stopKws) {
 			break
 		}
 		var p RenamePair
@@ -437,9 +449,61 @@ func parseOptionalWhere(r *bufio.Reader, dst *Expr) error {
 
 // ── Queries ───────────────────────────────────────────────────────────────────
 
-// ParseQuery reads a full query from r and returns a SelectQuery, UpdateQuery, or AlterQuery.
+// ParseQuery reads a single query from r and returns a SelectQuery,
+// UpdateQuery, or AlterQuery. Trailing input is not validated.
 func ParseQuery(r io.Reader) (Query, error) {
+	return parseOneQuery(bufio.NewReader(r))
+}
+
+// ParseProgram reads a sequence of statements from r and returns a Program.
+// Statements are separated by ';'. '--' starts a line comment that runs to
+// the next newline and is treated as whitespace. Consecutive ';' separators
+// (including leading and trailing ones) are tolerated. An input that contains
+// only whitespace and comments yields an empty Program.
+func ParseProgram(r io.Reader) (Program, error) {
 	br := bufio.NewReader(r)
+	var p Program
+	for {
+		skipSeparators(br)
+		b, _ := br.Peek(1)
+		if len(b) == 0 {
+			return p, nil
+		}
+		n := len(p.Stmts) + 1
+		q, err := parseOneQuery(br)
+		if err != nil {
+			if n > 1 {
+				return p, fmt.Errorf("statement %d: %w", n, err)
+			}
+			return p, err
+		}
+		p.Stmts = append(p.Stmts, q)
+		skipWS(br)
+		b, _ = br.Peek(1)
+		if len(b) == 0 {
+			return p, nil
+		}
+		if b[0] != ';' {
+			return p, fmt.Errorf("statement %d: expected ';' or end of input, got %q", n, string(b[0]))
+		}
+		consumeBytes(br, 1)
+	}
+}
+
+// skipSeparators consumes whitespace, comments, and any number of ';' tokens
+// so that consecutive or leading separators are tolerated between statements.
+func skipSeparators(br *bufio.Reader) {
+	for {
+		skipWS(br)
+		b, _ := br.Peek(1)
+		if len(b) == 0 || b[0] != ';' {
+			return
+		}
+		consumeBytes(br, 1)
+	}
+}
+
+func parseOneQuery(br *bufio.Reader) (Query, error) {
 	skipWS(br)
 	kw := peekKeyword(br)
 	switch strings.ToLower(kw) {

@@ -921,3 +921,111 @@ func TestParseQuery(t *testing.T) {
 		})
 	}
 }
+
+// ── ParseProgram ─────────────────────────────────────────────────────────────
+
+func TestParseProgram(t *testing.T) {
+	type stmtKind int
+	const (
+		kSelect stmtKind = iota
+		kUpdate
+		kAlter
+	)
+
+	tests := []struct {
+		name    string
+		in      string
+		want    []stmtKind
+		wantErr bool
+	}{
+		{name: "empty", in: "", want: nil},
+		{name: "only whitespace", in: "  \n\t\n", want: nil},
+		{name: "only comments", in: "-- foo\n-- bar\n", want: nil},
+		{name: "only separators", in: ";;;\n;", want: nil},
+
+		{name: "single no terminator", in: "select x from a", want: []stmtKind{kSelect}},
+		{name: "single with terminator", in: "select x from a;", want: []stmtKind{kSelect}},
+		{name: "trailing comment", in: "select x from a; -- done", want: []stmtKind{kSelect}},
+
+		{
+			name: "multi mixed",
+			in: `select x from a;
+update b/* set y = 1;
+alter c/* drop z;`,
+			want: []stmtKind{kSelect, kUpdate, kAlter},
+		},
+		{
+			name: "consecutive separators tolerated",
+			in:   "select x from a;;\n;;select y from b;",
+			want: []stmtKind{kSelect, kSelect},
+		},
+		{
+			name: "comments interleaved with statements",
+			in: `-- header
+select x from a;
+-- middle
+select y from b;
+-- footer`,
+			want: []stmtKind{kSelect, kSelect},
+		},
+		{
+			name: "comment after clause keyword",
+			in:   "select x -- pick x\nfrom a;",
+			want: []stmtKind{kSelect},
+		},
+		{
+			name: "semicolon inside string is not a separator",
+			in:   `update a/* set msg = "a;b" where vegan = true;`,
+			want: []stmtKind{kUpdate},
+		},
+		{
+			name: "dashes inside string are not a comment",
+			in:   `update a/* set note = "-- not a comment";`,
+			want: []stmtKind{kUpdate},
+		},
+		{
+			name: "backtick identifier with embedded semicolon",
+			in:   "select `weird;name` from a;",
+			want: []stmtKind{kSelect},
+		},
+
+		// Error cases
+		{name: "unknown keyword", in: "delete from a;", wantErr: true},
+		{name: "garbage between statements", in: "select x from a where vegan junk", wantErr: true},
+		{name: "second statement bad", in: "select x from a; bogus", wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p, err := lib.ParseProgram(r(tc.in))
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("ParseProgram(%q): expected error, got nil", tc.in)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ParseProgram(%q): unexpected error: %v", tc.in, err)
+			}
+			if len(p.Stmts) != len(tc.want) {
+				t.Fatalf("got %d stmts, want %d (got=%v)", len(p.Stmts), len(tc.want), p.Stmts)
+			}
+			for i, want := range tc.want {
+				switch want {
+				case kSelect:
+					if _, ok := p.Stmts[i].(lib.SelectQuery); !ok {
+						t.Errorf("stmt %d: got %T, want SelectQuery", i, p.Stmts[i])
+					}
+				case kUpdate:
+					if _, ok := p.Stmts[i].(lib.UpdateQuery); !ok {
+						t.Errorf("stmt %d: got %T, want UpdateQuery", i, p.Stmts[i])
+					}
+				case kAlter:
+					if _, ok := p.Stmts[i].(lib.AlterQuery); !ok {
+						t.Errorf("stmt %d: got %T, want AlterQuery", i, p.Stmts[i])
+					}
+				}
+			}
+		})
+	}
+}

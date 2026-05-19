@@ -17,6 +17,24 @@ Errors are written to `stderr` and return exit code 1.
 
 Parsing happens first. Any parse error (e.g. unrecognized type, malformed expression, static type error) halts the program before any file is touched.
 
+## Scripts
+
+Multiple statements may be combined into a script, separated by `;`.
+`--` starts a line comment that runs to the end of the line. Both `;`
+and `--` are ignored inside quoted strings and backtick identifiers.
+
+Statements run sequentially. If any statement fails the script halts
+and the remaining statements are not executed.
+
+`--dry-run` is rejected for multi-statement scripts because there is no
+transactional layer: each statement re-reads files from disk, so later
+statements would not observe the mutations that earlier statements would
+have made.
+
+```sh
+fm < script.sql
+```
+
 # Mutations
 
 Files are modified in-place without any transactional logic or backup.

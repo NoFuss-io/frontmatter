@@ -1,5 +1,9 @@
 package lib
 
+type Program struct {
+	Stmts []Query
+}
+
 // Query is the top-level parsed result.
 type Query interface{ query() }
 

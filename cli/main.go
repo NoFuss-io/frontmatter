@@ -29,7 +29,11 @@ const usage = `fm — Markdown frontmatter batch editor
 Usage:
   fm [query] [flags]
 
-Query is read from stdin if omitted.
+Query is read from stdin if omitted. Multiple queries may be separated
+by ';' and '--' starts a line comment, so an SQL-style script can be
+piped in:
+
+  fm < script.sql
 
 Flags:
   --dry-run   Simulate the operation without editing any files.
@@ -94,15 +98,30 @@ func run(opts options, args []string, in io.Reader, out, errOut io.Writer) error
 	if err != nil {
 		return err
 	}
-	if strings.TrimSpace(src) == "" {
-		return fmt.Errorf("empty query")
-	}
-
-	q, err := lib.ParseQuery(strings.NewReader(src))
+	prog, err := lib.ParseProgram(strings.NewReader(src))
 	if err != nil {
 		return fmt.Errorf("parse: %w", err)
 	}
+	if len(prog.Stmts) == 0 {
+		return fmt.Errorf("empty query")
+	}
+	if opts.dryRun && len(prog.Stmts) > 1 {
+		return fmt.Errorf("--dry-run is not supported with multi-statement scripts: " +
+			"each statement re-reads files from disk, so later statements would not " +
+			"see earlier (skipped) mutations")
+	}
+	for i, q := range prog.Stmts {
+		if err := runStatement(q, opts, out, errOut); err != nil {
+			if len(prog.Stmts) > 1 {
+				return fmt.Errorf("statement %d: %w", i+1, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
 
+func runStatement(q lib.Query, opts options, out, errOut io.Writer) error {
 	switch q := q.(type) {
 	case lib.SelectQuery:
 		return runSelect(q, opts, out, errOut)
@@ -115,6 +134,9 @@ func run(opts options, args []string, in io.Reader, out, errOut io.Writer) error
 }
 
 func readQuery(args []string, in io.Reader) (string, error) {
+	if len(args) == 1 {
+		return args[0], nil
+	}
 	if len(args) > 0 {
 		parts := make([]string, len(args))
 		for i, arg := range args {
