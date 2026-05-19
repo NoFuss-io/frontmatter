@@ -385,19 +385,26 @@ func (e UnaryExpr) Eval(fm *FrontMatter) Value {
 	return Value{Void: true}
 }
 
-// truthy returns the boolean view of v. Void and cast failures are falsey.
+// truthy returns the boolean view of v. Void is falsey; non-void uses type-native
+// semantics rather than strict bool casting, so bare field references act as
+// existence checks.
 func truthy(v Value) bool {
 	if v.Void {
 		return false
 	}
-	if v.Kind == TypeBool {
+	switch v.Kind {
+	case TypeBool:
 		return v.Data.(bool)
+	case TypeInt:
+		return v.Data.(int64) != 0
+	case TypeNumber:
+		return v.Data.(float64) != 0
+	case TypeString:
+		s := v.Data.(string)
+		return s != "" && strings.ToLower(s) != "false"
+	default:
+		return true
 	}
-	b, err := castToBool(v)
-	if err != nil || b.Void {
-		return false
-	}
-	return b.Data.(bool)
 }
 func (e BinExpr) Eval(fm *FrontMatter) Value {
 	switch e.Op {
