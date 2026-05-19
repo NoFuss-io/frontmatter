@@ -1,4 +1,4 @@
-<!-- baseline-sha: 216bc54835d868055bd5da2c6b65939da31fa01c -->
+<!-- baseline-sha: 0b7b09b3645a094b0b06efc7f97c8428d5002825 -->
 
 # Architecture Baseline
 
@@ -173,7 +173,7 @@ type Program struct { Stmts []Query }
 
 | Type         | Definition |
 |:-------------|:-----------|
-| `Field`      | `{Name string, Type FieldType, ElemType *FieldType}` — `ElemType` is non-nil only for `list:<elem>`. |
+| `Field`      | `{Name string, Type FieldType}` — type annotation defaults to `any`. |
 | `Assign`     | `{Field Field, Op AssignOp, Value Expr}` — `Value` is nil for the cast-only form (e.g. `set foo:int`). |
 | `SortTerm`   | `{Expr Expr, Desc bool}` |
 | `RenamePair` | `{From string, To string}` |
@@ -212,14 +212,17 @@ Parentheses are accepted for grouping.
 | Wildcard   | `any` |
 | Primitives | `string`, `bool`, `int`, `numeric`, `date`, `datetime` |
 | Links      | `link` (`[[ref\|title]]`), `mdlink` (`[title](ref)`) |
-| Compound   | `list`, `list:<elem>` |
+| Compound   | `list` (list-of-string; element-type annotation is a parse error) |
 
-Annotations appear after a colon: `tags:list:string`. Field names may be wrapped
-in backticks to allow spaces or other non-identifier characters: ``select `Last modified` from *``.
+Annotations appear after a colon: `tags:list`. Field names may be wrapped in
+backticks to allow spaces or other non-identifier characters: ``select `Last modified` from *``.
 
 ### Parser (`lib/parse.go`)
 
-Recursive-descent parser over a `bufio.Reader`. Entry points:
+Recursive-descent parser over an in-memory byte cursor. Public entry points
+(`ParseProgram`, `ParseQuery`, `ParseExpr`, and the per-node `Parse(io.Reader)`
+methods) `io.ReadAll` the input once, build a `cursor{src []byte, pos int}`,
+then delegate to the cursor-based helpers. Entry points:
 
 | Function | Purpose |
 |:---------|:--------|
@@ -228,8 +231,8 @@ Recursive-descent parser over a `bufio.Reader`. Entry points:
 | `ParseExpr(r)`    | Parse a standalone expression. |
 | `Field.Parse`, `Assign.Parse`, `SortTerm.Parse`, `RenamePair.Parse` | Per-node parsers (used by tests). |
 
-Each query type has a `parse(*bufio.Reader)` method invoked via the dispatch
-in `parseOneQuery`. Clause helpers (`readGlobs`, `readFieldList`, `readExprList`,
+Each query type has a `parse(*cursor)` method invoked via the dispatch in
+`parseOneQuery`. Clause helpers (`readGlobs`, `readFieldList`, `readExprList`,
 `readSortTermList`, `readAssignList`, `readRenamePairs`, `parseOptionalWhere`,
 `readIntLit`, `expectKeyword`, `atStopKeyword`) share whitespace and stop-keyword
 handling so each clause stops cleanly at the next SQL keyword (`from`, `set`,
@@ -264,12 +267,12 @@ the executor for non-literal expressions.
 type Value struct {
     Kind FieldType
     Data any
-    Void bool
+    Null bool
 }
 type Row []Value
 ```
 
-`Void` marks absence — missing fields or failed casts. Void propagates through
+`Null` marks absence — missing fields or failed casts. Null propagates through
 arithmetic and is falsey in boolean context. A bare field reference acts as an
 existence check via `truthy`.
 
@@ -277,14 +280,13 @@ existence check via `truthy`.
 
 `Cast(v, target)` dispatches on `target`:
 
-- `any` and same-kind targets are pass-through.
-- Scalar → `list` wraps the scalar in a one-element list.
+- `any` is pass-through.
+- `list` always coerces every element to `string` (scalars are wrapped first).
+  Lists are uniformly list-of-string.
+- Same-kind non-list targets are pass-through.
 - One-element `list` → scalar unwraps then recurses.
 - Per-pair `castTo<Bool|Int|Number|String|Date|Datetime|Link|MdLink>` handles
   remaining cross-type conversions.
-
-`CastField(v, field)` adds list-element casting: every element is cast to
-`*field.ElemType`; one element-level failure fails the whole cast.
 
 Bool ↔ int conversion is restricted to `0`/`1` to avoid surprises. Date strings
 must match `2006-01-02`; datetime strings `2006-01-02T15:04:05`. `link` is
@@ -295,10 +297,10 @@ through each other via `parseWikiLink` / `parseMdLink`.
 
 | Node                | Behavior |
 |:--------------------|:---------|
-| `LitExpr.Eval`      | Parse the raw `Value` string to its `Kind`. `null` → void. |
-| `FieldExpr.Eval`    | Look up `fm[name]`; absent → void. If a type annotation is present, runs `CastField`; cast failure → void. |
-| `UnaryExpr.Eval`    | `not` returns `bool(!truthy(v))`; `-` negates int/number, voids everything else. |
-| `BinExpr.Eval`      | `and`/`or` short-circuit-style on `truthy(...)`; arithmetic in `arith` (int stays int unless division has a remainder, then it promotes to number; div-by-zero → void); comparisons in `compare` (list cases routed to `compareList`). |
+| `LitExpr.Eval`      | Parse the raw `Value` string to its `Kind`. `null` → null `Value`. |
+| `FieldExpr.Eval`    | Look up `fm[name]`; absent → null. If a type annotation is present, runs `Cast`; cast failure → null. |
+| `UnaryExpr.Eval`    | `not` returns `bool(!truthy(v))`; `-` negates int/number, nulls everything else. |
+| `BinExpr.Eval`      | `and`/`or` short-circuit-style on `truthy(...)`; arithmetic in `arith` (int stays int unless division has a remainder, then it promotes to number; div-by-zero → null); comparisons in `compare` (list cases routed to `compareList`). |
 
 `scalarEq` compares same-kind values directly (with `time.Time.Equal` for
 dates/datetimes), falling back to numeric and then string coercion across
@@ -318,12 +320,12 @@ List comparisons:
 | Method            | Behavior |
 |:------------------|:---------|
 | `Assign.Apply`    | Eval `Value`, cast to `Field.Type` (if not `any`), then write/add/subtract. Cast-only form (no value) ensures the field exists (`nil` if absent) and recasts an existing value. |
-| `applyListAdd`    | `+=` appends scalar(s) to a list. A non-list current value is promoted to a one-element list first. |
-| `applyListSub`    | `-=` removes any element matching the supplied scalar(s) by `scalarEq`. A non-list current value is a no-op. |
+| `applyListAdd`    | `+=` appends scalar(s) to a list. A `nil` current value is treated as an empty list (no leading `null` element); a non-list, non-nil current value is promoted to a one-element list first. |
+| `applyListSub`    | `-=` removes any element matching the supplied scalar(s) by `scalarEq`. A missing or `nil` current value is a no-op. |
 | `UpdateQuery.Apply`, `AlterQuery.Apply`, `SelectQuery.Eval` | Top-level driver methods; honor an optional `Where` via `truthy`. |
 
 `anyFromValue` lowers `Value` back to the `any` form used by the YAML map
-(recursive for lists; `nil` for void).
+(recursive for lists; `nil` for null).
 
 `valueFromAny` lifts raw YAML values into `Value`. `time.Time` with all-zero
 time components is classified as `date`; otherwise `datetime`.
@@ -333,9 +335,9 @@ time components is classified as `date`; otherwise `datetime`.
 | Function | Purpose |
 |:---------|:--------|
 | `FieldName(e, idx)` | Column header: field name for `FieldExpr`, else `expr<idx+1>`. |
-| `FormatValue(v)` | Plain string view of a `Value` for tables. Void → empty; lists rendered as `[a, b, c]`. |
+| `FormatValue(v)` | Plain string view of a `Value` for tables. Null → empty; lists rendered as `[a, b, c]`. |
 | `PrintTable(w, headers, paths, rows)` | Tab-writer output with a `filename` column prepended and a dashed separator row. |
-| `SortRows(paths, rows, terms, fms)` | In-place stable sort by `SortTerm` evaluations. Void sorts last; numerics compare numerically; dates use `time.Time.Before/After`; everything else falls back to `FormatValue` string compare. |
+| `SortRows(paths, rows, terms, fms)` | In-place stable sort by `SortTerm` evaluations. Null sorts last; numerics compare numerically; dates use `time.Time.Before/After`; everything else falls back to `FormatValue` string compare. |
 
 ---
 
@@ -416,15 +418,15 @@ No CI/CD pipeline is configured.
   callers reuse the engine without inheriting the CLI.
 - **Single `any`-typed frontmatter map.** Flexibility wins over compile-time
   type safety: every field is `any` in memory, with types enforced at
-  query/mutation time via `CastField`.
-- **Void as a first-class value.** Missing fields and failed casts collapse to
-  the same `Void` sentinel rather than `nil`/error pairs, so expressions stay
+  query/mutation time via `Cast`.
+- **Null as a first-class value.** Missing fields and failed casts collapse to
+  the same `Null` sentinel rather than `nil`/error pairs, so expressions stay
   composable: `where missing_field + 1 > 0` quietly returns false instead of
   exploding.
 - **No transactional layer for scripts.** Each statement re-reads files from
   disk. `--dry-run` is rejected for multi-statement scripts because skipped
   writes would make later statements observe stale state.
-- **Hand-rolled DSL parser.** Recursive descent over `bufio.Reader` keeps the
+- **Hand-rolled DSL parser.** Recursive descent over an in-memory byte cursor keeps the
   parser dependency-free, supports backtick-quoted identifiers, raw and
   triple-quoted strings, and lets clause helpers share stop-keyword handling
   without a separate lexer.
