@@ -1,21 +1,23 @@
 # Tutorial
 
-Folder [tutorial](./tutorial/) contains some files from a recipe 
-collection that we will work on to demonstrate the core offering of 
-the `fm` CLI. 
+Folder [tutorial](./tutorial/) contains sample files from a recipe collection demonstrating `fm` core features.
 
 ## Goal
 
-Files got three fields `vegan`, `vegetarian` and `veggie` (synonymous to vegetarian),
-most often boolean but inconsistent,
-that we will turn into a new list field `diet` to accomodate other
-dietary restrictions and preferences (like allergies).
+Files have inconsistently-typed dietary fields: `vegan`, `vegetarian`, `veggie` (synonym for vegetarian).
+Goal: consolidate into a `diet` list field to support multiple dietary properties.
 
-Use `git diff` to see changes applied by each command below.  
-Use `git reset --hard HEAD` to undo changes.
+Use `git diff` to inspect changes from each command. Use `git reset --hard HEAD` to undo.
 
+## Step 1: Inspect current state
 
-## Step 1: Harmonize fields
+```sh
+fm select vegan, vegetarian, veggie, diet from tutorial/*
+```
+
+View current field values and types across files.
+
+## Step 2: Normalize and create fields
 
 ```sh
 fm update tutorial/* set \
@@ -25,21 +27,30 @@ fm update tutorial/* set \
   diet:list
 ```
 
-- Creates missing fields, with `null` value.
-- `veggie` and `vegan` fields are turned into `false` if zero or blank, everything else `true`, `null` remains.
-- Turns any non-list `diet` into a list of length 1.
+- Casts each field to specified type. Missing fields created with `null`. 
+- Errors if a field exists but cannot cast to the target type (file left unchanged).
+- `diet` is created as empty list if missing, or converted to single-element list if scalar.
 
-
-## Step 2: Append to `diet` list
+## Step 3: Populate `diet` from existing fields
 
 ```sh
-fm update tutorial/* set diet+=vegan      where vegan=true
+fm update tutorial/* set diet+=vegan where vegan=true
 fm update tutorial/* set diet+=vegetarian where vegetarian=true or veggie=true
 ```
 
+- Where clause evaluates field values: `true`, non-zero numbers, non-null/non-false values are truthy.
+- `+=` appends to list (or converts scalar to list and appends).
 
-## Step 3: Drop deprecated fields
+## Step 4: Verify results
+
+```sh
+fm select vegan, vegetarian, veggie, diet from tutorial/*
+```
+
+## Step 5: Clean up deprecated fields
 
 ```sh
 fm alter tutorial/* drop vegan, vegetarian, veggie
 ```
+
+Remove old fields now consolidated into `diet`.

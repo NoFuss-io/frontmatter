@@ -285,7 +285,7 @@ modified:datetime = 2026-05-17T21:02:30
 <field> [<op> <expression>]
 ```
 
-Unary comparison is truthy if the field exists and (optional) casting is successful. Otherwise falsey.
+Unary comparison evaluates to the boolean value of the field (after optional casting). Falsey values are: `null`, `false`, `0`, `0.0`, and void (missing field or failed cast). All other values are truthy.
 
 Binary comparison is truthy if both operands exist (literals always exist), with comparable types, and values meeting the criteria. Types are comparable if they can be relaxed to a matching type — otherwise it is a static type error caught at parse and halts the program. Runtime cast failure on values is per-clause (see [Error handling and program flow](#error-handling-and-program-flow)).
 
