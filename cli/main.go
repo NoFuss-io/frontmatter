@@ -71,14 +71,22 @@ func parseFlags(args []string) (options, []string, error) {
 	help := fs.Bool("help", false, "")
 	helpShort := fs.Bool("h", false, "")
 
-	if err := fs.Parse(args); err != nil {
+	split := len(args)
+	for i, arg := range args {
+		if strings.HasPrefix(arg, "-") {
+			split = i
+			break
+		}
+	}
+
+	if err := fs.Parse(args[split:]); err != nil {
 		return opts, nil, err
 	}
 	if *help || *helpShort {
 		fmt.Print(usage)
 		os.Exit(0)
 	}
-	return opts, fs.Args(), nil
+	return opts, args[:split], nil
 }
 
 func run(opts options, args []string, in io.Reader, out, errOut io.Writer) error {

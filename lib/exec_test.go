@@ -516,7 +516,6 @@ func TestSelectQuery_Eval(t *testing.T) {
 
 // ── Date/datetime types ───────────────────────────────────────────────────────
 
-
 func TestFieldExpr_Eval_Date(t *testing.T) {
 	fm := lib.FrontMatter{
 		"created":  time.Date(2026, 5, 14, 0, 0, 0, 0, time.UTC),

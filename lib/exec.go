@@ -53,8 +53,6 @@ func (v Value) String() string {
 	return "unknown"
 }
 
-var errEvalNotImplemented = errors.New("eval not implemented")
-
 // Cast converts v to target. Returns error if conversion is not possible.
 func Cast(v Value, target FieldType) (Value, error) {
 	if v.Void {

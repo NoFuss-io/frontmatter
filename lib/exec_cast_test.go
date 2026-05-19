@@ -99,14 +99,6 @@ func allBut(tt ...FieldType) []FieldType {
 	return out
 }
 
-func types(vv []Value) []FieldType {
-	out := make([]FieldType, 0, len(vv))
-	for _, v := range vv {
-		out = append(out, v.Kind)
-	}
-	return out
-}
-
 func v(ty FieldType, val any) Value {
 	return Value{ty, val, false}
 }
