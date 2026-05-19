@@ -17,29 +17,28 @@ fm select vegan, vegetarian, veggie, diet from tutorial/*
 
 View current field values and types across files.
 
-## Step 2: Normalize and create fields
+## Step 2: Normalize fields
 
 ```sh
 fm update tutorial/* set \
   vegan:bool, \
   vegetarian:bool, \
-  veggie:bool, \
-  diet:list
+  veggie:bool
 ```
 
 - Casts each field to specified type. Missing fields created with `null`. 
 - Errors if a field exists but cannot cast to the target type (file left unchanged).
-- `diet` is created as empty list if missing, or converted to single-element list if scalar.
 
 ## Step 3: Populate `diet` from existing fields
 
 ```sh
-fm update tutorial/* set diet+=vegan where vegan=true
-fm update tutorial/* set diet+=vegetarian where vegetarian=true or veggie=true
+fm update tutorial/* set 'diet+="vegan"' where vegan=true
+fm update tutorial/* set 'diet+="vegetarian"' where vegetarian=true or veggie=true
 ```
 
 - Where clause evaluates field values: `true`, non-zero numbers, non-null/non-false values are truthy.
-- `+=` appends to list (or converts scalar to list and appends).
+- `+=` creates `diet` as a list on first append if missing, then appends subsequent values.
+- Single-quote the assignment so the shell passes `diet+="vegan"` verbatim to `fm`; without it the shell strips the inner double quotes and `vegan` is parsed as a field reference instead of a string literal.
 
 ## Step 4: Verify results
 

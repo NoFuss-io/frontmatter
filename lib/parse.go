@@ -227,6 +227,7 @@ func atStopKeyword(r *bufio.Reader, stopKws []string) bool {
 }
 
 // readGlobs reads whitespace-separated glob tokens until EOF or a stop keyword.
+// Tokens may be double- or single-quoted to include spaces (e.g. paths from shell expansion).
 func readGlobs(r *bufio.Reader, stopKws ...string) []string {
 	var out []string
 	for {
@@ -239,13 +240,31 @@ func readGlobs(r *bufio.Reader, stopKws ...string) []string {
 			break
 		}
 		var sb strings.Builder
-		for {
-			b, _ := r.Peek(1)
-			if len(b) == 0 || unicode.IsSpace(rune(b[0])) {
-				break
+		if b[0] == '"' || b[0] == '\'' {
+			quote := rune(b[0])
+			_, _, _ = r.ReadRune()
+			for {
+				ch, _, err := r.ReadRune()
+				if err != nil || ch == quote {
+					break
+				}
+				if ch == '\\' {
+					if next, _, err := r.ReadRune(); err == nil {
+						sb.WriteRune(next)
+					}
+				} else {
+					sb.WriteRune(ch)
+				}
 			}
-			ch, _, _ := r.ReadRune()
-			sb.WriteRune(ch)
+		} else {
+			for {
+				b, _ := r.Peek(1)
+				if len(b) == 0 || unicode.IsSpace(rune(b[0])) {
+					break
+				}
+				ch, _, _ := r.ReadRune()
+				sb.WriteRune(ch)
+			}
 		}
 		if sb.Len() > 0 {
 			out = append(out, sb.String())

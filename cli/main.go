@@ -116,7 +116,15 @@ func run(opts options, args []string, in io.Reader, out, errOut io.Writer) error
 
 func readQuery(args []string, in io.Reader) (string, error) {
 	if len(args) > 0 {
-		return strings.Join(args, " "), nil
+		parts := make([]string, len(args))
+		for i, arg := range args {
+			if strings.ContainsAny(arg, " \t") {
+				parts[i] = `"` + strings.ReplaceAll(arg, `"`, `\"`) + `"`
+			} else {
+				parts[i] = arg
+			}
+		}
+		return strings.Join(parts, " "), nil
 	}
 	b, err := io.ReadAll(in)
 	if err != nil {

@@ -79,7 +79,12 @@ func ExpandGlobs(globs []string) ([]string, error) {
 			if err != nil {
 				return nil, fmt.Errorf("glob %q: %w", p, err)
 			}
-			paths = append(paths, matched...)
+			for _, m := range matched {
+				fi, err := os.Stat(m)
+				if err == nil && fi.Mode().IsRegular() {
+					paths = append(paths, m)
+				}
+			}
 			continue
 		}
 		if _, err := os.Stat(p); err != nil {
