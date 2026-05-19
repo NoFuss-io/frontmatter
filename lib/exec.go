@@ -10,12 +10,12 @@ import (
 )
 
 // Value is the runtime value produced by evaluating an expression.
-// Void marks absence: a missing field or a cast that could not produce a value.
-// Per Manual.md: void propagates through arithmetic; in boolean context it is falsey.
+// Null marks absence: a missing field or a cast that could not produce a value.
+// Per Manual.md: null propagates through arithmetic; in boolean context it is falsey.
 type Value struct {
 	Kind FieldType
 	Data any
-	Void bool
+	Null bool
 }
 
 // Row is the projected output of SelectQuery.Eval for a single document.
@@ -24,8 +24,8 @@ type Row []Value
 
 // String returns a formatted representation of v like bool(true) or string("haha").
 func (v Value) String() string {
-	if v.Void {
-		return "void"
+	if v.Null {
+		return "null"
 	}
 	switch v.Kind {
 	case TypeBool, TypeAny:
@@ -55,8 +55,8 @@ func (v Value) String() string {
 
 // Cast converts v to target. Returns error if conversion is not possible.
 func Cast(v Value, target FieldType) (Value, error) {
-	if v.Void {
-		return Value{}, fmt.Errorf("cannot cast void to %s", target)
+	if v.Null {
+		return Value{}, fmt.Errorf("cannot cast null to %s", target)
 	}
 	if target == TypeAny || target == v.Kind {
 		return v, nil
@@ -294,13 +294,13 @@ func (e LitExpr) Eval(_ *FrontMatter) Value {
 	case LitInt:
 		n, err := strconv.ParseInt(e.Value, 0, 64)
 		if err != nil {
-			return Value{Void: true}
+			return Value{Null: true}
 		}
 		return Value{Kind: TypeInt, Data: n}
 	case LitNumeric:
 		f, err := strconv.ParseFloat(e.Value, 64)
 		if err != nil {
-			return Value{Void: true}
+			return Value{Null: true}
 		}
 		return Value{Kind: TypeNumber, Data: f}
 	case LitString:
@@ -308,17 +308,17 @@ func (e LitExpr) Eval(_ *FrontMatter) Value {
 	case LitBool:
 		return Value{Kind: TypeBool, Data: strings.ToLower(e.Value) == "true"}
 	case LitNull:
-		return Value{Void: true}
+		return Value{Null: true}
 	}
-	return Value{Void: true}
+	return Value{Null: true}
 }
 func (e FieldExpr) Eval(fm *FrontMatter) Value {
 	if fm == nil {
-		return Value{Void: true}
+		return Value{Null: true}
 	}
 	raw, ok := (*fm)[e.Field.Name]
 	if !ok {
-		return Value{Void: true}
+		return Value{Null: true}
 	}
 	v := valueFromAny(raw)
 	if e.Field.Type == TypeAny {
@@ -326,7 +326,7 @@ func (e FieldExpr) Eval(fm *FrontMatter) Value {
 	}
 	c, err := CastField(v, e.Field)
 	if err != nil {
-		return Value{Void: true}
+		return Value{Null: true}
 	}
 	return c
 }
@@ -335,7 +335,7 @@ func (e FieldExpr) Eval(fm *FrontMatter) Value {
 // typed Value. Unknown Go types fall through as TypeAny with Data preserved.
 func valueFromAny(x any) Value {
 	if x == nil {
-		return Value{Void: true}
+		return Value{Null: true}
 	}
 	switch v := x.(type) {
 	case string:
@@ -370,8 +370,8 @@ func (e UnaryExpr) Eval(fm *FrontMatter) Value {
 	case UnaryNot:
 		return Value{Kind: TypeBool, Data: !truthy(v)}
 	case UnaryNeg:
-		if v.Void {
-			return Value{Void: true}
+		if v.Null {
+			return Value{Null: true}
 		}
 		switch v.Kind {
 		case TypeInt:
@@ -380,14 +380,14 @@ func (e UnaryExpr) Eval(fm *FrontMatter) Value {
 			return Value{Kind: TypeNumber, Data: -v.Data.(float64)}
 		}
 	}
-	return Value{Void: true}
+	return Value{Null: true}
 }
 
-// truthy returns the boolean view of v. Void is falsey; non-void uses type-native
+// truthy returns the boolean view of v. Null is falsey; non-null uses type-native
 // semantics rather than strict bool casting, so bare field references act as
 // existence checks.
 func truthy(v Value) bool {
-	if v.Void {
+	if v.Null {
 		return false
 	}
 	switch v.Kind {
@@ -415,15 +415,15 @@ func (e BinExpr) Eval(fm *FrontMatter) Value {
 	case BinEq, BinNe, BinLt, BinLe, BinGt, BinGe:
 		return compare(e.Op, e.Left.Eval(fm), e.Right.Eval(fm))
 	}
-	return Value{Void: true}
+	return Value{Null: true}
 }
 
-// compare implements =, !=, <, <=, >, >=. Void operands → false.
+// compare implements =, !=, <, <=, >, >=. Null operands → false.
 // Cast failures also → false.
 // Lists participate in set equality (= / !=) or set membership (list >= scalar,
 // scalar <= list); ordering operators require numeric coercion of both sides.
 func compare(op BinOp, l, r Value) Value {
-	if l.Void || r.Void {
+	if l.Null || r.Null {
 		return Value{Kind: TypeBool, Data: false}
 	}
 	if l.Kind == TypeList || r.Kind == TypeList {
@@ -437,7 +437,7 @@ func compare(op BinOp, l, r Value) Value {
 	}
 	lf, errL := Cast(l, TypeNumber)
 	rf, errR := Cast(r, TypeNumber)
-	if errL != nil || errR != nil || lf.Void || rf.Void {
+	if errL != nil || errR != nil || lf.Null || rf.Null {
 		return Value{Kind: TypeBool, Data: false}
 	}
 	a, b := lf.Data.(float64), rf.Data.(float64)
@@ -464,12 +464,12 @@ func scalarEq(l, r Value) bool {
 	}
 	lf, errL := Cast(l, TypeNumber)
 	rf, errR := Cast(r, TypeNumber)
-	if errL == nil && errR == nil && !lf.Void && !rf.Void {
+	if errL == nil && errR == nil && !lf.Null && !rf.Null {
 		return lf.Data.(float64) == rf.Data.(float64)
 	}
 	ls, errL := Cast(l, TypeString)
 	rs, errR := Cast(r, TypeString)
-	if errL == nil && errR == nil && !ls.Void && !rs.Void {
+	if errL == nil && errR == nil && !ls.Null && !rs.Null {
 		return ls.Data.(string) == rs.Data.(string)
 	}
 	return false
@@ -525,10 +525,10 @@ func listContains(list []Value, v Value) bool {
 
 // arith performs +, -, *, / with numeric coercion. Both ints stays int unless
 // division has a non-zero remainder, in which case it promotes to number.
-// Any void operand, cast failure, or division by zero → void.
+// Any null operand, cast failure, or division by zero → null.
 func arith(op BinOp, l, r Value) Value {
-	if l.Void || r.Void {
-		return Value{Void: true}
+	if l.Null || r.Null {
+		return Value{Null: true}
 	}
 	if l.Kind == TypeInt && r.Kind == TypeInt {
 		a, b := l.Data.(int64), r.Data.(int64)
@@ -542,7 +542,7 @@ func arith(op BinOp, l, r Value) Value {
 			n = a * b
 		case BinDiv:
 			if b == 0 {
-				return Value{Void: true}
+				return Value{Null: true}
 			}
 			if a%b != 0 {
 				return Value{Kind: TypeNumber, Data: float64(a) / float64(b)}
@@ -553,8 +553,8 @@ func arith(op BinOp, l, r Value) Value {
 	}
 	lf, errL := Cast(l, TypeNumber)
 	rf, errR := Cast(r, TypeNumber)
-	if errL != nil || errR != nil || lf.Void || rf.Void {
-		return Value{Void: true}
+	if errL != nil || errR != nil || lf.Null || rf.Null {
+		return Value{Null: true}
 	}
 	a, b := lf.Data.(float64), rf.Data.(float64)
 	var f float64
@@ -567,7 +567,7 @@ func arith(op BinOp, l, r Value) Value {
 		f = a * b
 	case BinDiv:
 		if b == 0 {
-			return Value{Void: true}
+			return Value{Null: true}
 		}
 		f = a / b
 	}
@@ -651,7 +651,7 @@ func (a Assign) Apply(fm *FrontMatter) error {
 
 // anyFromValue lowers a Value into the raw Go value used in FrontMatter maps.
 func anyFromValue(v Value) any {
-	if v.Void {
+	if v.Null {
 		return nil
 	}
 	if v.Kind == TypeList {
@@ -722,7 +722,7 @@ func applyListSub(fm *FrontMatter, name string, v Value) error {
 // ── Queries ───────────────────────────────────────────────────────────────────
 
 // Eval evaluates the where clause; if truthy, projects Fields into a Row.
-// Returns nil Row if where is falsey or evaluates to void.
+// Returns nil Row if where is falsey or evaluates to null.
 func (q SelectQuery) Eval(fm *FrontMatter) (Row, error) {
 	if q.Where != nil && !truthy(q.Where.Eval(fm)) {
 		return nil, nil

@@ -165,7 +165,7 @@ Scalar may be cast to a single-element list and vice versa.
 | \[5]        | int      | 5        |
 | \[6,7]      | int      | ERROR    |
 | \[7,8,"9"]  | list:int | \[7,8,9] |
-| Missing     | int      | Void     |
+| Missing     | int      | Null     |
 
 ## Expressions
 
@@ -201,9 +201,9 @@ Operator precedence (highest to lowest), following BigQuery ([docs](https://docs
 
 Atoms are the leaf nodes of an expression — either a field reference or a literal.
 
-**Field** (`identifier[:type]`): reads the value from the current file's frontmatter and optionally casts it (see [Fields](#fields)). Evaluates to **void** if the field does not exist or casting fails.
+**Field** (`identifier[:type]`): reads the value from the current file's frontmatter and optionally casts it (see [Fields](#fields)). Evaluates to **null** if the field does not exist or casting fails.
 
-**Literal**: a constant value embedded directly in the query (see [Literals](#literals)). Literals always exist; they never produce void.
+**Literal**: a constant value embedded directly in the query (see [Literals](#literals)). Literals always exist; they never produce null.
 
 ```
 title                -- field, any type
@@ -214,7 +214,7 @@ price:number         -- field cast to number
 true                 -- boolean literal
 ```
 
-Void propagates through arithmetic — any operation with a void operand produces void. In a boolean context (comparisons, `where`) void is falsey.
+Null propagates through arithmetic — any operation with a null operand produces null. In a boolean context (comparisons, `where`) null is falsey.
 
 ### Literals
 
@@ -303,7 +303,7 @@ modified:datetime = 2026-05-17T21:02:30
 <field> [<op> <expression>]
 ```
 
-Unary comparison evaluates to the boolean value of the field (after optional casting). Falsey values are: `null`, `false`, `0`, `0.0`, and void (missing field or failed cast). All other values are truthy.
+Unary comparison evaluates to the boolean value of the field (after optional casting). Falsey values are: `null`, `false`, `0`, `0.0`, and a missing field or failed cast (which also produce null). All other values are truthy.
 
 Binary comparison is truthy if both operands exist (literals always exist), with comparable types, and values meeting the criteria. Types are comparable if they can be relaxed to a matching type — otherwise it is a static type error caught at parse and halts the program. Runtime cast failure on values is per-clause (see [Error handling and program flow](#error-handling-and-program-flow)).
 

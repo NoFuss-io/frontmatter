@@ -20,7 +20,7 @@ func FieldName(e Expr, idx int) string {
 
 // FormatValue renders a Value as a plain string for table output.
 func FormatValue(v Value) string {
-	if v.Void {
+	if v.Null {
 		return ""
 	}
 	switch v.Kind {
@@ -75,7 +75,7 @@ func PrintTable(w io.Writer, headers []string, paths []string, rows []Row) {
 }
 
 // SortRows reorders paths/rows in place according to the SortTerms.
-// Void values sort last. Default direction asc unless term.Desc.
+// Null values sort last. Default direction asc unless term.Desc.
 func SortRows(paths []string, rows []Row, terms []SortTerm, frontmatter []FrontMatter) {
 	type item struct {
 		path string
@@ -108,22 +108,22 @@ func SortRows(paths []string, rows []Row, terms []SortTerm, frontmatter []FrontM
 	}
 }
 
-// compareValues returns -1, 0, +1. Void sorts after non-void. Numeric values
+// compareValues returns -1, 0, +1. Null sorts after non-null. Numeric values
 // compare numerically; everything else falls back to string form.
 func compareValues(a, b Value) int {
-	if a.Void && b.Void {
+	if a.Null && b.Null {
 		return 0
 	}
-	if a.Void {
+	if a.Null {
 		return 1
 	}
-	if b.Void {
+	if b.Null {
 		return -1
 	}
 	if isNumeric(a.Kind) && isNumeric(b.Kind) {
 		af, _ := Cast(a, TypeNumber)
 		bf, _ := Cast(b, TypeNumber)
-		if af.Void || bf.Void {
+		if af.Null || bf.Null {
 			return strings.Compare(FormatValue(a), FormatValue(b))
 		}
 		x, y := af.Data.(float64), bf.Data.(float64)

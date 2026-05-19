@@ -58,17 +58,17 @@ func applyAssignments(assigns []lib.Assign, fm *lib.FrontMatter) error {
 	return nil
 }
 
-// truthyExpr mirrors the Manual.md rule: a void or cast-failed where is falsey.
+// truthyExpr mirrors the Manual.md rule: a null or cast-failed where is falsey.
 func truthyExpr(e lib.Expr, fm *lib.FrontMatter) bool {
 	v := e.Eval(fm)
-	if v.Void {
+	if v.Null {
 		return false
 	}
 	if v.Kind == lib.TypeBool {
 		return v.Data.(bool)
 	}
 	c, err := lib.Cast(v, lib.TypeBool)
-	if err != nil || c.Void {
+	if err != nil || c.Null {
 		return false
 	}
 	return c.Data.(bool)

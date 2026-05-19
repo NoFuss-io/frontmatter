@@ -15,7 +15,7 @@ func vInt(n int64) lib.Value   { return lib.Value{Kind: lib.TypeInt, Data: n} }
 func vNum(n float64) lib.Value { return lib.Value{Kind: lib.TypeNumber, Data: n} }
 func vStr(s string) lib.Value  { return lib.Value{Kind: lib.TypeString, Data: s} }
 func vBool(b bool) lib.Value   { return lib.Value{Kind: lib.TypeBool, Data: b} }
-func vVoid() lib.Value         { return lib.Value{Void: true} }
+func vNull() lib.Value         { return lib.Value{Null: true} }
 func vList(els ...lib.Value) lib.Value {
 	return lib.Value{Kind: lib.TypeList, Data: els}
 }
@@ -29,10 +29,10 @@ func vLink(s string) lib.Value   { return lib.Value{Kind: lib.TypeLink, Data: s}
 func vMdLink(s string) lib.Value { return lib.Value{Kind: lib.TypeMdLink, Data: s} }
 
 func valEq(a, b lib.Value) bool {
-	if a.Void != b.Void {
+	if a.Null != b.Null {
 		return false
 	}
-	if a.Void {
+	if a.Null {
 		return true
 	}
 	if a.Kind != b.Kind {
@@ -82,7 +82,7 @@ func TestLitExpr_Eval(t *testing.T) {
 		{"bool_true", lib.LitExpr{Kind: lib.LitBool, Value: "true"}, vBool(true)},
 		{"bool_false", lib.LitExpr{Kind: lib.LitBool, Value: "false"}, vBool(false)},
 		{"bool_TRUE", lib.LitExpr{Kind: lib.LitBool, Value: "TRUE"}, vBool(true)},
-		{"null", lib.LitExpr{Kind: lib.LitNull, Value: "null"}, vVoid()},
+		{"null", lib.LitExpr{Kind: lib.LitNull, Value: "null"}, vNull()},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -112,10 +112,10 @@ func TestFieldExpr_Eval(t *testing.T) {
 		{"any_string", lib.Field{Name: "title", Type: lib.TypeAny}, vStr("hello")},
 		{"any_int", lib.Field{Name: "count", Type: lib.TypeAny}, vInt(5)},
 		{"any_bool", lib.Field{Name: "active", Type: lib.TypeAny}, vBool(true)},
-		{"missing", lib.Field{Name: "nope", Type: lib.TypeAny}, vVoid()},
+		{"missing", lib.Field{Name: "nope", Type: lib.TypeAny}, vNull()},
 		{"typed_match", lib.Field{Name: "count", Type: lib.TypeInt}, vInt(5)},
 		{"typed_relax_int_to_string", lib.Field{Name: "count", Type: lib.TypeString}, vStr("5")},
-		{"typed_cast_fail_string_to_int", lib.Field{Name: "title", Type: lib.TypeInt}, vVoid()},
+		{"typed_cast_fail_string_to_int", lib.Field{Name: "title", Type: lib.TypeInt}, vNull()},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -143,9 +143,9 @@ func TestUnaryExpr_Eval(t *testing.T) {
 	}{
 		{"not_true", lib.UnaryExpr{Op: lib.UnaryNot, Operand: bl("true")}, vBool(false)},
 		{"not_false", lib.UnaryExpr{Op: lib.UnaryNot, Operand: bl("false")}, vBool(true)},
-		{"not_void", lib.UnaryExpr{Op: lib.UnaryNot, Operand: missing}, vBool(true)},
+		{"not_null", lib.UnaryExpr{Op: lib.UnaryNot, Operand: missing}, vBool(true)},
 		{"neg_int", lib.UnaryExpr{Op: lib.UnaryNeg, Operand: il("5")}, vInt(-5)},
-		{"neg_void", lib.UnaryExpr{Op: lib.UnaryNeg, Operand: missing}, vVoid()},
+		{"neg_null", lib.UnaryExpr{Op: lib.UnaryNeg, Operand: missing}, vNull()},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -172,12 +172,12 @@ func TestBinExpr_BoolOps(t *testing.T) {
 		{"and_tt", lib.BinExpr{Op: lib.BinAnd, Left: bl("true"), Right: bl("true")}, vBool(true)},
 		{"and_tf", lib.BinExpr{Op: lib.BinAnd, Left: bl("true"), Right: bl("false")}, vBool(false)},
 		{"and_ft", lib.BinExpr{Op: lib.BinAnd, Left: bl("false"), Right: bl("true")}, vBool(false)},
-		{"and_void_lhs", lib.BinExpr{Op: lib.BinAnd, Left: missing, Right: bl("true")}, vBool(false)},
-		{"and_void_rhs", lib.BinExpr{Op: lib.BinAnd, Left: bl("true"), Right: missing}, vBool(false)},
+		{"and_null_lhs", lib.BinExpr{Op: lib.BinAnd, Left: missing, Right: bl("true")}, vBool(false)},
+		{"and_null_rhs", lib.BinExpr{Op: lib.BinAnd, Left: bl("true"), Right: missing}, vBool(false)},
 		{"or_tf", lib.BinExpr{Op: lib.BinOr, Left: bl("true"), Right: bl("false")}, vBool(true)},
 		{"or_ff", lib.BinExpr{Op: lib.BinOr, Left: bl("false"), Right: bl("false")}, vBool(false)},
-		{"or_void_void", lib.BinExpr{Op: lib.BinOr, Left: missing, Right: missing}, vBool(false)},
-		{"or_void_true", lib.BinExpr{Op: lib.BinOr, Left: missing, Right: bl("true")}, vBool(true)},
+		{"or_null_null", lib.BinExpr{Op: lib.BinOr, Left: missing, Right: missing}, vBool(false)},
+		{"or_null_true", lib.BinExpr{Op: lib.BinOr, Left: missing, Right: bl("true")}, vBool(true)},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -208,8 +208,8 @@ func TestBinExpr_Arith(t *testing.T) {
 		{"div_ints_exact", lib.BinExpr{Op: lib.BinDiv, Left: il("10"), Right: il("2")}, vInt(5)},
 		{"add_numerics", lib.BinExpr{Op: lib.BinAdd, Left: nl("1.5"), Right: nl("2.5")}, vNum(4.0)},
 		{"mix_int_numeric", lib.BinExpr{Op: lib.BinAdd, Left: il("1"), Right: nl("2.5")}, vNum(3.5)},
-		{"add_void_lhs", lib.BinExpr{Op: lib.BinAdd, Left: missing, Right: il("1")}, vVoid()},
-		{"add_void_rhs", lib.BinExpr{Op: lib.BinAdd, Left: il("1"), Right: missing}, vVoid()},
+		{"add_null_lhs", lib.BinExpr{Op: lib.BinAdd, Left: missing, Right: il("1")}, vNull()},
+		{"add_null_rhs", lib.BinExpr{Op: lib.BinAdd, Left: il("1"), Right: missing}, vNull()},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -242,8 +242,8 @@ func TestBinExpr_Compare(t *testing.T) {
 		{"gt_false", lib.BinExpr{Op: lib.BinGt, Left: il("1"), Right: il("2")}, vBool(false)},
 		{"ge_eq", lib.BinExpr{Op: lib.BinGe, Left: il("2"), Right: il("2")}, vBool(true)},
 		{"eq_strings", lib.BinExpr{Op: lib.BinEq, Left: sl("a"), Right: sl("a")}, vBool(true)},
-		{"eq_void_lhs", lib.BinExpr{Op: lib.BinEq, Left: missing, Right: il("1")}, vBool(false)},
-		{"eq_void_rhs", lib.BinExpr{Op: lib.BinEq, Left: il("1"), Right: missing}, vBool(false)},
+		{"eq_null_lhs", lib.BinExpr{Op: lib.BinEq, Left: missing, Right: il("1")}, vBool(false)},
+		{"eq_null_rhs", lib.BinExpr{Op: lib.BinEq, Left: il("1"), Right: missing}, vBool(false)},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -530,15 +530,15 @@ func TestSelectQuery_Eval(t *testing.T) {
 			t.Errorf("row = %+v, want nil (where=false)", row)
 		}
 	})
-	t.Run("missing_field_void", func(t *testing.T) {
+	t.Run("missing_field_null", func(t *testing.T) {
 		fm := lib.FrontMatter{}
 		q := parseQ(t, "select title from *.md").(lib.SelectQuery)
 		row, err := q.Eval(&fm)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(row) != 1 || !row[0].Void {
-			t.Errorf("row = %+v, want [void]", row)
+		if len(row) != 1 || !row[0].Null {
+			t.Errorf("row = %+v, want [null]", row)
 		}
 	})
 }
@@ -633,7 +633,7 @@ func TestCastField_ListElemType(t *testing.T) {
 			"elemtype_int_cast_fail",
 			vList(vStr("hello"), vStr("4")),
 			lib.Field{Type: lib.TypeList, ElemType: &intType},
-			vVoid(),
+			vNull(),
 		},
 		{
 			"scalar_wrapped_and_cast",
@@ -650,7 +650,7 @@ func TestCastField_ListElemType(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			wantErr := tc.want.Void
+			wantErr := tc.want.Null
 			got, err := lib.CastField(tc.v, tc.field)
 			if wantErr {
 				if err == nil {

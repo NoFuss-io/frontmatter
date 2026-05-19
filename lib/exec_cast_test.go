@@ -38,7 +38,7 @@ func TestCastReversible(t *testing.T) {
 	}
 }
 
-func TestCastVoid(t *testing.T) {
+func TestCastNull(t *testing.T) {
 	for _, x := range allTypes {
 		input := Value{x, nil, true}
 		for _, y := range allTypes {
