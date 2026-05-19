@@ -148,25 +148,11 @@ func (f *Field) parse(r *bufio.Reader) error {
 	}
 	f.Type = ft
 
-	if ft != TypeList {
-		return nil
+	if ft == TypeList {
+		if ch, _ := peekRune(r); ch == ':' {
+			return fmt.Errorf("list element type annotation is no longer supported; lists are list-of-string")
+		}
 	}
-
-	ch, err = peekRune(r)
-	if err != nil || ch != ':' {
-		return nil
-	}
-	_, _, _ = r.ReadRune() // consume ':'
-
-	elemName, err := readIdent(r)
-	if err != nil {
-		return fmt.Errorf("expected element type after 'list:': %w", err)
-	}
-	et, ok := typeNames[elemName]
-	if !ok {
-		return fmt.Errorf("unknown list element type %q", elemName)
-	}
-	f.ElemType = &et
 	return nil
 }
 

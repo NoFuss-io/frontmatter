@@ -58,11 +58,28 @@ func Cast(v Value, target FieldType) (Value, error) {
 	if v.Null {
 		return Value{}, fmt.Errorf("cannot cast null to %s", target)
 	}
-	if target == TypeAny || target == v.Kind {
+	if target == TypeAny {
 		return v, nil
 	}
 	if target == TypeList {
-		return Value{Kind: TypeList, Data: []Value{v}}, nil
+		var elems []Value
+		if v.Kind == TypeList {
+			elems = v.Data.([]Value)
+		} else {
+			elems = []Value{v}
+		}
+		out := make([]Value, len(elems))
+		for i, e := range elems {
+			s, err := Cast(e, TypeString)
+			if err != nil {
+				return Value{}, fmt.Errorf("list element %d: %w", i, err)
+			}
+			out[i] = s
+		}
+		return Value{Kind: TypeList, Data: out}, nil
+	}
+	if target == v.Kind {
+		return v, nil
 	}
 	if v.Kind == TypeList {
 		els, ok := v.Data.([]Value)
@@ -324,7 +341,7 @@ func (e FieldExpr) Eval(fm *FrontMatter) Value {
 	if e.Field.Type == TypeAny {
 		return v
 	}
-	c, err := CastField(v, e.Field)
+	c, err := Cast(v, e.Field.Type)
 	if err != nil {
 		return Value{Null: true}
 	}
@@ -574,28 +591,6 @@ func arith(op BinOp, l, r Value) Value {
 	return Value{Kind: TypeNumber, Data: f}
 }
 
-// CastField casts v to the type described by f. For list fields with a declared
-// element type, each element is cast to that type; an error in any element fails the cast.
-func CastField(v Value, f Field) (Value, error) {
-	if f.Type != TypeList || f.ElemType == nil {
-		return Cast(v, f.Type)
-	}
-	listVal, err := Cast(v, TypeList)
-	if err != nil {
-		return Value{}, err
-	}
-	els := listVal.Data.([]Value)
-	out := make([]Value, len(els))
-	for i, e := range els {
-		c, err := Cast(e, *f.ElemType)
-		if err != nil {
-			return Value{}, fmt.Errorf("element %d: %w", i, err)
-		}
-		out[i] = c
-	}
-	return Value{Kind: TypeList, Data: out}, nil
-}
-
 // SortTerm.Eval is a thin wrapper around the underlying expression.
 func (s SortTerm) Eval(fm *FrontMatter) Value { return s.Expr.Eval(fm) }
 
@@ -621,7 +616,7 @@ func (a Assign) Apply(fm *FrontMatter) error {
 			return nil
 		}
 		v := valueFromAny(cur)
-		c, err := CastField(v, a.Field)
+		c, err := Cast(v, a.Field.Type)
 		if err != nil {
 			return fmt.Errorf("cannot cast field %q: %w", name, err)
 		}
@@ -631,7 +626,7 @@ func (a Assign) Apply(fm *FrontMatter) error {
 
 	v := a.Value.Eval(fm)
 	if a.Field.Type != TypeAny {
-		c, err := CastField(v, a.Field)
+		c, err := Cast(v, a.Field.Type)
 		if err != nil {
 			return fmt.Errorf("cannot cast value to %v for field %q: %w", a.Field.Type, name, err)
 		}

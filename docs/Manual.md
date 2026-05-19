@@ -127,7 +127,7 @@ Quoted identifiers:
 | `string`      | [Text](https://obsidian.md/help/properties#Text)                   | Foo                         |                                                                                                        |
 | `link`        | Text                                                               | \[\[ref]], \[\[ref\|title]] | Wiki style links.                                                                                      |
 | `mdlink`      | Text                                                               | \[title](ref)               | Markdown style links.                                                                                  |
-| `list[:type]` | [List](https://obsidian.md/help/properties#List)                   | - "bar"<br>- "baz"          | Default list type is `any`.<br>Lists of lists are not supported.                                       |
+| `list`        | [List](https://obsidian.md/help/properties#List)                   | - "bar"<br>- "baz"          | Elements are coerced to strings on cast. Lists of lists are not supported.                             |
 | `numeric`     | [Number](https://obsidian.md/help/properties#Number)               | 1.23                        |                                                                                                        |
 | `int`         | Number                                                             | 4                           |                                                                                                        |
 | `bool`        | [Checkbox](https://obsidian.md/help/properties#Checkbox)           | true                        |                                                                                                        |
@@ -150,9 +150,7 @@ Cast between `link` and `mdlink` is always possible (reversible format conversio
 
 Cast from `datetime` to `date` is lossy (time part truncated). 
 
-Scalar may be cast to a single-element list and vice versa.
-
-`list:X` can be relaxed to `list:Y` if X is looser than Y. The reverse direction errors if any element fails to cast.
+Scalar may be cast to a single-element list and vice versa. When casting to `list`, each element is coerced to `string`.
 
 #### Examples
 
@@ -161,10 +159,10 @@ Scalar may be cast to a single-element list and vice versa.
 | 1           | bool     | true     |
 | 2           | bool     | ERROR    |
 | "3"         | int      | 3        |
-| 4           | list     | \[4]     |
+| 4           | list     | \["4"]   |
 | \[5]        | int      | 5        |
 | \[6,7]      | int      | ERROR    |
-| \[7,8,"9"]  | list:int | \[7,8,9] |
+| \[7,8,"9"]  | list     | \["7","8","9"] |
 | Missing     | int      | Null     |
 
 ## Expressions

@@ -90,9 +90,8 @@ func (f FieldType) String() string {
 
 // Field is a field reference with an optional type annotation: identifier[:type].
 type Field struct {
-	Name     string
-	Type     FieldType
-	ElemType *FieldType // non-nil for list:<elemtype>
+	Name string
+	Type FieldType
 }
 
 // AssignOp is the operator used in an update...set assignment.

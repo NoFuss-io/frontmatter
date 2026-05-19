@@ -10,9 +10,6 @@ import (
 // r wraps a string in a Reader for use with Parse methods.
 func r(s string) *strings.Reader { return strings.NewReader(s) }
 
-// ptr returns a pointer to v, for constructing *FieldType in expected values.
-func ptr[T any](v T) *T { return &v }
-
 // ── Field ─────────────────────────────────────────────────────────────────────
 
 func TestField_Parse(t *testing.T) {
@@ -36,11 +33,8 @@ func TestField_Parse(t *testing.T) {
 		{in: "ref:link", want: lib.Field{Name: "ref", Type: lib.TypeLink}},
 		{in: "ref:mdlink", want: lib.Field{Name: "ref", Type: lib.TypeMdLink}},
 
-		// List types
+		// List type (list-of-string; no element-type annotation)
 		{in: "tags:list", want: lib.Field{Name: "tags", Type: lib.TypeList}},
-		{in: "tags:list:string", want: lib.Field{Name: "tags", Type: lib.TypeList, ElemType: ptr(lib.TypeString)}},
-		{in: "ratings:list:int", want: lib.Field{Name: "ratings", Type: lib.TypeList, ElemType: ptr(lib.TypeInt)}},
-		{in: "dates:list:date", want: lib.Field{Name: "dates", Type: lib.TypeList, ElemType: ptr(lib.TypeDate)}},
 
 		// Quoted identifiers (backtick) — allow spaces, symbols, reserved words
 		{in: "`created-at`", want: lib.Field{Name: "created-at", Type: lib.TypeAny}},
@@ -49,11 +43,12 @@ func TestField_Parse(t *testing.T) {
 		{in: "`from`:date", want: lib.Field{Name: "from", Type: lib.TypeDate}},
 
 		// Errors
-		{in: "", wantErr: true},                 // empty
-		{in: "1foo", wantErr: true},             // starts with digit
-		{in: "foo:unknown", wantErr: true},      // unknown type
-		{in: "``", wantErr: true},               // empty quoted identifier
-		{in: "foo:list:unknown", wantErr: true}, // unknown list element type
+		{in: "", wantErr: true},                // empty
+		{in: "1foo", wantErr: true},            // starts with digit
+		{in: "foo:unknown", wantErr: true},     // unknown type
+		{in: "``", wantErr: true},              // empty quoted identifier
+		{in: "tags:list:string", wantErr: true}, // list element type no longer accepted
+		{in: "tags:list:int", wantErr: true},
 	}
 
 	for _, tc := range tests {
@@ -74,16 +69,6 @@ func TestField_Parse(t *testing.T) {
 			}
 			if f.Type != tc.want.Type {
 				t.Errorf("Type = %v, want %v", f.Type, tc.want.Type)
-			}
-			if tc.want.ElemType == nil && f.ElemType != nil {
-				t.Errorf("ElemType = %v, want nil", *f.ElemType)
-			}
-			if tc.want.ElemType != nil {
-				if f.ElemType == nil {
-					t.Errorf("ElemType = nil, want %v", *tc.want.ElemType)
-				} else if *f.ElemType != *tc.want.ElemType {
-					t.Errorf("ElemType = %v, want %v", *f.ElemType, *tc.want.ElemType)
-				}
 			}
 		})
 	}

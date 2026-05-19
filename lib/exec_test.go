@@ -599,80 +599,40 @@ func TestFieldExpr_Eval_Link(t *testing.T) {
 	}
 }
 
-// ── List element type ─────────────────────────────────────────────────────────
+// ── List cast ─────────────────────────────────────────────────────────────────
 
-func TestCastField_ListElemType(t *testing.T) {
-	strType := lib.TypeString
-	intType := lib.TypeInt
-
+// Casting to TypeList always normalises element values to TypeString so the
+// list is uniformly list-of-string; scalars are wrapped and stringified.
+func TestCastToList_StringElements(t *testing.T) {
 	tests := []struct {
-		name  string
-		v     lib.Value
-		field lib.Field
-		want  lib.Value
+		name string
+		v    lib.Value
+		want lib.Value
 	}{
-		{
-			"no_elemtype_passthrough",
-			vList(vStr("a")),
-			lib.Field{Type: lib.TypeList},
-			vList(vStr("a")),
-		},
-		{
-			"elemtype_string_noop",
-			vList(vStr("a"), vStr("b")),
-			lib.Field{Type: lib.TypeList, ElemType: &strType},
-			vList(vStr("a"), vStr("b")),
-		},
-		{
-			"elemtype_int_cast_ok",
-			vList(vStr("3"), vStr("4")),
-			lib.Field{Type: lib.TypeList, ElemType: &intType},
-			vList(vInt(3), vInt(4)),
-		},
-		{
-			"elemtype_int_cast_fail",
-			vList(vStr("hello"), vStr("4")),
-			lib.Field{Type: lib.TypeList, ElemType: &intType},
-			vNull(),
-		},
-		{
-			"scalar_wrapped_and_cast",
-			vInt(5),
-			lib.Field{Type: lib.TypeList, ElemType: &intType},
-			vList(vInt(5)),
-		},
-		{
-			"non_list_delegates_to_cast",
-			vStr("42"),
-			lib.Field{Type: lib.TypeInt},
-			vInt(42),
-		},
+		{"string_passthrough", vList(vStr("a"), vStr("b")), vList(vStr("a"), vStr("b"))},
+		{"int_elements_stringified", vList(vInt(3), vInt(4)), vList(vStr("3"), vStr("4"))},
+		{"mixed_stringified", vList(vInt(1), vStr("two"), vBool(true)), vList(vStr("1"), vStr("two"), vStr("true"))},
+		{"scalar_wrapped", vInt(5), vList(vStr("5"))},
+		{"scalar_string", vStr("hi"), vList(vStr("hi"))},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			wantErr := tc.want.Null
-			got, err := lib.CastField(tc.v, tc.field)
-			if wantErr {
-				if err == nil {
-					t.Errorf("CastField(%+v, %+v) = %+v, want error", tc.v, tc.field, got)
-				}
-			} else {
-				if err != nil {
-					t.Errorf("CastField(%+v, %+v) error: %s", tc.v, tc.field, err)
-				} else if !valEq(got, tc.want) {
-					t.Errorf("CastField(%+v, %+v) = %+v, want %+v", tc.v, tc.field, got, tc.want)
-				}
+			got, err := lib.Cast(tc.v, lib.TypeList)
+			if err != nil {
+				t.Fatalf("Cast(%+v, list) error: %s", tc.v, err)
+			}
+			if !valEq(got, tc.want) {
+				t.Errorf("Cast(%+v, list) = %+v, want %+v", tc.v, got, tc.want)
 			}
 		})
 	}
 }
 
-func TestFieldExpr_Eval_ListElemType(t *testing.T) {
-	et := lib.TypeInt
-	fm := lib.FrontMatter{"nums": []any{"3", "4", "5"}}
-	e := lib.FieldExpr{Field: lib.Field{Name: "nums", Type: lib.TypeList, ElemType: &et}}
+func TestFieldExpr_Eval_List(t *testing.T) {
+	fm := lib.FrontMatter{"nums": []any{int64(3), int64(4), int64(5)}}
+	e := lib.FieldExpr{Field: lib.Field{Name: "nums", Type: lib.TypeList}}
 	got := e.Eval(&fm)
-	want := vList(vInt(3), vInt(4), vInt(5))
+	want := vList(vStr("3"), vStr("4"), vStr("5"))
 	if !valEq(got, want) {
 		t.Errorf("Eval() = %+v, want %+v", got, want)
 	}
