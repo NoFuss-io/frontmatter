@@ -2,134 +2,124 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"strings"
+	"io"
+	"sort"
 
-	"github.com/spf13/cobra"
+	"github.com/backlin/frontmatter/lib"
 )
 
-func updateCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "update <glob>... set <assignment>[, <assignment>]... [where <expression>]",
-		Short: "Cast or set field values",
-		Long: `Applies one or more assignments to each matching file and writes the result back to
-disk. Field order is always sorted alphabetically after a write.
-
-Assignment forms:
-
-  field:type        Cast field to type; creates it as null if absent. Skipped when type is any.
-  field="string"    Set field to a literal string value.
-  field=value       Set field to the value of another field (field reference).
-  field=null        Clear the field (set to null).
-  field+=value      Numbers: add. Strings: append. Lists: append if not already present.
-  field+="value"    Lists: append literal string if not already present.
-  field+=ref        Lists: merge (set union).
-  field-="value"    Lists: remove literal string if present.
-  field-=ref        Lists: subtract (set difference).
-
-A missing field reference defaults to null for = and is a no-op for += and -=.`,
-		Args: cobra.ArbitraryArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			stmt, err := newUpdateStatement(args)
-			if err != nil {
-				return err
-			}
-			return stmt.run()
-		},
-	}
-}
-
-type updateStatement struct {
-	globs       []string
-	where       Expression
-	assignments []Assignment
-}
-
-func newUpdateStatement(args []string) (updateStatement, error) {
-	globArgs, rest, ok := splitOn(args, "set")
-	if !ok {
-		return updateStatement{}, fmt.Errorf("missing 'set' keyword")
-	}
-	assignArgs, whereArgs, _ := splitOn(rest, "where")
-	assignArgs = splitCommas(assignArgs)
-
-	if len(globArgs) == 0 {
-		return updateStatement{}, fmt.Errorf("no files specified")
-	}
-	if len(assignArgs) == 0 {
-		return updateStatement{}, fmt.Errorf("no fields or assignments specified")
-	}
-
-	var assignments []Assignment
-	for _, arg := range assignArgs {
-		a, err := ParseAssignment(arg)
-		if err != nil {
-			return updateStatement{}, err
-		}
-		assignments = append(assignments, a)
-	}
-
-	var where Expression
-	if len(whereArgs) > 0 {
-		var err error
-		where, err = ParseExpression(strings.Join(whereArgs, " "))
-		if err != nil {
-			return updateStatement{}, fmt.Errorf("invalid where clause: %w", err)
-		}
-	}
-
-	return updateStatement{
-		globs:       globArgs,
-		where:       where,
-		assignments: assignments,
-	}, nil
-}
-
-func (s updateStatement) run() error {
-	paths, err := expandGlobs(s.globs)
+func runUpdate(q lib.UpdateQuery, opts options, out, errOut io.Writer) error {
+	paths, err := lib.ExpandGlobs(q.From)
 	if err != nil {
 		return err
 	}
 
-	files := readMatchingFiles(paths, s.where)
-
-	var result *SelectResult
-	var resultCols []selectCol
-	if verbose >= 2 {
-		seen := map[string]bool{}
-		for _, a := range s.assignments {
-			if !seen[a.Field.Name] {
-				resultCols = append(resultCols, selectCol{field: a.Field})
-				seen[a.Field.Name] = true
+	var (
+		touched   []string
+		touchedFM []lib.FrontMatter
+	)
+	for _, p := range paths {
+		f, err := lib.ReadFile(p)
+		if err != nil {
+			fmt.Fprintf(errOut, "warning: %v\n", err)
+			continue
+		}
+		if q.Where != nil && !truthyExpr(q.Where, &f.FrontMatter) {
+			continue
+		}
+		if err := applyAssignments(q.Set, &f.FrontMatter); err != nil {
+			fmt.Fprintf(errOut, "%s: %v\n", p, err)
+			continue
+		}
+		if !opts.dryRun {
+			if err := f.Write(); err != nil {
+				fmt.Fprintf(errOut, "%s: write: %v\n", p, err)
+				continue
 			}
 		}
-		headers := make([]string, len(resultCols))
-		for i, c := range resultCols {
-			headers[i] = c.field.Name
-		}
-		result = &SelectResult{headers: headers}
+		touched = append(touched, p)
+		touchedFM = append(touchedFM, f.FrontMatter)
 	}
 
-	modified := 0
-	for _, f := range files {
-		for _, a := range s.assignments {
-			if e := f.Apply(a); e != nil {
-				fmt.Fprintf(os.Stderr, "%s: %v\n", f.Path, e)
-			}
-		}
-		if e := f.Write(); e != nil {
-			writeErr(f, e)
-		} else {
-			modified++
-			if result != nil {
-				result.addRow(f, resultCols)
-			}
-		}
-	}
-	if result != nil {
-		result.print(os.Stdout)
-	} else if verbose >= 1 {
-		fmt.Fprintf(os.Stderr, "%d files modified\n", modified)
+	if opts.verbose {
+		printAffected(out, affectedFields(q.Set), touched, touchedFM)
 	}
 	return nil
+}
+
+// applyAssignments applies each Assign in order. The first failing assignment
+// halts the whole file per Manual.md — the caller skips the write.
+func applyAssignments(assigns []lib.Assign, fm *lib.FrontMatter) error {
+	for _, a := range assigns {
+		if err := a.Apply(fm); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// truthyExpr mirrors the Manual.md rule: a void or cast-failed where is falsey.
+func truthyExpr(e lib.Expr, fm *lib.FrontMatter) bool {
+	v := e.Eval(fm)
+	if v.Void {
+		return false
+	}
+	if v.Kind == lib.TypeBool {
+		return v.Data.(bool)
+	}
+	c, err := lib.Cast(v, lib.TypeBool)
+	if err != nil || c.Void {
+		return false
+	}
+	return c.Data.(bool)
+}
+
+func affectedFields(assigns []lib.Assign) []lib.Field {
+	seen := map[string]bool{}
+	var out []lib.Field
+	for _, a := range assigns {
+		if seen[a.Field.Name] {
+			continue
+		}
+		seen[a.Field.Name] = true
+		out = append(out, a.Field)
+	}
+	return out
+}
+
+// printAffected renders a select-style table of the touched files restricted
+// to the supplied fields.
+func printAffected(out io.Writer, fields []lib.Field, paths []string, fms []lib.FrontMatter) {
+	headers := make([]string, len(fields))
+	exprs := make([]lib.Expr, len(fields))
+	for i, f := range fields {
+		headers[i] = f.Name
+		exprs[i] = lib.FieldExpr{Field: f}
+	}
+	rows := make([]lib.Row, len(paths))
+	for i := range paths {
+		row := make(lib.Row, len(exprs))
+		for j, e := range exprs {
+			row[j] = e.Eval(&fms[i])
+		}
+		rows[i] = row
+	}
+	sortByPath(paths, rows)
+	lib.PrintTable(out, headers, paths, rows)
+}
+
+func sortByPath(paths []string, rows []lib.Row) {
+	type entry struct {
+		path string
+		row  lib.Row
+	}
+	es := make([]entry, len(paths))
+	for i := range paths {
+		es[i] = entry{paths[i], rows[i]}
+	}
+	sort.SliceStable(es, func(i, j int) bool { return es[i].path < es[j].path })
+	for i := range es {
+		paths[i] = es[i].path
+		rows[i] = es[i].row
+	}
 }

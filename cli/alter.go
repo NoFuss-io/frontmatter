@@ -2,107 +2,60 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"strings"
+	"io"
 
-	"github.com/spf13/cobra"
+	"github.com/backlin/frontmatter/lib"
 )
 
-func alterCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "alter <glob>... drop <field>[, <field>]... [where <expression>]",
-		Short: "Remove fields",
-		Long: `Removes one or more fields from each matching file's frontmatter and writes the
-result back to disk. When a field carries a type annotation (field:type), it is only
-removed if the stored value matches that type.`,
-		Args: cobra.ArbitraryArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			stmt, err := newAlterStatement(args)
-			if err != nil {
-				return err
-			}
-			return stmt.run()
-		},
-	}
-}
-
-type alterStatement struct {
-	globs  []string
-	where  Expression
-	fields []Field
-}
-
-func newAlterStatement(args []string) (alterStatement, error) {
-	globArgs, rest, ok := splitOn(args, "drop")
-	if !ok {
-		return alterStatement{}, fmt.Errorf("missing 'drop' keyword")
-	}
-	fieldArgs, whereArgs, _ := splitOn(rest, "where")
-	fieldArgs = splitCommas(fieldArgs)
-
-	if len(globArgs) == 0 {
-		return alterStatement{}, fmt.Errorf("no files specified")
-	}
-	if len(fieldArgs) == 0 {
-		return alterStatement{}, fmt.Errorf("no fields specified")
-	}
-
-	var fields []Field
-	for _, arg := range fieldArgs {
-		field, err := ParseField(arg)
-		if err != nil {
-			return alterStatement{}, err
-		}
-		fields = append(fields, field)
-	}
-
-	var where Expression
-	if len(whereArgs) > 0 {
-		var err error
-		where, err = ParseExpression(strings.Join(whereArgs, " "))
-		if err != nil {
-			return alterStatement{}, fmt.Errorf("invalid where clause: %w", err)
-		}
-	}
-
-	return alterStatement{
-		globs:  globArgs,
-		where:  where,
-		fields: fields,
-	}, nil
-}
-
-func (s alterStatement) run() error {
-	paths, err := expandGlobs(s.globs)
+func runAlter(q lib.AlterQuery, opts options, out, errOut io.Writer) error {
+	paths, err := lib.ExpandGlobs(q.From)
 	if err != nil {
 		return err
 	}
 
-	files := readMatchingFiles(paths, s.where)
-
-	modified := 0
-	for _, f := range files {
-		if verbose >= 2 {
-			fmt.Fprintln(os.Stderr, f.Path)
+	var (
+		touched   []string
+		touchedFM []lib.FrontMatter
+	)
+	for _, p := range paths {
+		f, err := lib.ReadFile(p)
+		if err != nil {
+			fmt.Fprintf(errOut, "warning: %v\n", err)
+			continue
 		}
-		changed := false
-		for _, field := range s.fields {
-			if f.Remove(field) {
-				changed = true
+		if q.Where != nil && !truthyExpr(q.Where, &f.FrontMatter) {
+			continue
+		}
+		if err := q.Apply(&f.FrontMatter); err != nil {
+			fmt.Fprintf(errOut, "%s: %v\n", p, err)
+			continue
+		}
+		if !opts.dryRun {
+			if err := f.Write(); err != nil {
+				fmt.Fprintf(errOut, "%s: write: %v\n", p, err)
+				continue
 			}
 		}
-		if changed {
-			if e := f.Write(); e != nil {
-				writeErr(f, e)
-			} else {
-				modified++
-			}
-		}
+		touched = append(touched, p)
+		touchedFM = append(touchedFM, f.FrontMatter)
 	}
-	if verbose >= 2 {
-		fmt.Fprintf(os.Stderr, "%d files\n", len(files))
-	} else if verbose >= 1 {
-		fmt.Fprintf(os.Stderr, "%d files modified\n", modified)
+
+	if opts.verbose {
+		printAffected(out, alterAffectedFields(q), touched, touchedFM)
+	}
+	return nil
+}
+
+func alterAffectedFields(q lib.AlterQuery) []lib.Field {
+	switch q.Op {
+	case lib.AlterDrop:
+		return append([]lib.Field(nil), q.Drop...)
+	case lib.AlterRename:
+		out := make([]lib.Field, len(q.Rename))
+		for i, r := range q.Rename {
+			out[i] = lib.Field{Name: r.To}
+		}
+		return out
 	}
 	return nil
 }
