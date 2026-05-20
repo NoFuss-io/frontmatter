@@ -2,25 +2,24 @@ package internal
 
 import (
 	"testing"
-	"time"
 )
 
 func TestCastReversible(t *testing.T) {
 	testCases := [][]Value{
-		[]Value{v(TypeBool, true), v(TypeInt, int64(1)), v(TypeNumber, 1.0)},
-		[]Value{v(TypeBool, true), v(TypeString, "true")},
-		[]Value{v(TypeInt, int64(1)), v(TypeNumber, 1.0)},
-		[]Value{v(TypeInt, int64(3)), v(TypeString, "3")},
-		[]Value{v(TypeNumber, 4.56), v(TypeString, "4.56")},
+		[]Value{vBool(true), vInt(1), vNum(1.0)},
+		[]Value{vBool(true), vStr("true")},
+		[]Value{vInt(1), vNum(1.0)},
+		[]Value{vInt(3), vStr("3")},
+		[]Value{vNum(4.56), vStr("4.56")},
 
-		[]Value{v(TypeLink, "[[ref]]"), v(TypeString, "[[ref]]")},
-		[]Value{v(TypeMdLink, "[ref](ref)"), v(TypeString, "[ref](ref)")},
-		[]Value{v(TypeLink, "[[ref]]"), v(TypeMdLink, "[ref](ref)")},
+		[]Value{vLink("[[ref]]"), vStr("[[ref]]")},
+		[]Value{vMdLink("[ref](ref)"), vStr("[ref](ref)")},
+		[]Value{vLink("[[ref]]"), vMdLink("[ref](ref)")},
 
-		[]Value{v(TypeString, "2026-05-14"), v(TypeDate, time.Date(2026, 5, 14, 0, 0, 0, 0, time.UTC))},
-		[]Value{v(TypeString, "2026-05-14T21:02:30"), v(TypeDatetime, time.Date(2026, 5, 14, 21, 2, 30, 0, time.UTC))},
+		[]Value{vStr("2026-05-14"), vDate(2026, 5, 14)},
+		[]Value{vStr("2026-05-14T21:02:30"), vDatetime(2026, 5, 14, 21, 2, 30)},
 
-		[]Value{v(TypeString, "hello")},
+		[]Value{vStr("hello")},
 	}
 
 	for _, tc := range testCases {
@@ -55,17 +54,17 @@ func TestCastFailures(t *testing.T) {
 		from Value
 		to   []FieldType
 	}{
-		{v(TypeBool, false), allBut(TypeInt, TypeNumber, TypeString, TypeList)},
-		{v(TypeInt, int64(2)), allBut(TypeNumber, TypeString, TypeList)},
-		{v(TypeNumber, 1.5), allBut(TypeString, TypeList)},
+		{vBool(false), allBut(TypeInt, TypeNumber, TypeString, TypeList)},
+		{vInt(2), allBut(TypeNumber, TypeString, TypeList)},
+		{vNum(1.5), allBut(TypeString, TypeList)},
 
-		{v(TypeLink, "[[ref]]"), allBut(TypeMdLink, TypeString, TypeList)},
-		{v(TypeMdLink, "[title](ref)"), allBut(TypeLink, TypeString, TypeList)},
+		{vLink("[[ref]]"), allBut(TypeMdLink, TypeString, TypeList)},
+		{vMdLink("[title](ref)"), allBut(TypeLink, TypeString, TypeList)},
 
-		{v(TypeString, "hello"), allBut(TypeList)},
+		{vStr("hello"), allBut(TypeList)},
 
-		{v(TypeDate, time.Date(2026, 5, 14, 0, 0, 0, 0, time.UTC)), allBut(TypeString, TypeList)},
-		{v(TypeDatetime, time.Date(2026, 5, 14, 21, 2, 30, 0, time.UTC)), allBut(TypeString, TypeList)},
+		{vDate(2026, 5, 14), allBut(TypeString, TypeList)},
+		{vDatetime(2026, 5, 14, 21, 2, 30), allBut(TypeString, TypeList)},
 
 		{vList(vStr("a"), vStr("b")), allTypes},
 	}
@@ -97,8 +96,4 @@ func allBut(tt ...FieldType) []FieldType {
 	next:
 	}
 	return out
-}
-
-func v(ty FieldType, val any) Value {
-	return Value{ty, val, false}
 }

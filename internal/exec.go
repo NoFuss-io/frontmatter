@@ -15,6 +15,10 @@ func (q SelectQuery) Eval(fm FrontMatter) (Row, error) {
 	if q.Where != nil && !truthy(q.Where.Eval(fm)) {
 		return nil, nil
 	}
+	return q.evalAlways(fm)
+}
+
+func (q SelectQuery) evalAlways(fm FrontMatter) (Row, error) {
 	row := make(Row, len(q.Fields))
 	for i, f := range q.Fields {
 		row[i] = f.Eval(fm)
@@ -38,34 +42,6 @@ func (q query) WhereTruthy(fm FrontMatter) bool {
 		return false
 	}
 	return c.Data.(bool)
-}
-
-func (a AlterQuery) Eval(fm FrontMatter) (Row, error) {
-	if err := a.Apply(fm); err != nil {
-		return nil, err
-	}
-	return nil, nil
-}
-
-// Apply evaluates the where clause; if truthy, drops or renames fields on fm.
-func (q AlterQuery) Apply(fm FrontMatter) error {
-	if q.Where != nil && !truthy(q.Where.Eval(fm)) {
-		return nil
-	}
-	switch q.Op {
-	case AlterDrop:
-		for _, f := range q.Drop {
-			delete(fm, f.Name)
-		}
-	case AlterRename:
-		for _, p := range q.Rename {
-			if v, ok := (fm)[p.From]; ok {
-				(fm)[p.To] = v
-				delete(fm, p.From)
-			}
-		}
-	}
-	return nil
 }
 
 // Value is the runtime value produced by evaluating an expression.

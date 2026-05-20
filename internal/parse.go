@@ -21,15 +21,6 @@ type cursor struct {
 
 func newCursor(b []byte) *cursor { return &cursor{src: b} }
 
-func (c *cursor) eof() bool { return c.pos >= len(c.src) }
-
-func (c *cursor) peekByte() byte {
-	if c.pos >= len(c.src) {
-		return 0
-	}
-	return c.src[c.pos]
-}
-
 func (c *cursor) peekN(n int) []byte {
 	end := c.pos + n
 	if end > len(c.src) {
@@ -567,19 +558,19 @@ func parseOneQuery(c *cursor) (Query, error) {
 		if err := q.parse(c); err != nil {
 			return nil, err
 		}
-		return &q, nil
+		return q, nil
 	case "update":
 		var q UpdateQuery
 		if err := q.parse(c); err != nil {
 			return nil, err
 		}
-		return &q, nil
+		return q, nil
 	case "alter":
 		var q AlterQuery
 		if err := q.parse(c); err != nil {
 			return nil, err
 		}
-		return &q, nil
+		return q, nil
 	}
 	if kw == "" {
 		return nil, fmt.Errorf("expected query keyword (select|update|alter)")
