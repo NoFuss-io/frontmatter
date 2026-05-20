@@ -4,11 +4,12 @@ type Program struct {
 	Stmts []Query
 }
 
-// Query is the top-level parsed result.
-type Query interface{ query() }
+type Query interface {
+	Eval(fm FrontMatter) (Row, error)
+}
 
-// SelectQuery represents: select <exprs> from <globs> [where <expr>] [sort by <terms>] [limit <n>]
-type SelectQuery struct {
+// Query is the top-level parsed result.
+type query struct {
 	Fields []Expr
 	From   []string
 	Where  Expr // nil if absent
@@ -16,27 +17,22 @@ type SelectQuery struct {
 	Limit  int // 0 = no limit
 }
 
-func (SelectQuery) query() {}
+// SelectQuery represents: select <exprs> from <globs> [where <expr>] [sort by <terms>] [limit <n>]
+type SelectQuery = query
 
 // UpdateQuery represents: update <globs> set <assigns> [where <expr>]
 type UpdateQuery struct {
-	From  []string
-	Set   []Assign
-	Where Expr
+	query
+	Set []Assign
 }
-
-func (UpdateQuery) query() {}
 
 // AlterQuery represents: alter <globs> drop/rename ... [where <expr>]
 type AlterQuery struct {
-	From   []string
+	query
 	Op     AlterOp
 	Drop   []Field      // populated when Op == AlterDrop
 	Rename []RenamePair // populated when Op == AlterRename
-	Where  Expr
 }
-
-func (AlterQuery) query() {}
 
 // AlterOp distinguishes the two forms of alter query.
 type AlterOp int
@@ -128,7 +124,7 @@ type Assign struct {
 // Expr is the expression tree node interface.
 type Expr interface {
 	expr()
-	Eval(fm *FrontMatter) Value
+	Eval(fm FrontMatter) Value
 }
 
 // BinExpr is a binary operation: Left Op Right.

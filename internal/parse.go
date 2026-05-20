@@ -567,19 +567,19 @@ func parseOneQuery(c *cursor) (Query, error) {
 		if err := q.parse(c); err != nil {
 			return nil, err
 		}
-		return q, nil
+		return &q, nil
 	case "update":
 		var q UpdateQuery
 		if err := q.parse(c); err != nil {
 			return nil, err
 		}
-		return q, nil
+		return &q, nil
 	case "alter":
 		var q AlterQuery
 		if err := q.parse(c); err != nil {
 			return nil, err
 		}
-		return q, nil
+		return &q, nil
 	}
 	if kw == "" {
 		return nil, fmt.Errorf("expected query keyword (select|update|alter)")
@@ -686,8 +686,17 @@ func (q *UpdateQuery) parse(c *cursor) error {
 		return fmt.Errorf("expected assignment after 'set'")
 	}
 	q.Set = assigns
+	q.Fields = assignsToFields(assigns)
 
 	return parseOptionalWhere(c, &q.Where)
+}
+
+func assignsToFields(assigns []Assign) []Expr {
+	out := make([]Expr, 0, len(assigns))
+	for _, a := range assigns {
+		out = append(out, FieldExpr{a.Field})
+	}
+	return out
 }
 
 func (q *AlterQuery) Parse(r io.Reader) error {
@@ -734,11 +743,20 @@ func (q *AlterQuery) parse(c *cursor) error {
 			return fmt.Errorf("expected rename pair after 'rename'")
 		}
 		q.Rename = pairs
+		q.Fields = renamesToFields(pairs)
 	default:
 		return fmt.Errorf("expected 'drop' or 'rename' after globs")
 	}
 
 	return parseOptionalWhere(c, &q.Where)
+}
+
+func renamesToFields(pairs []RenamePair) []Expr {
+	out := make([]Expr, 0, len(pairs))
+	for _, p := range pairs {
+		out = append(out, FieldExpr{Field{Name: p.To, Type: TypeAny}})
+	}
+	return out
 }
 
 // ── LitExpr ───────────────────────────────────────────────────────────────────

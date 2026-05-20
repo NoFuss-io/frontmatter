@@ -88,8 +88,8 @@ func SortRows(paths []string, rows []Row, terms []SortTerm, frontmatter []FrontM
 	}
 	sort.SliceStable(items, func(i, j int) bool {
 		for _, t := range terms {
-			vi := t.Eval(&items[i].fm)
-			vj := t.Eval(&items[j].fm)
+			vi := t.Eval(items[i].fm)
+			vj := t.Eval(items[j].fm)
 			c := compareValues(vi, vj)
 			if c == 0 {
 				continue

@@ -3,7 +3,6 @@ package internal
 import (
 	"strings"
 	"testing"
-
 )
 
 // r wraps a string in a Reader for use with Parse methods.

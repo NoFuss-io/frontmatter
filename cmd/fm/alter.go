@@ -4,21 +4,21 @@ import (
 	"fmt"
 	"io"
 
-	lib "github.com/nofuss-io/frontmatter"
+	fm "github.com/nofuss-io/frontmatter"
 )
 
-func runAlter(q lib.AlterQuery, opts options, out, errOut io.Writer) error {
-	paths, err := lib.ExpandGlobs(q.From)
+func runAlter(q fm.AlterQuery, opts options, out, errOut io.Writer) error {
+	paths, err := fm.ExpandGlobs(q.From)
 	if err != nil {
 		return err
 	}
 
 	var (
 		touched   []string
-		touchedFM []lib.FrontMatter
+		touchedFM []fm.FrontMatter
 	)
 	for _, p := range paths {
-		doc, err := lib.ReadDocument(p)
+		doc, err := fm.ReadDocument(p)
 		if err != nil {
 			fmt.Fprintf(errOut, "warning: %v\n", err)
 			continue
@@ -31,7 +31,7 @@ func runAlter(q lib.AlterQuery, opts options, out, errOut io.Writer) error {
 			continue
 		}
 		if !opts.dryRun {
-			if err := lib.Write(doc, p); err != nil {
+			if err := fm.Write(doc, p); err != nil {
 				fmt.Fprintf(errOut, "%s: write: %v\n", p, err)
 				continue
 			}
@@ -46,14 +46,14 @@ func runAlter(q lib.AlterQuery, opts options, out, errOut io.Writer) error {
 	return nil
 }
 
-func alterAffectedFields(q lib.AlterQuery) []lib.Field {
+func alterAffectedFields(q fm.AlterQuery) []fm.Field {
 	switch q.Op {
-	case lib.AlterDrop:
-		return append([]lib.Field(nil), q.Drop...)
-	case lib.AlterRename:
-		out := make([]lib.Field, len(q.Rename))
+	case fm.AlterDrop:
+		return append([]fm.Field(nil), q.Drop...)
+	case fm.AlterRename:
+		out := make([]fm.Field, len(q.Rename))
 		for i, r := range q.Rename {
-			out[i] = lib.Field{Name: r.To}
+			out[i] = fm.Field{Name: r.To}
 		}
 		return out
 	}

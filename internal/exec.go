@@ -9,6 +9,65 @@ import (
 	"time"
 )
 
+// Eval evaluates the where clause; if truthy, projects Fields into a Row.
+// Returns nil Row if where is falsey or evaluates to null.
+func (q SelectQuery) Eval(fm FrontMatter) (Row, error) {
+	if q.Where != nil && !truthy(q.Where.Eval(fm)) {
+		return nil, nil
+	}
+	row := make(Row, len(q.Fields))
+	for i, f := range q.Fields {
+		row[i] = f.Eval(fm)
+	}
+	return row, nil
+}
+
+func (q query) WhereTruthy(fm FrontMatter) bool {
+	if q.Where == nil {
+		return true
+	}
+	v := q.Where.Eval(fm)
+	if v.Null {
+		return false
+	}
+	if v.Kind == TypeBool {
+		return v.Data.(bool)
+	}
+	c, err := Cast(v, TypeBool)
+	if err != nil || c.Null {
+		return false
+	}
+	return c.Data.(bool)
+}
+
+func (a AlterQuery) Eval(fm FrontMatter) (Row, error) {
+	if err := a.Apply(fm); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
+// Apply evaluates the where clause; if truthy, drops or renames fields on fm.
+func (q AlterQuery) Apply(fm FrontMatter) error {
+	if q.Where != nil && !truthy(q.Where.Eval(fm)) {
+		return nil
+	}
+	switch q.Op {
+	case AlterDrop:
+		for _, f := range q.Drop {
+			delete(fm, f.Name)
+		}
+	case AlterRename:
+		for _, p := range q.Rename {
+			if v, ok := (fm)[p.From]; ok {
+				(fm)[p.To] = v
+				delete(fm, p.From)
+			}
+		}
+	}
+	return nil
+}
+
 // Value is the runtime value produced by evaluating an expression.
 // Null marks absence: a missing field or a cast that could not produce a value.
 // Per Manual.md: null propagates through arithmetic; in boolean context it is falsey.
@@ -17,10 +76,6 @@ type Value struct {
 	Data any
 	Null bool
 }
-
-// Row is the projected output of SelectQuery.Eval for a single document.
-// The slice index matches the order of SelectQuery.Fields.
-type Row []Value
 
 // String returns a formatted representation of v like bool(true) or string("haha").
 func (v Value) String() string {
@@ -306,7 +361,7 @@ func castToMdLink(v Value) (Value, error) {
 
 // ── Expressions ───────────────────────────────────────────────────────────────
 
-func (e LitExpr) Eval(_ *FrontMatter) Value {
+func (e LitExpr) Eval(_ FrontMatter) Value {
 	switch e.Kind {
 	case LitInt:
 		n, err := strconv.ParseInt(e.Value, 0, 64)
@@ -329,11 +384,11 @@ func (e LitExpr) Eval(_ *FrontMatter) Value {
 	}
 	return Value{Null: true}
 }
-func (e FieldExpr) Eval(fm *FrontMatter) Value {
+func (e FieldExpr) Eval(fm FrontMatter) Value {
 	if fm == nil {
 		return Value{Null: true}
 	}
-	raw, ok := (*fm)[e.Field.Name]
+	raw, ok := (fm)[e.Field.Name]
 	if !ok {
 		return Value{Null: true}
 	}
@@ -381,7 +436,7 @@ func valueFromAny(x any) Value {
 	}
 	return Value{Kind: TypeAny, Data: x}
 }
-func (e UnaryExpr) Eval(fm *FrontMatter) Value {
+func (e UnaryExpr) Eval(fm FrontMatter) Value {
 	v := e.Operand.Eval(fm)
 	switch e.Op {
 	case UnaryNot:
@@ -421,7 +476,7 @@ func truthy(v Value) bool {
 		return true
 	}
 }
-func (e BinExpr) Eval(fm *FrontMatter) Value {
+func (e BinExpr) Eval(fm FrontMatter) Value {
 	switch e.Op {
 	case BinAnd:
 		return Value{Kind: TypeBool, Data: truthy(e.Left.Eval(fm)) && truthy(e.Right.Eval(fm))}
@@ -592,14 +647,14 @@ func arith(op BinOp, l, r Value) Value {
 }
 
 // SortTerm.Eval is a thin wrapper around the underlying expression.
-func (s SortTerm) Eval(fm *FrontMatter) Value { return s.Expr.Eval(fm) }
+func (s SortTerm) Eval(fm FrontMatter) Value { return s.Expr.Eval(fm) }
 
 // ── Assignment ────────────────────────────────────────────────────────────────
 
 // Apply evaluates a.Value (if present), casts to a.Field.Type, and writes the
 // result into fm under a.Field.Name. A runtime cast failure is returned as
 // an error so the caller can halt the current file per Manual.md.
-func (a Assign) Apply(fm *FrontMatter) error {
+func (a Assign) Apply(fm FrontMatter) error {
 	if fm == nil {
 		return errors.New("nil frontmatter")
 	}
@@ -607,9 +662,9 @@ func (a Assign) Apply(fm *FrontMatter) error {
 
 	if a.Value == nil {
 		// Cast-only form: ensure field exists; cast if it does.
-		cur, ok := (*fm)[name]
+		cur, ok := (fm)[name]
 		if !ok {
-			(*fm)[name] = nil
+			(fm)[name] = nil
 			return nil
 		}
 		if a.Field.Type == TypeAny {
@@ -620,7 +675,7 @@ func (a Assign) Apply(fm *FrontMatter) error {
 		if err != nil {
 			return fmt.Errorf("cannot cast field %q: %w", name, err)
 		}
-		(*fm)[name] = anyFromValue(c)
+		(fm)[name] = anyFromValue(c)
 		return nil
 	}
 
@@ -635,7 +690,7 @@ func (a Assign) Apply(fm *FrontMatter) error {
 
 	switch a.Op {
 	case OpSet:
-		(*fm)[name] = anyFromValue(v)
+		(fm)[name] = anyFromValue(v)
 	case OpAdd:
 		return applyListAdd(fm, name, v)
 	case OpSub:
@@ -660,8 +715,8 @@ func anyFromValue(v Value) any {
 	return v.Data
 }
 
-func applyListAdd(fm *FrontMatter, name string, v Value) error {
-	cur, ok := (*fm)[name]
+func applyListAdd(fm FrontMatter, name string, v Value) error {
+	cur, ok := (fm)[name]
 	var list []any
 	if ok && cur != nil {
 		if l, isList := cur.([]any); isList {
@@ -677,12 +732,12 @@ func applyListAdd(fm *FrontMatter, name string, v Value) error {
 	} else {
 		list = append(list, anyFromValue(v))
 	}
-	(*fm)[name] = list
+	(fm)[name] = list
 	return nil
 }
 
-func applyListSub(fm *FrontMatter, name string, v Value) error {
-	cur, ok := (*fm)[name]
+func applyListSub(fm FrontMatter, name string, v Value) error {
+	cur, ok := (fm)[name]
 	if !ok || cur == nil {
 		return nil
 	}
@@ -710,55 +765,6 @@ func applyListSub(fm *FrontMatter, name string, v Value) error {
 			out = append(out, x)
 		}
 	}
-	(*fm)[name] = out
-	return nil
-}
-
-// ── Queries ───────────────────────────────────────────────────────────────────
-
-// Eval evaluates the where clause; if truthy, projects Fields into a Row.
-// Returns nil Row if where is falsey or evaluates to null.
-func (q SelectQuery) Eval(fm *FrontMatter) (Row, error) {
-	if q.Where != nil && !truthy(q.Where.Eval(fm)) {
-		return nil, nil
-	}
-	row := make(Row, len(q.Fields))
-	for i, f := range q.Fields {
-		row[i] = f.Eval(fm)
-	}
-	return row, nil
-}
-
-// Apply evaluates the where clause; if truthy, applies each Assign to fm.
-func (q UpdateQuery) Apply(fm *FrontMatter) error {
-	if q.Where != nil && !truthy(q.Where.Eval(fm)) {
-		return nil
-	}
-	for _, a := range q.Set {
-		if err := a.Apply(fm); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// Apply evaluates the where clause; if truthy, drops or renames fields on fm.
-func (q AlterQuery) Apply(fm *FrontMatter) error {
-	if q.Where != nil && !truthy(q.Where.Eval(fm)) {
-		return nil
-	}
-	switch q.Op {
-	case AlterDrop:
-		for _, f := range q.Drop {
-			delete(*fm, f.Name)
-		}
-	case AlterRename:
-		for _, p := range q.Rename {
-			if v, ok := (*fm)[p.From]; ok {
-				(*fm)[p.To] = v
-				delete(*fm, p.From)
-			}
-		}
-	}
+	(fm)[name] = out
 	return nil
 }

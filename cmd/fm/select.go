@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	lib "github.com/nofuss-io/frontmatter/internal"
+	lib "github.com/nofuss-io/frontmatter"
 )
 
 func runSelect(q lib.SelectQuery, _ options, out, errOut io.Writer) error {
@@ -24,7 +24,7 @@ func runSelect(q lib.SelectQuery, _ options, out, errOut io.Writer) error {
 			fmt.Fprintf(errOut, "warning: %v\n", err)
 			continue
 		}
-		row, err := q.Eval(&doc.FrontMatter)
+		row, err := q.Eval(doc.FrontMatter)
 		if err != nil {
 			fmt.Fprintf(errOut, "%s: %v\n", p, err)
 			continue

@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 )
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -119,7 +118,7 @@ func TestFieldExpr_Eval(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			e := FieldExpr{Field: tc.f}
-			got := e.Eval(&fm)
+			got := e.Eval(fm)
 			if !valEq(got, tc.want) {
 				t.Errorf("Eval(%+v) = %+v, want %+v", tc.f, got, tc.want)
 			}
@@ -148,7 +147,7 @@ func TestUnaryExpr_Eval(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.e.Eval(&fm)
+			got := tc.e.Eval(fm)
 			if !valEq(got, tc.want) {
 				t.Errorf("Eval() = %+v, want %+v", got, tc.want)
 			}
@@ -180,7 +179,7 @@ func TestBinExpr_BoolOps(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.e.Eval(&fm)
+			got := tc.e.Eval(fm)
 			if !valEq(got, tc.want) {
 				t.Errorf("Eval() = %+v, want %+v", got, tc.want)
 			}
@@ -212,7 +211,7 @@ func TestBinExpr_Arith(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.e.Eval(&fm)
+			got := tc.e.Eval(fm)
 			if !valEq(got, tc.want) {
 				t.Errorf("Eval() = %+v, want %+v", got, tc.want)
 			}
@@ -246,7 +245,7 @@ func TestBinExpr_Compare(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.e.Eval(&fm)
+			got := tc.e.Eval(fm)
 			if !valEq(got, tc.want) {
 				t.Errorf("Eval() = %+v, want %+v", got, tc.want)
 			}
@@ -264,7 +263,7 @@ func TestAssign_Apply(t *testing.T) {
 			Op:    OpSet,
 			Value: LitExpr{Kind: LitString, Value: "hello"},
 		}
-		if err := a.Apply(&fm); err != nil {
+		if err := a.Apply(fm); err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
 		if fm["title"] != "hello" {
@@ -278,7 +277,7 @@ func TestAssign_Apply(t *testing.T) {
 			Op:    OpSet,
 			Value: LitExpr{Kind: LitString, Value: "42"},
 		}
-		if err := a.Apply(&fm); err != nil {
+		if err := a.Apply(fm); err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
 		if fm["n"] != int64(42) {
@@ -292,7 +291,7 @@ func TestAssign_Apply(t *testing.T) {
 			Op:    OpSet,
 			Value: nil,
 		}
-		if err := a.Apply(&fm); err != nil {
+		if err := a.Apply(fm); err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
 		if _, ok := fm["foo"]; !ok {
@@ -309,7 +308,7 @@ func TestAssign_Apply(t *testing.T) {
 			Op:    OpSet,
 			Value: LitExpr{Kind: LitNull, Value: "null"},
 		}
-		if err := a.Apply(&fm); err != nil {
+		if err := a.Apply(fm); err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
 		if fm["title"] != nil {
@@ -323,7 +322,7 @@ func TestAssign_Apply(t *testing.T) {
 			Op:    OpAdd,
 			Value: LitExpr{Kind: LitString, Value: "b"},
 		}
-		if err := a.Apply(&fm); err != nil {
+		if err := a.Apply(fm); err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
 		tags, ok := fm["tags"].([]any)
@@ -338,7 +337,7 @@ func TestAssign_Apply(t *testing.T) {
 			Op:    OpSub,
 			Value: LitExpr{Kind: LitString, Value: "b"},
 		}
-		if err := a.Apply(&fm); err != nil {
+		if err := a.Apply(fm); err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
 		tags, _ := fm["tags"].([]any)
@@ -353,7 +352,7 @@ func TestAssign_Apply(t *testing.T) {
 			Op:    OpAdd,
 			Value: LitExpr{Kind: LitString, Value: "x"},
 		}
-		if err := a.Apply(&fm); err != nil {
+		if err := a.Apply(fm); err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
 		tags, ok := fm["tags"].([]any)
@@ -368,7 +367,7 @@ func TestAssign_Apply(t *testing.T) {
 			Op:    OpSub,
 			Value: LitExpr{Kind: LitString, Value: "x"},
 		}
-		if err := a.Apply(&fm); err != nil {
+		if err := a.Apply(fm); err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
 		if fm["tags"] != nil {
@@ -382,7 +381,7 @@ func TestAssign_Apply(t *testing.T) {
 			Op:    OpSet,
 			Value: FieldExpr{Field: Field{Name: "src", Type: TypeString}},
 		}
-		if err := a.Apply(&fm); err == nil {
+		if err := a.Apply(fm); err == nil {
 			t.Error("expected cast-failure error, got nil")
 		}
 	})
@@ -396,7 +395,7 @@ func TestSortTerm_Eval(t *testing.T) {
 		Expr: FieldExpr{Field: Field{Name: "title"}},
 		Desc: false,
 	}
-	if got := s.Eval(&fm); !valEq(got, vStr("abc")) {
+	if got := s.Eval(fm); !valEq(got, vStr("abc")) {
 		t.Errorf("Eval() = %+v, want %+v", got, vStr("abc"))
 	}
 }
@@ -407,7 +406,7 @@ func TestAlterQuery_Apply(t *testing.T) {
 	t.Run("drop_one", func(t *testing.T) {
 		fm := FrontMatter{"title": "x", "date": "2026-01-01"}
 		q := parseQ(t, "alter *.md drop title").(AlterQuery)
-		if err := q.Apply(&fm); err != nil {
+		if err := q.Apply(fm); err != nil {
 			t.Fatal(err)
 		}
 		if _, ok := fm["title"]; ok {
@@ -420,7 +419,7 @@ func TestAlterQuery_Apply(t *testing.T) {
 	t.Run("drop_multi", func(t *testing.T) {
 		fm := FrontMatter{"a": int64(1), "b": int64(2), "c": int64(3)}
 		q := parseQ(t, "alter *.md drop a, b").(AlterQuery)
-		if err := q.Apply(&fm); err != nil {
+		if err := q.Apply(fm); err != nil {
 			t.Fatal(err)
 		}
 		if len(fm) != 1 || fm["c"] != int64(3) {
@@ -430,7 +429,7 @@ func TestAlterQuery_Apply(t *testing.T) {
 	t.Run("rename", func(t *testing.T) {
 		fm := FrontMatter{"foo": "hello"}
 		q := parseQ(t, "alter *.md rename foo to bar").(AlterQuery)
-		if err := q.Apply(&fm); err != nil {
+		if err := q.Apply(fm); err != nil {
 			t.Fatal(err)
 		}
 		if _, ok := fm["foo"]; ok {
@@ -443,7 +442,7 @@ func TestAlterQuery_Apply(t *testing.T) {
 	t.Run("where_skips", func(t *testing.T) {
 		fm := FrontMatter{"published": false, "title": "x"}
 		q := parseQ(t, "alter *.md drop title where published = true").(AlterQuery)
-		if err := q.Apply(&fm); err != nil {
+		if err := q.Apply(fm); err != nil {
 			t.Fatal(err)
 		}
 		if _, ok := fm["title"]; !ok {
@@ -458,7 +457,7 @@ func TestUpdateQuery_Apply(t *testing.T) {
 	t.Run("set_one", func(t *testing.T) {
 		fm := FrontMatter{}
 		q := parseQ(t, `update *.md set title = "hello"`).(UpdateQuery)
-		if err := q.Apply(&fm); err != nil {
+		if err := q.Apply(fm); err != nil {
 			t.Fatal(err)
 		}
 		if fm["title"] != "hello" {
@@ -468,7 +467,7 @@ func TestUpdateQuery_Apply(t *testing.T) {
 	t.Run("set_multi", func(t *testing.T) {
 		fm := FrontMatter{}
 		q := parseQ(t, `update *.md set a = 1, b = 2`).(UpdateQuery)
-		if err := q.Apply(&fm); err != nil {
+		if err := q.Apply(fm); err != nil {
 			t.Fatal(err)
 		}
 		if fm["a"] != int64(1) || fm["b"] != int64(2) {
@@ -478,7 +477,7 @@ func TestUpdateQuery_Apply(t *testing.T) {
 	t.Run("where_skips", func(t *testing.T) {
 		fm := FrontMatter{"published": false}
 		q := parseQ(t, `update *.md set title = "x" where published = true`).(UpdateQuery)
-		if err := q.Apply(&fm); err != nil {
+		if err := q.Apply(fm); err != nil {
 			t.Fatal(err)
 		}
 		if _, ok := fm["title"]; ok {
@@ -493,7 +492,7 @@ func TestSelectQuery_Eval(t *testing.T) {
 	t.Run("project_one", func(t *testing.T) {
 		fm := FrontMatter{"title": "hello", "date": "2026-01-01"}
 		q := parseQ(t, "select title from *.md").(SelectQuery)
-		row, err := q.Eval(&fm)
+		row, err := q.Eval(fm)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -504,7 +503,7 @@ func TestSelectQuery_Eval(t *testing.T) {
 	t.Run("project_multi", func(t *testing.T) {
 		fm := FrontMatter{"a": "x", "b": int64(42)}
 		q := parseQ(t, "select a, b from *.md").(SelectQuery)
-		row, err := q.Eval(&fm)
+		row, err := q.Eval(fm)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -521,7 +520,7 @@ func TestSelectQuery_Eval(t *testing.T) {
 	t.Run("where_returns_nil", func(t *testing.T) {
 		fm := FrontMatter{"published": false, "title": "x"}
 		q := parseQ(t, "select title from *.md where published = true").(SelectQuery)
-		row, err := q.Eval(&fm)
+		row, err := q.Eval(fm)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -532,7 +531,7 @@ func TestSelectQuery_Eval(t *testing.T) {
 	t.Run("missing_field_null", func(t *testing.T) {
 		fm := FrontMatter{}
 		q := parseQ(t, "select title from *.md").(SelectQuery)
-		row, err := q.Eval(&fm)
+		row, err := q.Eval(fm)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -562,7 +561,7 @@ func TestFieldExpr_Eval_Date(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			e := FieldExpr{Field: tc.f}
-			got := e.Eval(&fm)
+			got := e.Eval(fm)
 			if !valEq(got, tc.want) {
 				t.Errorf("Eval(%+v) = %+v, want %+v", tc.f, got, tc.want)
 			}
@@ -590,7 +589,7 @@ func TestFieldExpr_Eval_Link(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			e := FieldExpr{Field: tc.f}
-			got := e.Eval(&fm)
+			got := e.Eval(fm)
 			if !valEq(got, tc.want) {
 				t.Errorf("Eval(%+v) = %+v, want %+v", tc.f, got, tc.want)
 			}
@@ -630,7 +629,7 @@ func TestCastToList_StringElements(t *testing.T) {
 func TestFieldExpr_Eval_List(t *testing.T) {
 	fm := FrontMatter{"nums": []any{int64(3), int64(4), int64(5)}}
 	e := FieldExpr{Field: Field{Name: "nums", Type: TypeList}}
-	got := e.Eval(&fm)
+	got := e.Eval(fm)
 	want := vList(vStr("3"), vStr("4"), vStr("5"))
 	if !valEq(got, want) {
 		t.Errorf("Eval() = %+v, want %+v", got, want)
