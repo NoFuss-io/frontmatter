@@ -67,7 +67,7 @@ func TestCastFailures(t *testing.T) {
 		{v(TypeDate, time.Date(2026, 5, 14, 0, 0, 0, 0, time.UTC)), allBut(TypeString, TypeList)},
 		{v(TypeDatetime, time.Date(2026, 5, 14, 21, 2, 30, 0, time.UTC)), allBut(TypeString, TypeList)},
 
-		{v(TypeList, []Value{v(TypeString, "a"), v(TypeString, "b")}), allTypes},
+		{vList(vStr("a"), vStr("b")), allTypes},
 	}
 
 	for _, tc := range testCases {
