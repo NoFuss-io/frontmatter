@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/nofuss-io/fm/lib"
+	lib "github.com/nofuss-io/frontmatter/internal"
 )
 
 func runSelect(q lib.SelectQuery, _ options, out, errOut io.Writer) error {
@@ -19,12 +19,12 @@ func runSelect(q lib.SelectQuery, _ options, out, errOut io.Writer) error {
 		keepFM    []lib.FrontMatter
 	)
 	for _, p := range paths {
-		f, err := lib.ReadFile(p)
+		doc, err := lib.ReadDocument(p)
 		if err != nil {
 			fmt.Fprintf(errOut, "warning: %v\n", err)
 			continue
 		}
-		row, err := q.Eval(&f.FrontMatter)
+		row, err := q.Eval(&doc.FrontMatter)
 		if err != nil {
 			fmt.Fprintf(errOut, "%s: %v\n", p, err)
 			continue
@@ -34,7 +34,7 @@ func runSelect(q lib.SelectQuery, _ options, out, errOut io.Writer) error {
 		}
 		keepPaths = append(keepPaths, p)
 		keepRows = append(keepRows, row)
-		keepFM = append(keepFM, f.FrontMatter)
+		keepFM = append(keepFM, doc.FrontMatter)
 	}
 
 	if len(q.SortBy) > 0 {

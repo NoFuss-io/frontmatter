@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/nofuss-io/fm/lib"
+	lib "github.com/nofuss-io/frontmatter"
 )
 
 func runAlter(q lib.AlterQuery, opts options, out, errOut io.Writer) error {
@@ -18,26 +18,26 @@ func runAlter(q lib.AlterQuery, opts options, out, errOut io.Writer) error {
 		touchedFM []lib.FrontMatter
 	)
 	for _, p := range paths {
-		f, err := lib.ReadFile(p)
+		doc, err := lib.ReadDocument(p)
 		if err != nil {
 			fmt.Fprintf(errOut, "warning: %v\n", err)
 			continue
 		}
-		if q.Where != nil && !truthyExpr(q.Where, &f.FrontMatter) {
+		if q.Where != nil && !truthyExpr(q.Where, &doc.FrontMatter) {
 			continue
 		}
-		if err := q.Apply(&f.FrontMatter); err != nil {
+		if err := q.Apply(&doc.FrontMatter); err != nil {
 			fmt.Fprintf(errOut, "%s: %v\n", p, err)
 			continue
 		}
 		if !opts.dryRun {
-			if err := f.Write(); err != nil {
+			if err := lib.Write(doc, p); err != nil {
 				fmt.Fprintf(errOut, "%s: write: %v\n", p, err)
 				continue
 			}
 		}
 		touched = append(touched, p)
-		touchedFM = append(touchedFM, f.FrontMatter)
+		touchedFM = append(touchedFM, doc.FrontMatter)
 	}
 
 	if opts.verbose {

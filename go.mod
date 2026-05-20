@@ -1,4 +1,4 @@
-module github.com/nofuss-io/fm
+module github.com/nofuss-io/frontmatter
 
 go 1.23.0
 

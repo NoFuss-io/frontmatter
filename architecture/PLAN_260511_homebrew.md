@@ -10,7 +10,7 @@
       - `test` block: `fm --version`.
 - [ ] Create `scripts/make-formula.sh`:
       - Usage: `make-formula.sh <tag>` (e.g. `v0.2.0`).
-      - Derives tarball URL `https://github.com/nofuss-io/fm/archive/refs/tags/<tag>.tar.gz`.
+      - Derives tarball URL `https://github.com/nofuss-io/frontmatter/archive/refs/tags/<tag>.tar.gz`.
       - Downloads tarball, computes SHA256, substitutes into template, prints result to
         stdout. Maintainer copies output to `Formula/fm.rb` in the `homebrew-backlin` tap
         repo.

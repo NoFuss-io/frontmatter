@@ -21,7 +21,7 @@ Multiple statements may be combined into an SQL-style script separated by `;`,
 with `--` line comments. Scripts can be read from stdin (`fm < script.sql`) or
 passed as positional arguments.
 
-Module path: `github.com/nofuss-io/fm`
+Module path: `github.com/nofuss-io/frontmatter`
 Language: Go 1.23
 Binary name: `fm`
 
