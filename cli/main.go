@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/backlin/frontmatter/lib"
+	"github.com/nofuss-io/fm/lib"
 )
 
 type Semver struct{ Major, Minor, Patch int }

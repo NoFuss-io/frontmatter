@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/backlin/frontmatter/lib"
+	"github.com/nofuss-io/fm/lib"
 )
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

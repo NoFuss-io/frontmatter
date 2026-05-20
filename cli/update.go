@@ -5,7 +5,7 @@ import (
 	"io"
 	"sort"
 
-	"github.com/backlin/frontmatter/lib"
+	"github.com/nofuss-io/fm/lib"
 )
 
 func runUpdate(q lib.UpdateQuery, opts options, out, errOut io.Writer) error {

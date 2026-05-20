@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/backlin/frontmatter/lib"
+	"github.com/nofuss-io/fm/lib"
 )
 
 func runAlter(q lib.AlterQuery, opts options, out, errOut io.Writer) error {

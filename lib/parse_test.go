@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/backlin/frontmatter/lib"
+	"github.com/nofuss-io/fm/lib"
 )
 
 // r wraps a string in a Reader for use with Parse methods.
@@ -43,10 +43,10 @@ func TestField_Parse(t *testing.T) {
 		{in: "`from`:date", want: lib.Field{Name: "from", Type: lib.TypeDate}},
 
 		// Errors
-		{in: "", wantErr: true},                // empty
-		{in: "1foo", wantErr: true},            // starts with digit
-		{in: "foo:unknown", wantErr: true},     // unknown type
-		{in: "``", wantErr: true},              // empty quoted identifier
+		{in: "", wantErr: true},                 // empty
+		{in: "1foo", wantErr: true},             // starts with digit
+		{in: "foo:unknown", wantErr: true},      // unknown type
+		{in: "``", wantErr: true},               // empty quoted identifier
 		{in: "tags:list:string", wantErr: true}, // list element type no longer accepted
 		{in: "tags:list:int", wantErr: true},
 	}
