@@ -595,9 +595,6 @@ func (q *SelectQuery) parse(c *cursor) error {
 	if err != nil {
 		return err
 	}
-	if len(fields) == 0 {
-		return fmt.Errorf("expected field after 'select'")
-	}
 	q.Fields = fields
 
 	if err := expectKeyword(c, "from"); err != nil {

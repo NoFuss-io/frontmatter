@@ -672,9 +672,20 @@ func TestSelectQuery_Parse(t *testing.T) {
 				}
 			},
 		},
+		// Zero fields (just filename)
+		{
+			in: "select from *.md",
+			check: func(t *testing.T, q SelectQuery) {
+				if len(q.Fields) != 0 {
+					t.Errorf("len(Fields) = %d, want 0", len(q.Fields))
+				}
+				if len(q.From) != 1 || q.From[0] != "*.md" {
+					t.Errorf("From = %v, want [*.md]", q.From)
+				}
+			},
+		},
 		// Errors
 		{in: "select title", wantErr: true},                     // missing from
-		{in: "select from *.md", wantErr: true},                 // missing fields
 		{in: "select title from", wantErr: true},                // missing glob
 		{in: "select title from *.md limit -1", wantErr: true},  // negative limit
 		{in: "select title from *.md limit foo", wantErr: true}, // non-integer limit

@@ -34,10 +34,17 @@ func runSelect(q lib.SelectQuery, _ options, out, errOut io.Writer) error {
 	}
 	keepPaths, keepRows = lib.Limit(q.Limit, keepPaths, keepRows)
 
-	headers := make([]string, len(q.Fields))
-	for i, e := range q.Fields {
-		headers[i] = lib.FieldName(e, i)
+	if len(q.Fields) == 0 {
+		io.WriteString(out, "filename\n")
+		for _, p := range keepPaths {
+			io.WriteString(out, p+"\n")
+		}
+	} else {
+		headers := make([]string, len(q.Fields))
+		for i, e := range q.Fields {
+			headers[i] = lib.FieldName(e, i)
+		}
+		lib.PrintTable(out, headers, keepPaths, keepRows)
 	}
-	lib.PrintTable(out, headers, keepPaths, keepRows)
 	return nil
 }

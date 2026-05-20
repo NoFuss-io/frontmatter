@@ -277,4 +277,15 @@ func TestSelectQuery_Eval(t *testing.T) {
 			t.Errorf("row = %+v, want [null]", row)
 		}
 	})
+	t.Run("zero_fields", func(t *testing.T) {
+		fm := FrontMatter{"title": "hello"}
+		q := parseQ(t, "select from *.md").(SelectQuery)
+		row, err := q.Eval(fm)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(row) != 0 {
+			t.Errorf("row = %+v, want empty slice", row)
+		}
+	})
 }
