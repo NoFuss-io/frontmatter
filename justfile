@@ -4,7 +4,7 @@ help:
     just --list
 
 build:
-    go build -o fm ./cli
+    go build -o fm ./cmd/fm
 
 lint:
     go fmt ./...
@@ -19,10 +19,10 @@ vendor:
     go mod vendor
 
 dev *args:
-    go run ./cli {{ args }}
+    go run ./cmd/fm {{ args }}
 
 install:
-    go build -o $(go env GOPATH)/bin/fm ./cli
+    go build -o $(go env GOPATH)/bin/fm ./cmd/fm
 
 install-skill: install
     mkdir -p ~/.claude/skills/fm

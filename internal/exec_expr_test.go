@@ -183,6 +183,9 @@ func TestBinExpr_Compare(t *testing.T) {
 		{"eq_strings", BinExpr{Op: BinEq, Left: sl("a"), Right: sl("a")}, vBool(true)},
 		{"eq_null_lhs", BinExpr{Op: BinEq, Left: missing, Right: il("1")}, vBool(false)},
 		{"eq_null_rhs", BinExpr{Op: BinEq, Left: il("1"), Right: missing}, vBool(false)},
+		{"eq_null_null", BinExpr{Op: BinEq, Left: missing, Right: missing}, vBool(true)},
+		{"ne_null_null", BinExpr{Op: BinNe, Left: missing, Right: missing}, vBool(false)},
+		{"ne_null_value", BinExpr{Op: BinNe, Left: missing, Right: il("1")}, vBool(true)},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

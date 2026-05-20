@@ -466,13 +466,17 @@ func (e BinExpr) Eval(fm FrontMatter) Value {
 	return Value{Null: true}
 }
 
-// compare implements =, !=, <, <=, >, >=. Null operands → false.
-// Cast failures also → false.
+// compare implements =, !=, <, <=, >, >=.
+// null = null → true; null != null → false; null = non-null → false; null != non-null → true.
+// Cast failures also follow null semantics.
 // Lists participate in set equality (= / !=) or set membership (list >= scalar,
 // scalar <= list); ordering operators require numeric coercion of both sides.
 func compare(op BinOp, l, r Value) Value {
+	if l.Null && r.Null {
+		return Value{Kind: TypeBool, Data: op == BinEq}
+	}
 	if l.Null || r.Null {
-		return Value{Kind: TypeBool, Data: false}
+		return Value{Kind: TypeBool, Data: op == BinNe}
 	}
 	if l.Kind == TypeList || r.Kind == TypeList {
 		return compareList(op, l, r)

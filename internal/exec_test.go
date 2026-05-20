@@ -62,4 +62,3 @@ func parseQ(t *testing.T, src string) Query {
 	}
 	return q
 }
-
