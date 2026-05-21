@@ -5,9 +5,9 @@ using SQL expressions.
 
 Compatibile with [Obsidian](https://obsidian.md).
 
-- [Manual](https://fm.nofuss.io)
-- [Tutorial](./docs/tutorial.md)
-- [Blog post](https://nofuss.io/en/fm)
+- [Manual](./docs/manual.md)
+- [Tutorial](./docs/tutorial/tutorial.md)
+- [Blog post](https://nofuss.io/en/frontmatter/)
 
 
 ## Installation

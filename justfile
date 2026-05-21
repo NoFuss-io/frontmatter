@@ -25,5 +25,6 @@ install:
     go build -o $(go env GOPATH)/bin/fm ./cmd/fm
 
 install-skill: install
-    mkdir -p ~/.claude/skills/fm
+    mkdir -p ~/.claude/skills/fm/docs
     cp SKILL.md ~/.claude/skills/fm/SKILL.md
+    cp docs/manual.md ~/.claude/skills/fm/docs/manual.md

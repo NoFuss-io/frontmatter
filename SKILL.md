@@ -20,6 +20,13 @@ user's natural language request.
 
 ## Command syntax
 
+Command uses BigQuery syntax but does not implement it in full.
+Notably, it lacks function calls, group-by, and window operations, i.e. all processing is per file.
+
+Full manual is available in @docs/manual.md but only load if anything is unclear or not working
+(to save tokens and time).
+
+Examples:
 ```
 fm select [<field>[, <field>]...] from <glob>... [where <expr>] [sort by <field> [desc]] [limit <n>]
 fm update <glob>... set <assignment>[, <assignment>]...          [where <expr>]
