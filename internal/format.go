@@ -51,13 +51,17 @@ func FormatValue(v Value) string {
 	return ""
 }
 
-func (t *Table) Print(w io.Writer, headers []string) {
-	PrintTable(w, t.Headers, t.Paths, t.Rows)
+func (t *Table) print(w io.Writer) {
+	headers := make([]string, len(t.sel.Select))
+	for i, e := range t.sel.Select {
+		headers[i] = FieldName(e, i)
+	}
+	PrintTable(w, headers, t.rows)
 }
 
 // PrintTable writes a tab-separated table to w: filename column plus the
-// supplied headers/rows.
-func PrintTable(w io.Writer, headers []string, paths []string, rows []Row) {
+// supplied headers and the materialized values from each TableRow.
+func PrintTable(w io.Writer, headers []string, rows []TableRow) {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	hs := append([]string{"filename"}, headers...)
 	seps := make([]string, len(hs))
@@ -66,10 +70,10 @@ func PrintTable(w io.Writer, headers []string, paths []string, rows []Row) {
 	}
 	fmt.Fprintln(tw, strings.Join(hs, "\t"))
 	fmt.Fprintln(tw, strings.Join(seps, "\t"))
-	for i, row := range rows {
-		cells := make([]string, len(row)+1)
-		cells[0] = paths[i]
-		for j, v := range row {
+	for _, row := range rows {
+		cells := make([]string, len(row.print)+1)
+		cells[0] = row.path
+		for j, v := range row.print {
 			cells[j+1] = FormatValue(v)
 		}
 		fmt.Fprintln(tw, strings.Join(cells, "\t"))

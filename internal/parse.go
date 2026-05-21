@@ -605,10 +605,7 @@ func (q *SelectQuery) parse(c *cursor) error {
 	if len(globs) == 0 {
 		return fmt.Errorf("expected glob after 'from'")
 	}
-	q.From, err = ExpandGlobs(globs)
-	if err != nil {
-		return fmt.Errorf("could not expand globs: %w", err)
-	}
+	q.From = globs
 
 	if err := parseOptionalWhere(c, &q.Where); err != nil {
 		return err

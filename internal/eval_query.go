@@ -1,51 +1,36 @@
 package internal
 
-import (
-	"slices"
-)
-
-func (p Program) Eval(fp FilePath, fm FrontMatter, out *Output) {
-	done := make([]bool, len(p.Stmts))
-	for i, q := range p.Stmts {
-		res, err := q.Eval(fp, fm)
-		if err != nil {
-			out.error(fp, err)
-		}
-		if res != nil {
-			done[i] = out.append(fp, i, *res)
-		}
-	}
-}
-
-// Eval evaluates the where clause; if truthy, projects Fields into a Row.
-// Returns nil Row if where is falsey or evaluates to null.
-func (q SelectQuery) Eval(fp FilePath, fm FrontMatter) (*TableRow, error) {
-	if q.evalWhere(fp, fm) {
+// Eval projects Select fields into a TableRow, honoring the where clause.
+// Returns (nil, nil) when where is falsey or null. Pure read; never mutates fm.
+func (q query) Eval(fm FrontMatter) (*TableRow, error) {
+	if q.Where != nil && !truthy(q.Where.Eval(fm)) {
 		return nil, nil
 	}
-	return q.evalSelect(fp, fm)
+	return q.evalSelect(fm), nil
 }
 
-func (q SelectQuery) evalWhere(fp FilePath, fm FrontMatter) bool {
-	return slices.Contains(q.From, fp) && (q.Where == nil || truthy(q.Where.Eval(fm)))
-}
+func (q query) IsMutation() bool { return false }
 
-func (q SelectQuery) evalSelect(fp FilePath, fm FrontMatter) (*TableRow, error) {
-	res := q.newResult(fp)
+func (q query) Globs() []string { return q.From }
+
+func (q query) q() query { return q }
+
+func (q query) evalSelect(fm FrontMatter) *TableRow {
+	res := q.newResult()
 	for i, f := range q.Select {
 		res.print[i] = f.Eval(fm)
 	}
 	for i, f := range q.SortBy {
 		res.sort[i] = f.Eval(fm)
 	}
-	return res, nil
+	return res
 }
 
-// Apply runs each Assign in order, then returns the projected row. The first
-// failing assignment halts the whole file — the caller skips the write.
-// Where is honored by Eval, not here.
-func (q UpdateQuery) Apply(fp FilePath, fm FrontMatter) (*TableRow, error) {
-	if q.evalWhere(fp, fm) {
+// Eval applies all assignments in order, then projects the affected fields.
+// A failed assignment returns (nil, err); fm may be partially mutated.
+// Caller is responsible for discarding the file on error.
+func (q UpdateQuery) Eval(fm FrontMatter) (*TableRow, error) {
+	if q.Where != nil && !truthy(q.Where.Eval(fm)) {
 		return nil, nil
 	}
 	for _, a := range q.Set {
@@ -53,31 +38,25 @@ func (q UpdateQuery) Apply(fp FilePath, fm FrontMatter) (*TableRow, error) {
 			return nil, err
 		}
 	}
-	return q.query.evalSelect(fp, fm)
+	return q.query.evalSelect(fm), nil
 }
 
-// Apply drops or renames fields on fm, then returns the projected row.
-// For drop, the row is projected before deletion; for rename, after.
-// Where is honored by Eval, not here.
-func (q AlterQuery) Apply(fp FilePath, fm FrontMatter) (*TableRow, error) {
-	if q.evalWhere(fp, fm) {
+func (q UpdateQuery) IsMutation() bool { return true }
+
+// Eval drops or renames fields, then projects the affected fields.
+// For drop, projection happens before deletion so dropped values are visible.
+// For rename, projection happens after rename so headers match new names.
+func (q AlterQuery) Eval(fm FrontMatter) (*TableRow, error) {
+	if q.Where != nil && !truthy(q.Where.Eval(fm)) {
 		return nil, nil
-	}
-	var (
-		res *TableRow
-		err error
-	)
-	if q.Op == AlterDrop {
-		res, err = q.query.evalSelect(fp, fm)
-		if err != nil {
-			return nil, err
-		}
 	}
 	switch q.Op {
 	case AlterDrop:
+		res := q.query.evalSelect(fm)
 		for _, f := range q.Drop {
 			delete(fm, f.Name)
 		}
+		return res, nil
 	case AlterRename:
 		for _, p := range q.Rename {
 			if v, ok := fm[p.From]; ok {
@@ -85,15 +64,9 @@ func (q AlterQuery) Apply(fp FilePath, fm FrontMatter) (*TableRow, error) {
 				delete(fm, p.From)
 			}
 		}
+		return q.query.evalSelect(fm), nil
 	}
-	if q.Op == AlterRename {
-		res, err = q.query.evalSelect(fp, fm)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return res, nil
+	return nil, nil
 }
-func (q query) q() query {
-	return q
-}
+
+func (q AlterQuery) IsMutation() bool { return true }

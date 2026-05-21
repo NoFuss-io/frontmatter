@@ -7,8 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/nofuss-io/frontmatter/internal"
-	fm "github.com/nofuss-io/frontmatter/internal"
+	fm "github.com/nofuss-io/frontmatter"
 )
 
 type Semver struct{ Major, Minor, Patch int }
@@ -21,6 +20,8 @@ var VERSION = Semver{0, 1, 0}
 
 type options struct {
 	dryRun             bool
+	silent             bool
+	verbose            bool
 	includeHiddenFiles bool
 }
 
@@ -52,13 +53,13 @@ func main() {
 	okOut := io.Writer(os.Stdout)
 	errOut := io.Writer(os.Stderr)
 
-	prog, err := parseProgram(opts, args, os.Stdin, okOut, errOut)
+	prog, err := parseProgram(args, os.Stdin)
 	if err != nil {
 		fmt.Fprintln(errOut, err)
 		os.Exit(2)
 	}
 
-	if ok := run(prog, opts, args, os.Stdin, okOut, errOut); !ok {
+	if ok := prog.Run(fm.ExecOptions{DryRun: opts.dryRun}, okOut, errOut); !ok {
 		os.Exit(1)
 	}
 }
@@ -92,7 +93,7 @@ func parseFlags(args []string) (options, []string, error) {
 	return opts, args[:split], nil
 }
 
-func parseProgram(opts options, args []string, in io.Reader, out, errOut io.Writer) (*internal.Program, error) {
+func parseProgram(args []string, in io.Reader) (*fm.Program, error) {
 	src, err := readProgramString(args, in)
 	if err != nil {
 		return nil, err

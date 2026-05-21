@@ -4,122 +4,129 @@ import (
 	"fmt"
 	"io"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 )
 
+// NewOutput allocates one Table per statement, in source order.
 func NewOutput(p *Program, err io.Writer) *Output {
-	tables := make([]Table, len(p.Stmts))
+	tables := make([]*Table, len(p.Stmts))
 	for i, stmt := range p.Stmts {
-		tables[i] = Table{sel: stmt.q()}
+		tables[i] = &Table{
+			sel:       stmt.q(),
+			mutation:  stmt.IsMutation(),
+		}
 	}
-	return &Output{
-		tables: tables,
-		errors: err,
-	}
+	return &Output{tables: tables, errors: err}
 }
 
+// Output accumulates per-statement result tables across a multi-file evaluation.
 type Output struct {
-	tables []Table
+	tables []*Table
 	errors io.Writer
 }
 
-func (o *Output) append(path FilePath, index int, row TableRow) (done bool) {
-	o.tables[index].append(path, row)
+// Append stamps row with path, stores it in the i'th table, and returns true
+// when no further input is needed for that statement.
+func (o *Output) Append(path FilePath, index int, row *TableRow) (done bool) {
+	row.path = path
+	return o.tables[index].append(*row)
+}
+
+// Done reports whether statement i has collected enough rows to short-circuit
+// remaining files (only true for select with limit and no sort).
+func (o *Output) Done(index int) bool {
+	return o.tables[index].done()
+}
+
+// AllDone reports whether every statement has reached its short-circuit.
+func (o *Output) AllDone() bool {
+	for _, t := range o.tables {
+		if !t.done() {
+			return false
+		}
+	}
 	return true
 }
 
-func (o *Output) error(path FilePath, err error) {
-	fmt.Fprintf(o.errors, "ERROR: %s: %s", path, err)
+// Error reports a per-file evaluation error to the configured error sink.
+func (o *Output) Error(path FilePath, err error) {
+	fmt.Fprintf(o.errors, "ERROR: %s: %s\n", path, err)
 }
 
+// Finalize sorts and truncates each table according to its source statement.
+func (o *Output) Finalize() {
+	for _, t := range o.tables {
+		t.finalize()
+	}
+}
+
+// Print writes every table to w in source order.
+func (o *Output) Print(w io.Writer) {
+	for _, t := range o.tables {
+		t.print(w)
+	}
+}
+
+// Table holds the accumulated rows for one statement.
 type Table struct {
-	sel   SelectQuery
-	rows  Rows
-	limit int
+	sel      query
+	mutation bool
+	rows     []TableRow
 }
 
-type Rows []TableRow
-
-func (t Table) append(path FilePath, row TableRow) (done bool) {
+func (t *Table) append(row TableRow) (done bool) {
 	t.rows = append(t.rows, row)
-	return len(t.rows) >= t.limit
+	return t.done()
 }
 
-func (t Rows) Sort() {
-	slices.SortStableFunc(t, func(a, b TableRow) int {
-		for i := range a.sort {
-			if c := compareValues(a.sort[i], b.sort[i]); c != 0 {
+func (t *Table) done() bool {
+	if t.mutation {
+		return false
+	}
+	return len(t.sel.SortBy) == 0 && t.sel.Limit > 0 && len(t.rows) >= t.sel.Limit
+}
+
+func (t *Table) finalize() {
+	if len(t.sel.SortBy) > 0 {
+		terms := t.sel.SortBy
+		slices.SortStableFunc(t.rows, func(a, b TableRow) int {
+			for i, term := range terms {
+				if i >= len(a.sort) || i >= len(b.sort) {
+					return 0
+				}
+				c := compareValues(a.sort[i], b.sort[i])
+				if c == 0 {
+					continue
+				}
+				if term.Desc {
+					return -c
+				}
 				return c
 			}
-		}
-		return 0
-	})
+			return 0
+		})
+	}
+	if t.sel.Limit > 0 && len(t.rows) > t.sel.Limit {
+		t.rows = t.rows[:t.sel.Limit]
+	}
 }
 
+// TableRow is one projected row: the file it came from and the materialized
+// values for the statement's Select and SortBy expressions.
 type TableRow struct {
 	path  FilePath
 	print []Value
 	sort  []Value
 }
 
-func (r TableRow) IsZero() bool {
-	return r.path == ""
-}
+func (r TableRow) IsZero() bool { return r.path == "" }
 
-func (q query) newResult(path FilePath) *TableRow {
+func (q query) newResult() *TableRow {
 	return &TableRow{
-		path:  path,
-		print: make([]Value, 0, len(q.Select)),
-		sort:  make([]Value, 0, len(q.SortBy)),
+		print: make([]Value, len(q.Select)),
+		sort:  make([]Value, len(q.SortBy)),
 	}
-}
-
-// Row is the projected output of SelectQuery.Eval for a single document.
-// The slice index matches the order of SelectQuery.Fields.
-type Row []Value
-
-// SortRows reorders paths/rows in place according to terms. Null values sort
-// last. Default direction asc unless term.Desc.
-func SortRows(paths []FilePath, rows []Row, terms []SortTerm, fms []FrontMatter) {
-	type item struct {
-		path string
-		row  Row
-		fm   FrontMatter
-	}
-	items := make([]item, len(paths))
-	for i := range paths {
-		items[i] = item{paths[i], rows[i], fms[i]}
-	}
-	sort.SliceStable(items, func(i, j int) bool {
-		for _, t := range terms {
-			vi := t.Eval(items[i].fm)
-			vj := t.Eval(items[j].fm)
-			c := compareValues(vi, vj)
-			if c == 0 {
-				continue
-			}
-			if t.Desc {
-				return c > 0
-			}
-			return c < 0
-		}
-		return false
-	})
-	for i := range items {
-		paths[i] = items[i].path
-		rows[i] = items[i].row
-		fms[i] = items[i].fm
-	}
-}
-
-// Limit truncates paths and rows to n. n <= 0 means no limit.
-func Limit(n int, paths []string, rows []Row) ([]string, []Row) {
-	if n > 0 && len(rows) > n {
-		return paths[:n], rows[:n]
-	}
-	return paths, rows
 }
 
 // compareValues returns -1, 0, +1. Null sorts after non-null. Numeric values

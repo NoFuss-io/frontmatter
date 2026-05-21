@@ -144,7 +144,7 @@ func TestAlterQuery_Apply(t *testing.T) {
 	t.Run("drop_one", func(t *testing.T) {
 		fm := FrontMatter{"title": "x", "date": "2026-01-01"}
 		q := parseQ(t, "alter *.md drop title").(AlterQuery)
-		if _, err := q.Apply(fm); err != nil {
+		if _, err := q.Eval(fm); err != nil {
 			t.Fatal(err)
 		}
 		if _, ok := fm["title"]; ok {
@@ -157,7 +157,7 @@ func TestAlterQuery_Apply(t *testing.T) {
 	t.Run("drop_multi", func(t *testing.T) {
 		fm := FrontMatter{"a": int64(1), "b": int64(2), "c": int64(3)}
 		q := parseQ(t, "alter *.md drop a, b").(AlterQuery)
-		if _, err := q.Apply(fm); err != nil {
+		if _, err := q.Eval(fm); err != nil {
 			t.Fatal(err)
 		}
 		if len(fm) != 1 || fm["c"] != int64(3) {
@@ -167,7 +167,7 @@ func TestAlterQuery_Apply(t *testing.T) {
 	t.Run("rename", func(t *testing.T) {
 		fm := FrontMatter{"foo": "hello"}
 		q := parseQ(t, "alter *.md rename foo to bar").(AlterQuery)
-		if _, err := q.Apply(fm); err != nil {
+		if _, err := q.Eval(fm); err != nil {
 			t.Fatal(err)
 		}
 		if _, ok := fm["foo"]; ok {
@@ -195,7 +195,7 @@ func TestUpdateQuery_Apply(t *testing.T) {
 	t.Run("set_one", func(t *testing.T) {
 		fm := FrontMatter{}
 		q := parseQ(t, `update *.md set title = "hello"`).(UpdateQuery)
-		if _, err := q.Apply(fm); err != nil {
+		if _, err := q.Eval(fm); err != nil {
 			t.Fatal(err)
 		}
 		if fm["title"] != "hello" {
@@ -205,7 +205,7 @@ func TestUpdateQuery_Apply(t *testing.T) {
 	t.Run("set_multi", func(t *testing.T) {
 		fm := FrontMatter{}
 		q := parseQ(t, `update *.md set a = 1, b = 2`).(UpdateQuery)
-		if _, err := q.Apply(fm); err != nil {
+		if _, err := q.Eval(fm); err != nil {
 			t.Fatal(err)
 		}
 		if fm["a"] != int64(1) || fm["b"] != int64(2) {
@@ -234,7 +234,7 @@ func TestSelectQuery_Eval(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(row) != 1 || !valEq(row[0], vStr("hello")) {
+		if row == nil || len(row.print) != 1 || !valEq(row.print[0], vStr("hello")) {
 			t.Errorf("row = %+v, want [hello]", row)
 		}
 	})
@@ -245,14 +245,14 @@ func TestSelectQuery_Eval(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(row) != 2 {
+		if row == nil || len(row.print) != 2 {
 			t.Fatalf("row = %+v, want 2 cols", row)
 		}
-		if !valEq(row[0], vStr("x")) {
-			t.Errorf("row[0] = %+v, want %+v", row[0], vStr("x"))
+		if !valEq(row.print[0], vStr("x")) {
+			t.Errorf("row[0] = %+v, want %+v", row.print[0], vStr("x"))
 		}
-		if !valEq(row[1], vInt(42)) {
-			t.Errorf("row[1] = %+v, want %+v", row[1], vInt(42))
+		if !valEq(row.print[1], vInt(42)) {
+			t.Errorf("row[1] = %+v, want %+v", row.print[1], vInt(42))
 		}
 	})
 	t.Run("where_returns_nil", func(t *testing.T) {
@@ -273,7 +273,7 @@ func TestSelectQuery_Eval(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(row) != 1 || !row[0].Null {
+		if row == nil || len(row.print) != 1 || !row.print[0].Null {
 			t.Errorf("row = %+v, want [null]", row)
 		}
 	})
@@ -284,7 +284,7 @@ func TestSelectQuery_Eval(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(row) != 0 {
+		if row == nil || len(row.print) != 0 {
 			t.Errorf("row = %+v, want empty slice", row)
 		}
 	})

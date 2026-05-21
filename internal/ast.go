@@ -5,8 +5,10 @@ type Program struct {
 }
 
 type Query interface {
-	q() SelectQuery
-	Eval(p FilePath, fm FrontMatter) (*TableRow, error)
+	Eval(fm FrontMatter) (*TableRow, error)
+	IsMutation() bool
+	Globs() []string
+	q() query
 }
 
 // Query is the top-level parsed result.
