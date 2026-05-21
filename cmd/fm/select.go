@@ -3,16 +3,16 @@ package main
 import (
 	"io"
 
-	lib "github.com/nofuss-io/frontmatter"
+	fm "github.com/nofuss-io/frontmatter"
 )
 
-func runSelect(q lib.SelectQuery, _ options, out, errOut io.Writer) error {
+func runSelect(q fm.SelectQuery, _ options, out, errOut io.Writer) error {
 	var (
 		keepPaths []string
-		keepRows  []lib.Row
-		keepFM    []lib.FrontMatter
+		keepRows  []fm.Row
+		keepFM    []fm.FrontMatter
 	)
-	err := forEachDoc(q.From, errOut, func(p string, doc *lib.Document) error {
+	err := forEachDoc(q.From, errOut, func(p string, doc *fm.Document) error {
 		row, err := q.Eval(doc.FrontMatter)
 		if err != nil {
 			return err
@@ -30,21 +30,21 @@ func runSelect(q lib.SelectQuery, _ options, out, errOut io.Writer) error {
 	}
 
 	if len(q.SortBy) > 0 {
-		lib.SortRows(keepPaths, keepRows, q.SortBy, keepFM)
+		fm.SortRows(keepPaths, keepRows, q.SortBy, keepFM)
 	}
-	keepPaths, keepRows = lib.Limit(q.Limit, keepPaths, keepRows)
+	keepPaths, keepRows = fm.Limit(q.Limit, keepPaths, keepRows)
 
-	if len(q.Fields) == 0 {
+	if len(q.Select) == 0 {
 		io.WriteString(out, "filename\n")
 		for _, p := range keepPaths {
 			io.WriteString(out, p+"\n")
 		}
 	} else {
-		headers := make([]string, len(q.Fields))
-		for i, e := range q.Fields {
-			headers[i] = lib.FieldName(e, i)
+		headers := make([]string, len(q.Select))
+		for i, e := range q.Select {
+			headers[i] = fm.FieldName(e, i)
 		}
-		lib.PrintTable(out, headers, keepPaths, keepRows)
+		fm.PrintTable(out, headers, keepPaths, keepRows)
 	}
 	return nil
 }

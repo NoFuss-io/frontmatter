@@ -51,6 +51,10 @@ func FormatValue(v Value) string {
 	return ""
 }
 
+func (t *Table) Print(w io.Writer, headers []string) {
+	PrintTable(w, t.Headers, t.Paths, t.Rows)
+}
+
 // PrintTable writes a tab-separated table to w: filename column plus the
 // supplied headers/rows.
 func PrintTable(w io.Writer, headers []string, paths []string, rows []Row) {

@@ -9,41 +9,6 @@ import (
 	"time"
 )
 
-// Eval evaluates the where clause; if truthy, projects Fields into a Row.
-// Returns nil Row if where is falsey or evaluates to null.
-func (q SelectQuery) Eval(fm FrontMatter) (Row, error) {
-	if q.Where != nil && !truthy(q.Where.Eval(fm)) {
-		return nil, nil
-	}
-	return q.evalAlways(fm)
-}
-
-func (q SelectQuery) evalAlways(fm FrontMatter) (Row, error) {
-	row := make(Row, len(q.Fields))
-	for i, f := range q.Fields {
-		row[i] = f.Eval(fm)
-	}
-	return row, nil
-}
-
-func (q query) WhereTruthy(fm FrontMatter) bool {
-	if q.Where == nil {
-		return true
-	}
-	v := q.Where.Eval(fm)
-	if v.Null {
-		return false
-	}
-	if v.Kind == TypeBool {
-		return v.Data.(bool)
-	}
-	c, err := Cast(v, TypeBool)
-	if err != nil || c.Null {
-		return false
-	}
-	return c.Data.(bool)
-}
-
 // Value is the runtime value produced by evaluating an expression.
 // Null marks absence: a missing field or a cast that could not produce a value.
 // Per Manual.md: null propagates through arithmetic; in boolean context it is falsey.

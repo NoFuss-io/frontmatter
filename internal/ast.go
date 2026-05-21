@@ -5,13 +5,14 @@ type Program struct {
 }
 
 type Query interface {
-	Eval(fm FrontMatter) (Row, error)
+	q() SelectQuery
+	Eval(p FilePath, fm FrontMatter) (*TableRow, error)
 }
 
 // Query is the top-level parsed result.
 type query struct {
-	Fields []Expr
-	From   []string
+	Select []Expr
+	From   []FilePath
 	Where  Expr // nil if absent
 	SortBy []SortTerm
 	Limit  int // 0 = no limit

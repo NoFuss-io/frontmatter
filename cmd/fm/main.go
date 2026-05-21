@@ -7,7 +7,8 @@ import (
 	"os"
 	"strings"
 
-	lib "github.com/nofuss-io/frontmatter/internal"
+	"github.com/nofuss-io/frontmatter/internal"
+	fm "github.com/nofuss-io/frontmatter/internal"
 )
 
 type Semver struct{ Major, Minor, Patch int }
@@ -19,12 +20,11 @@ func (v Semver) String() string {
 var VERSION = Semver{0, 1, 0}
 
 type options struct {
-	dryRun  bool
-	silent  bool
-	verbose bool
+	dryRun             bool
+	includeHiddenFiles bool
 }
 
-const usage = `fm — Markdown frontmatter batch editor
+const usage = `fm -- Markdown frontmatter batch editor
 
 Usage:
   fm [query] [flags]
@@ -36,11 +36,9 @@ piped in:
   fm < script.sql
 
 Flags:
-  --dry-run   Simulate the operation without editing any files.
-  --silent    Suppress all output.
-  -v          After update or alter, run a select on the affected files
-              and fields and print the result.
-  -h, --help  Show this message.
+  -h, --help      Show this message.
+  -d, --dry-run   Simulate the operation without editing any files.
+  -H, --hidden    Include hidden files (ignored by default).
 `
 
 func main() {
@@ -48,18 +46,19 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		fmt.Fprint(os.Stderr, usage)
-		os.Exit(1)
+		os.Exit(2)
 	}
 
-	out := io.Writer(os.Stdout)
+	okOut := io.Writer(os.Stdout)
 	errOut := io.Writer(os.Stderr)
-	if opts.silent {
-		out = io.Discard
-		errOut = io.Discard
+
+	prog, err := parseProgram(opts, args, os.Stdin, okOut, errOut)
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		os.Exit(2)
 	}
 
-	if err := run(opts, args, os.Stdin, out, errOut); err != nil {
-		fmt.Fprintln(errOut, err)
+	if ok := run(prog, opts, args, os.Stdin, okOut, errOut); !ok {
 		os.Exit(1)
 	}
 }
@@ -93,47 +92,22 @@ func parseFlags(args []string) (options, []string, error) {
 	return opts, args[:split], nil
 }
 
-func run(opts options, args []string, in io.Reader, out, errOut io.Writer) error {
-	src, err := readQuery(args, in)
+func parseProgram(opts options, args []string, in io.Reader, out, errOut io.Writer) (*internal.Program, error) {
+	src, err := readProgramString(args, in)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	prog, err := lib.ParseProgram(strings.NewReader(src))
+	prog, err := fm.ParseProgram(strings.NewReader(src))
 	if err != nil {
-		return fmt.Errorf("parse: %w", err)
+		return nil, fmt.Errorf("parse: %w", err)
 	}
 	if len(prog.Stmts) == 0 {
-		return fmt.Errorf("empty query")
+		return nil, fmt.Errorf("empty query")
 	}
-	if opts.dryRun && len(prog.Stmts) > 1 {
-		return fmt.Errorf("--dry-run is not supported with multi-statement scripts: " +
-			"each statement re-reads files from disk, so later statements would not " +
-			"see earlier (skipped) mutations")
-	}
-	for i, q := range prog.Stmts {
-		if err := runStatement(q, opts, out, errOut); err != nil {
-			if len(prog.Stmts) > 1 {
-				return fmt.Errorf("statement %d: %w", i+1, err)
-			}
-			return err
-		}
-	}
-	return nil
+	return &prog, nil
 }
 
-func runStatement(q lib.Query, opts options, out, errOut io.Writer) error {
-	switch q := q.(type) {
-	case lib.SelectQuery:
-		return runSelect(q, opts, out, errOut)
-	case lib.UpdateQuery:
-		return runUpdate(q, opts, out, errOut)
-	case lib.AlterQuery:
-		return runAlter(q, opts, out, errOut)
-	}
-	return fmt.Errorf("unknown query type %T", q)
-}
-
-func readQuery(args []string, in io.Reader) (string, error) {
+func readProgramString(args []string, in io.Reader) (string, error) {
 	if len(args) == 1 {
 		return args[0], nil
 	}

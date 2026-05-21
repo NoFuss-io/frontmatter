@@ -595,7 +595,7 @@ func (q *SelectQuery) parse(c *cursor) error {
 	if err != nil {
 		return err
 	}
-	q.Fields = fields
+	q.Select = fields
 
 	if err := expectKeyword(c, "from"); err != nil {
 		return err
@@ -605,7 +605,10 @@ func (q *SelectQuery) parse(c *cursor) error {
 	if len(globs) == 0 {
 		return fmt.Errorf("expected glob after 'from'")
 	}
-	q.From = globs
+	q.From, err = ExpandGlobs(globs)
+	if err != nil {
+		return fmt.Errorf("could not expand globs: %w", err)
+	}
 
 	if err := parseOptionalWhere(c, &q.Where); err != nil {
 		return err
@@ -674,7 +677,7 @@ func (q *UpdateQuery) parse(c *cursor) error {
 		return fmt.Errorf("expected assignment after 'set'")
 	}
 	q.Set = assigns
-	q.Fields = assignsToFields(assigns)
+	q.Select = assignsToFields(assigns)
 
 	return parseOptionalWhere(c, &q.Where)
 }
@@ -731,7 +734,7 @@ func (q *AlterQuery) parse(c *cursor) error {
 			return fmt.Errorf("expected rename pair after 'rename'")
 		}
 		q.Rename = pairs
-		q.Fields = renamesToFields(pairs)
+		q.Select = renamesToFields(pairs)
 	default:
 		return fmt.Errorf("expected 'drop' or 'rename' after globs")
 	}

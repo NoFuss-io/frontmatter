@@ -595,8 +595,8 @@ func TestSelectQuery_Parse(t *testing.T) {
 		{
 			in: "select title from *.md",
 			check: func(t *testing.T, q SelectQuery) {
-				if len(q.Fields) != 1 {
-					t.Fatalf("len(Fields) = %d, want 1", len(q.Fields))
+				if len(q.Select) != 1 {
+					t.Fatalf("len(Fields) = %d, want 1", len(q.Select))
 				}
 				if len(q.From) != 1 || q.From[0] != "*.md" {
 					t.Errorf("From = %v, want [*.md]", q.From)
@@ -612,8 +612,8 @@ func TestSelectQuery_Parse(t *testing.T) {
 		{
 			in: "select title, date from *.md",
 			check: func(t *testing.T, q SelectQuery) {
-				if len(q.Fields) != 2 {
-					t.Errorf("len(Fields) = %d, want 2", len(q.Fields))
+				if len(q.Select) != 2 {
+					t.Errorf("len(Fields) = %d, want 2", len(q.Select))
 				}
 			},
 		},
@@ -676,8 +676,8 @@ func TestSelectQuery_Parse(t *testing.T) {
 		{
 			in: "select from *.md",
 			check: func(t *testing.T, q SelectQuery) {
-				if len(q.Fields) != 0 {
-					t.Errorf("len(Fields) = %d, want 0", len(q.Fields))
+				if len(q.Select) != 0 {
+					t.Errorf("len(Fields) = %d, want 0", len(q.Select))
 				}
 				if len(q.From) != 1 || q.From[0] != "*.md" {
 					t.Errorf("From = %v, want [*.md]", q.From)

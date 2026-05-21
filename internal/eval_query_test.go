@@ -144,7 +144,7 @@ func TestAlterQuery_Apply(t *testing.T) {
 	t.Run("drop_one", func(t *testing.T) {
 		fm := FrontMatter{"title": "x", "date": "2026-01-01"}
 		q := parseQ(t, "alter *.md drop title").(AlterQuery)
-		if err := q.Apply(fm); err != nil {
+		if _, err := q.Apply(fm); err != nil {
 			t.Fatal(err)
 		}
 		if _, ok := fm["title"]; ok {
@@ -157,7 +157,7 @@ func TestAlterQuery_Apply(t *testing.T) {
 	t.Run("drop_multi", func(t *testing.T) {
 		fm := FrontMatter{"a": int64(1), "b": int64(2), "c": int64(3)}
 		q := parseQ(t, "alter *.md drop a, b").(AlterQuery)
-		if err := q.Apply(fm); err != nil {
+		if _, err := q.Apply(fm); err != nil {
 			t.Fatal(err)
 		}
 		if len(fm) != 1 || fm["c"] != int64(3) {
@@ -167,7 +167,7 @@ func TestAlterQuery_Apply(t *testing.T) {
 	t.Run("rename", func(t *testing.T) {
 		fm := FrontMatter{"foo": "hello"}
 		q := parseQ(t, "alter *.md rename foo to bar").(AlterQuery)
-		if err := q.Apply(fm); err != nil {
+		if _, err := q.Apply(fm); err != nil {
 			t.Fatal(err)
 		}
 		if _, ok := fm["foo"]; ok {
@@ -195,7 +195,7 @@ func TestUpdateQuery_Apply(t *testing.T) {
 	t.Run("set_one", func(t *testing.T) {
 		fm := FrontMatter{}
 		q := parseQ(t, `update *.md set title = "hello"`).(UpdateQuery)
-		if err := q.Apply(fm); err != nil {
+		if _, err := q.Apply(fm); err != nil {
 			t.Fatal(err)
 		}
 		if fm["title"] != "hello" {
@@ -205,7 +205,7 @@ func TestUpdateQuery_Apply(t *testing.T) {
 	t.Run("set_multi", func(t *testing.T) {
 		fm := FrontMatter{}
 		q := parseQ(t, `update *.md set a = 1, b = 2`).(UpdateQuery)
-		if err := q.Apply(fm); err != nil {
+		if _, err := q.Apply(fm); err != nil {
 			t.Fatal(err)
 		}
 		if fm["a"] != int64(1) || fm["b"] != int64(2) {

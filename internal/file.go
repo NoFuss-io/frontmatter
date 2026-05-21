@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
+
+type FilePath = string
 
 type FrontMatter map[string]any
 
@@ -17,8 +20,8 @@ type Document struct {
 // ExpndGlobs expands the patterns to file paths. Bare paths that exist are
 // passed through; tokens containing glob metacharacters are expanded via
 // filepath.Glob. A token that resolves to no match is an error.
-func ExpandGlobs(globs []string) ([]string, error) {
-	var paths []string
+func ExpandGlobs(globs []string) ([]FilePath, error) {
+	var paths []FilePath
 	for _, p := range globs {
 		if strings.ContainsAny(p, "*?[") {
 			matched, err := filepath.Glob(p)
@@ -39,4 +42,18 @@ func ExpandGlobs(globs []string) ([]string, error) {
 		paths = append(paths, p)
 	}
 	return paths, nil
+}
+
+
+
+func (p Program) Files() []FilePath {
+	var paths []FilePath
+	for _, q := range p.Stmts {
+		for _, f := range q.q().From {
+			if !slices.Contains(paths, f) {
+				paths = append(paths, f)
+			}
+		}
+	}
+	return paths
 }

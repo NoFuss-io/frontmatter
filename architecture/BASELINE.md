@@ -103,8 +103,8 @@ between flags, the parser, and the evaluator.
 
 ### Dispatch
 
-`run` calls `lib.ParseProgram` on the source, then iterates `Stmts` through
-`runStatement`, which type-switches on `lib.Query` (`SelectQuery`, `UpdateQuery`,
+`run` calls `internal.ParseProgram` on the source, then iterates `Stmts` through
+`runStatement`, which type-switches on `internal.Query` (`SelectQuery`, `UpdateQuery`,
 `AlterQuery`) and delegates to `runSelect`/`runUpdate`/`runAlter`.
 
 Per-file errors (read failures, cast failures, write failures) are reported to
