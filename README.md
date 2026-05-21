@@ -13,8 +13,8 @@ Compatibile with [Obsidian](https://obsidian.md).
 ## Installation
 
 ```sh
-git clone git@github.com/NoFuss-io/fm.git
-cd fm
+git clone git@github.com/NoFuss-io/frontmatter.git
+cd frontmatter
 just install
 just install-skill
 ```
