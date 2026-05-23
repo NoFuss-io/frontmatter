@@ -591,11 +591,17 @@ func (q *SelectQuery) parse(c *cursor) error {
 		return err
 	}
 
-	fields, err := readExprList(c, "from")
-	if err != nil {
-		return err
+	skipWS(c)
+	if b := c.peekN(1); len(b) > 0 && b[0] == '*' {
+		consumeBytes(c, 1)
+		q.Star = true
+	} else {
+		fields, err := readExprList(c, "from")
+		if err != nil {
+			return err
+		}
+		q.Select = fields
 	}
-	q.Select = fields
 
 	if err := expectKeyword(c, "from"); err != nil {
 		return err
@@ -638,6 +644,7 @@ func (q *SelectQuery) parse(c *cursor) error {
 			return fmt.Errorf("limit must be non-negative, got %d", n)
 		}
 		q.Limit = n
+		q.LimitSet = true
 	}
 
 	return nil

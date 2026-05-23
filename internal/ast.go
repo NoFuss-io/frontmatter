@@ -13,11 +13,13 @@ type Query interface {
 
 // Query is the top-level parsed result.
 type query struct {
-	Select []Expr
-	From   []FilePath
-	Where  Expr // nil if absent
-	SortBy []SortTerm
-	Limit  int // 0 = no limit
+	Select   []Expr
+	Star     bool // true when source had `select *`; Select is ignored
+	From     []FilePath
+	Where    Expr // nil if absent
+	SortBy   []SortTerm
+	Limit    int  // 0 = no limit (when LimitSet is false)
+	LimitSet bool // true if a `limit` clause was given in the source
 }
 
 // SelectQuery represents: select <exprs> from <globs> [where <expr>] [sort by <terms>] [limit <n>]

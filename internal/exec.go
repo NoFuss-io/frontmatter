@@ -10,7 +10,14 @@ import (
 type ExecOptions struct {
 	// DryRun runs all statements in memory but does not write mutated documents back to disk.
 	DryRun bool
+	// StarLimit caps the rows returned by `select *` statements that have no
+	// explicit `limit` clause. Zero means use DefaultStarLimit.
+	StarLimit int
 }
+
+// DefaultStarLimit is the row cap applied to `select *` when neither the
+// statement nor ExecOptions sets an explicit limit.
+const DefaultStarLimit = 20
 
 // Run executes the program. For each file in the union of all statement globs,
 // the document is read once, every applicable statement runs against the
@@ -22,6 +29,21 @@ type ExecOptions struct {
 // file failed to read, write, or evaluate.
 func (p Program) Run(opts ExecOptions, okOut, errOut io.Writer) (ok bool) {
 	ok = true
+
+	starLimit := opts.StarLimit
+	if starLimit <= 0 {
+		starLimit = DefaultStarLimit
+	}
+	for i, stmt := range p.Stmts {
+		sq, ok := stmt.(SelectQuery)
+		if !ok || !sq.Star || sq.LimitSet {
+			continue
+		}
+		sq.Limit = starLimit
+		sq.LimitSet = true
+		p.Stmts[i] = sq
+	}
+
 	out := NewOutput(&p, errOut)
 
 	stmtPaths, allPaths, err := expandPlan(p)

@@ -113,20 +113,25 @@ func (t *Table) finalize() {
 }
 
 // TableRow is one projected row: the file it came from and the materialized
-// values for the statement's Select and SortBy expressions.
+// values for the statement's Select and SortBy expressions. star is populated
+// instead of print when the source statement was `select *`.
 type TableRow struct {
 	path  FilePath
 	print []Value
+	star  map[string]Value
 	sort  []Value
 }
 
 func (r TableRow) IsZero() bool { return r.path == "" }
 
 func (q query) newResult() *TableRow {
-	return &TableRow{
-		print: make([]Value, len(q.Select)),
-		sort:  make([]Value, len(q.SortBy)),
+	r := &TableRow{
+		sort: make([]Value, len(q.SortBy)),
 	}
+	if !q.Star {
+		r.print = make([]Value, len(q.Select))
+	}
+	return r
 }
 
 // compareValues returns -1, 0, +1. Null sorts after non-null. Numeric values

@@ -23,6 +23,7 @@ type options struct {
 	silent             bool
 	verbose            bool
 	includeHiddenFiles bool
+	starLimit          int
 }
 
 const usage = `fm -- Markdown frontmatter batch editor
@@ -37,9 +38,10 @@ piped in:
   fm < script.sql
 
 Flags:
-  -h, --help      Show this message.
-  -d, --dry-run   Simulate the operation without editing any files.
-  -H, --hidden    Include hidden files (ignored by default).
+  -h, --help              Show this message.
+  -d, --dry-run           Simulate the operation without editing any files.
+  -H, --hidden            Include hidden files (ignored by default).
+      --star-limit N      Row cap for 'select *' without an explicit limit (default 20).
 `
 
 func main() {
@@ -59,7 +61,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	if ok := prog.Run(fm.ExecOptions{DryRun: opts.dryRun}, okOut, errOut); !ok {
+	if ok := prog.Run(fm.ExecOptions{DryRun: opts.dryRun, StarLimit: opts.starLimit}, okOut, errOut); !ok {
 		os.Exit(1)
 	}
 }
@@ -72,6 +74,7 @@ func parseFlags(args []string) (options, []string, error) {
 	fs.BoolVar(&opts.dryRun, "dry-run", false, "")
 	fs.BoolVar(&opts.silent, "silent", false, "")
 	fs.BoolVar(&opts.verbose, "v", false, "")
+	fs.IntVar(&opts.starLimit, "star-limit", 0, "")
 	help := fs.Bool("help", false, "")
 	helpShort := fs.Bool("h", false, "")
 

@@ -3,6 +3,7 @@ package internal
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -52,11 +53,51 @@ func FormatValue(v Value) string {
 }
 
 func (t *Table) print(w io.Writer) {
+	if t.sel.Star {
+		printStarTable(w, t.rows)
+		return
+	}
 	headers := make([]string, len(t.sel.Select))
 	for i, e := range t.sel.Select {
 		headers[i] = FieldName(e, i)
 	}
 	PrintTable(w, headers, t.rows)
+}
+
+// printStarTable renders rows produced by `select *`. The header set is the
+// alphabetical union of field names seen across all rows.
+func printStarTable(w io.Writer, rows []TableRow) {
+	seen := make(map[string]struct{})
+	for _, r := range rows {
+		for name := range r.star {
+			seen[name] = struct{}{}
+		}
+	}
+	headers := make([]string, 0, len(seen))
+	for name := range seen {
+		headers = append(headers, name)
+	}
+	sort.Strings(headers)
+
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	hs := append([]string{"filename"}, headers...)
+	seps := make([]string, len(hs))
+	for i, h := range hs {
+		seps[i] = strings.Repeat("-", len(h))
+	}
+	fmt.Fprintln(tw, strings.Join(hs, "\t"))
+	fmt.Fprintln(tw, strings.Join(seps, "\t"))
+	for _, row := range rows {
+		cells := make([]string, len(headers)+1)
+		cells[0] = truncCell(row.path)
+		for j, name := range headers {
+			if v, ok := row.star[name]; ok {
+				cells[j+1] = truncCell(FormatValue(v))
+			}
+		}
+		fmt.Fprintln(tw, strings.Join(cells, "\t"))
+	}
+	tw.Flush()
 }
 
 // PrintTable writes a tab-separated table to w: filename column plus the
@@ -72,11 +113,23 @@ func PrintTable(w io.Writer, headers []string, rows []TableRow) {
 	fmt.Fprintln(tw, strings.Join(seps, "\t"))
 	for _, row := range rows {
 		cells := make([]string, len(row.print)+1)
-		cells[0] = row.path
+		cells[0] = truncCell(row.path)
 		for j, v := range row.print {
-			cells[j+1] = FormatValue(v)
+			cells[j+1] = truncCell(FormatValue(v))
 		}
 		fmt.Fprintln(tw, strings.Join(cells, "\t"))
 	}
 	tw.Flush()
+}
+
+// maxCellWidth caps the rune length of any printed table cell. Longer strings
+// are truncated with a trailing ellipsis so columns stay readable.
+const maxCellWidth = 30
+
+func truncCell(s string) string {
+	runes := []rune(s)
+	if len(runes) <= maxCellWidth {
+		return s
+	}
+	return string(runes[:maxCellWidth-1]) + "…"
 }
