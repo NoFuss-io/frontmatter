@@ -12,11 +12,13 @@ import (
 
 type Semver struct{ Major, Minor, Patch int }
 
+var Commit = ""
+
 func (v Semver) String() string {
 	return fmt.Sprintf("v%d.%d.%d", v.Major, v.Minor, v.Patch)
 }
 
-var VERSION = Semver{0, 1, 0}
+var VERSION = Semver{0, 2, 0}
 
 type options struct {
 	dryRun             bool
@@ -26,7 +28,8 @@ type options struct {
 	maxColumns         int
 }
 
-const usage = `fm -- Markdown frontmatter batch editor
+var usage = `fm -- Markdown frontmatter batch editor
+` + VERSION.String() + ` (` + Commit + `)
 
 Usage:
   fm [query] [flags]
