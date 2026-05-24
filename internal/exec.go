@@ -10,14 +10,15 @@ import (
 type ExecOptions struct {
 	// DryRun runs all statements in memory but does not write mutated documents back to disk.
 	DryRun bool
-	// StarLimit caps the rows returned by `select *` statements that have no
-	// explicit `limit` clause. Zero means use DefaultStarLimit.
-	StarLimit int
+	// MaxColumns caps the number of frontmatter columns rendered for `select *`
+	// output. Zero means use DefaultMaxColumns. Excess columns are dropped from
+	// the printed table; row count is unaffected.
+	MaxColumns int
 }
 
-// DefaultStarLimit is the row cap applied to `select *` when neither the
-// statement nor ExecOptions sets an explicit limit.
-const DefaultStarLimit = 20
+// DefaultMaxColumns is the column cap applied to `select *` output when
+// ExecOptions does not set an explicit value.
+const DefaultMaxColumns = 20
 
 // Run executes the program. For each file in the union of all statement globs,
 // the document is read once, every applicable statement runs against the
@@ -30,21 +31,12 @@ const DefaultStarLimit = 20
 func (p Program) Run(opts ExecOptions, okOut, errOut io.Writer) (ok bool) {
 	ok = true
 
-	starLimit := opts.StarLimit
-	if starLimit <= 0 {
-		starLimit = DefaultStarLimit
-	}
-	for i, stmt := range p.Stmts {
-		sq, ok := stmt.(SelectQuery)
-		if !ok || !sq.Star || sq.LimitSet {
-			continue
-		}
-		sq.Limit = starLimit
-		sq.LimitSet = true
-		p.Stmts[i] = sq
+	maxColumns := opts.MaxColumns
+	if maxColumns <= 0 {
+		maxColumns = DefaultMaxColumns
 	}
 
-	out := NewOutput(&p, errOut)
+	out := NewOutput(&p, errOut, maxColumns)
 
 	stmtPaths, allPaths, err := expandPlan(p)
 	if err != nil {

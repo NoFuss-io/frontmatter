@@ -644,7 +644,6 @@ func (q *SelectQuery) parse(c *cursor) error {
 			return fmt.Errorf("limit must be non-negative, got %d", n)
 		}
 		q.Limit = n
-		q.LimitSet = true
 	}
 
 	return nil

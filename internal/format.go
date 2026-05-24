@@ -54,7 +54,7 @@ func FormatValue(v Value) string {
 
 func (t *Table) print(w io.Writer) {
 	if t.sel.Star {
-		printStarTable(w, t.rows)
+		printStarTable(w, t.rows, t.maxColumns)
 		return
 	}
 	headers := make([]string, len(t.sel.Select))
@@ -65,8 +65,10 @@ func (t *Table) print(w io.Writer) {
 }
 
 // printStarTable renders rows produced by `select *`. The header set is the
-// alphabetical union of field names seen across all rows.
-func printStarTable(w io.Writer, rows []TableRow) {
+// alphabetical union of field names seen across all rows, capped at
+// maxColumns; any extra columns are dropped and a trailing note reports the
+// hidden count. maxColumns <= 0 disables the cap.
+func printStarTable(w io.Writer, rows []TableRow, maxColumns int) {
 	seen := make(map[string]struct{})
 	for _, r := range rows {
 		for name := range r.star {
@@ -78,6 +80,12 @@ func printStarTable(w io.Writer, rows []TableRow) {
 		headers = append(headers, name)
 	}
 	sort.Strings(headers)
+
+	hidden := 0
+	if maxColumns > 0 && len(headers) > maxColumns {
+		hidden = len(headers) - maxColumns
+		headers = headers[:maxColumns]
+	}
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	hs := append([]string{"filename"}, headers...)
@@ -98,6 +106,9 @@ func printStarTable(w io.Writer, rows []TableRow) {
 		fmt.Fprintln(tw, strings.Join(cells, "\t"))
 	}
 	tw.Flush()
+	if hidden > 0 {
+		fmt.Fprintf(w, "(%d more column(s) hidden; raise --max-columns to show)\n", hidden)
+	}
 }
 
 // PrintTable writes a tab-separated table to w: filename column plus the
