@@ -5,20 +5,41 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	fm "github.com/nofuss-io/frontmatter"
 )
 
-type Semver struct{ Major, Minor, Patch int }
+var (
+	Version = "dev"
+	Commit  = ""
+)
 
-var Commit = ""
-
-func (v Semver) String() string {
-	return fmt.Sprintf("v%d.%d.%d", v.Major, v.Minor, v.Patch)
+func init() {
+	if Version != "dev" && Commit != "" {
+		return
+	}
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		return
+	}
+	if Version == "dev" && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
+		Version = bi.Main.Version
+	}
+	if Commit == "" {
+		for _, s := range bi.Settings {
+			if s.Key == "vcs.revision" {
+				if len(s.Value) > 7 {
+					Commit = s.Value[:7]
+				} else {
+					Commit = s.Value
+				}
+				break
+			}
+		}
+	}
 }
-
-var VERSION = Semver{0, 2, 0}
 
 type options struct {
 	dryRun             bool
@@ -29,7 +50,7 @@ type options struct {
 }
 
 var usage = `fm -- Markdown frontmatter batch editor
-` + VERSION.String() + ` (` + Commit + `)
+` + Version + ` (` + Commit + `)
 
 Usage:
   fm [query] [flags]
