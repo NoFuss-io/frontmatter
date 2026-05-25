@@ -176,12 +176,13 @@ const (
 	BinAnd              // and
 
 	// Comparison operators.
-	BinEq // =
-	BinNe // !=
-	BinLt // <
-	BinLe // <=
-	BinGt // >
-	BinGe // >=
+	BinEq      // =
+	BinNe      // !=
+	BinLt      // <
+	BinLe      // <=
+	BinGt      // >
+	BinGe      // >=
+	BinOverlap // <=>  set overlap (lists share ≥1 element)
 
 	// Arithmetic operators.
 	BinAdd // +

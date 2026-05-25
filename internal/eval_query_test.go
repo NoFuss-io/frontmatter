@@ -96,6 +96,47 @@ func TestAssign_Apply(t *testing.T) {
 			t.Errorf("tags = %+v, want [a c]", tags)
 		}
 	})
+	t.Run("sub_removes_all_duplicates", func(t *testing.T) {
+		fm := FrontMatter{"tags": []any{"a", "b", "a", "c", "a"}}
+		a := Assign{
+			Field: Field{Name: "tags"},
+			Op:    OpSub,
+			Value: LitExpr{Kind: LitString, Value: "a"},
+		}
+		if err := a.Apply(fm); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		tags, ok := fm["tags"].([]any)
+		if !ok || len(tags) != 2 || tags[0] != "b" || tags[1] != "c" {
+			t.Errorf("tags = %+v, want [b c]", fm["tags"])
+		}
+	})
+	t.Run("add_duplicate_ignored", func(t *testing.T) {
+		fm := FrontMatter{"tags": []any{"a"}}
+		a := Assign{
+			Field: Field{Name: "tags"},
+			Op:    OpAdd,
+			Value: LitExpr{Kind: LitString, Value: "a"},
+		}
+		if err := a.Apply(fm); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		tags, ok := fm["tags"].([]any)
+		if !ok || len(tags) != 1 || tags[0] != "a" {
+			t.Errorf("tags = %+v, want [a] (no duplicate)", fm["tags"])
+		}
+	})
+	t.Run("add_list_deduplicates", func(t *testing.T) {
+		fm := FrontMatter{"tags": []any{"a", "b"}}
+		v := vList(vStr("b"), vStr("c"))
+		if err := applyListAdd(fm, "tags", v); err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		tags, ok := fm["tags"].([]any)
+		if !ok || len(tags) != 3 || tags[2] != "c" {
+			t.Errorf("tags = %+v, want [a b c]", fm["tags"])
+		}
+	})
 	t.Run("add_to_null_field", func(t *testing.T) {
 		fm := FrontMatter{"tags": nil}
 		a := Assign{

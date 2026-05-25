@@ -1090,10 +1090,12 @@ func parseComparison(c *cursor) (Expr, error) {
 		return nil, err
 	}
 	skipWS(c)
-	b := c.peekN(2)
+	b := c.peekN(3)
 	var op BinOp
 	var n int
 	switch {
+	case len(b) >= 3 && b[0] == '<' && b[1] == '=' && b[2] == '>':
+		op, n = BinOverlap, 3
 	case len(b) >= 2 && b[0] == '!' && b[1] == '=':
 		op, n = BinNe, 2
 	case len(b) >= 2 && b[0] == '<' && b[1] == '=':

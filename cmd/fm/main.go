@@ -118,16 +118,8 @@ func readProgramString(args []string, in io.Reader) (string, error) {
 	if len(args) == 1 {
 		return args[0], nil
 	}
-	if len(args) > 0 {
-		parts := make([]string, len(args))
-		for i, arg := range args {
-			if strings.ContainsAny(arg, " \t") {
-				parts[i] = `"` + strings.ReplaceAll(arg, `"`, `\"`) + `"`
-			} else {
-				parts[i] = arg
-			}
-		}
-		return strings.Join(parts, " "), nil
+	if len(args) > 1 {
+		return "", fmt.Errorf("expected single query argument, got %d", len(args))
 	}
 	b, err := io.ReadAll(in)
 	if err != nil {
