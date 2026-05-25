@@ -3,7 +3,9 @@ package internal
 import (
 	"fmt"
 	"io"
+	"path/filepath"
 	"slices"
+	"strings"
 )
 
 // ExecOptions controls how a Program is executed.
@@ -14,6 +16,9 @@ type ExecOptions struct {
 	// output. Zero means use DefaultMaxColumns. Excess columns are dropped from
 	// the printed table; row count is unaffected.
 	MaxColumns int
+	// IncludeHidden includes files whose basename begins with '.' in glob
+	// expansion. Default skips them.
+	IncludeHidden bool
 }
 
 // DefaultMaxColumns is the column cap applied to `select *` output when
@@ -38,7 +43,7 @@ func (p Program) Run(opts ExecOptions, okOut, errOut io.Writer) (ok bool) {
 
 	out := NewOutput(&p, errOut, maxColumns)
 
-	stmtPaths, allPaths, err := expandPlan(p)
+	stmtPaths, allPaths, err := expandPlan(p, opts.IncludeHidden)
 	if err != nil {
 		fmt.Fprintln(errOut, err)
 		return false
@@ -95,8 +100,10 @@ func (p Program) Run(opts ExecOptions, okOut, errOut io.Writer) (ok bool) {
 }
 
 // expandPlan resolves each statement's globs once and returns the per-statement
-// path lists plus the deduplicated union iterated by the outer file loop.
-func expandPlan(p Program) ([][]string, []string, error) {
+// path lists plus the deduplicated union iterated by the outer file loop. When
+// includeHidden is false, files whose basename starts with '.' are dropped from
+// glob-expanded results (bare paths are kept regardless).
+func expandPlan(p Program, includeHidden bool) ([][]string, []string, error) {
 	stmtPaths := make([][]string, len(p.Stmts))
 	var all []string
 	seen := make(map[string]bool)
@@ -104,6 +111,9 @@ func expandPlan(p Program) ([][]string, []string, error) {
 		paths, err := ExpandGlobs(stmt.Globs())
 		if err != nil {
 			return nil, nil, fmt.Errorf("statement %d: %w", i+1, err)
+		}
+		if !includeHidden {
+			paths = filterHidden(paths, stmt.Globs())
 		}
 		stmtPaths[i] = paths
 		for _, p := range paths {
@@ -115,3 +125,29 @@ func expandPlan(p Program) ([][]string, []string, error) {
 	}
 	return stmtPaths, all, nil
 }
+
+// filterHidden drops paths whose basename begins with '.', except those that
+// match a bare-path (non-glob) token, which the user named explicitly.
+func filterHidden(paths []string, globs []string) []string {
+	bare := make(map[string]bool, len(globs))
+	for _, g := range globs {
+		if !containsGlobMeta(g) {
+			bare[g] = true
+		}
+	}
+	out := paths[:0]
+	for _, p := range paths {
+		if bare[p] {
+			out = append(out, p)
+			continue
+		}
+		base := filepath.Base(p)
+		if strings.HasPrefix(base, ".") {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+func containsGlobMeta(s string) bool { return strings.ContainsAny(s, "*?[") }

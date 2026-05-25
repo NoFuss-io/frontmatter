@@ -1,2 +1,1 @@
-fm 'select tags from * where tags <=> ["a", "b"]'
-fm 'update * set tags += "t"'
+fm 'select tags from * where tags <=> ["a", "b"]; update * set tags += "t"'
