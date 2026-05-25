@@ -3,10 +3,13 @@ _default: dev
 help:
     just --list
 
-commit := `git rev-parse --short HEAD`
+commit  := `git rev-parse --short HEAD`
+version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
+
+ldflags := "-X main.Version=" + version + " -X main.Commit=" + commit
 
 build:
-    go build -ldflags "-X main.Commit={{ commit }}" -o fm ./cmd/fm
+    go build -ldflags "{{ ldflags }}" -o fm ./cmd/fm
 
 lint:
     go fmt ./...
@@ -32,7 +35,7 @@ dev *args:
     go run ./cmd/fm {{ args }}
 
 install:
-    go build -ldflags "-X main.Commit={{ commit }}" -o $(go env GOPATH)/bin/fm ./cmd/fm
+    go build -ldflags "{{ ldflags }}" -o $(go env GOPATH)/bin/fm ./cmd/fm
 
 install-skill: install
     mkdir -p ~/.claude/skills/fm/docs
