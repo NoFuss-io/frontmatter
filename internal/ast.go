@@ -14,6 +14,7 @@ type Query interface {
 // Query is the top-level parsed result.
 type query struct {
 	Select []Expr
+	Star   bool // true when source had `select *`; Select is ignored
 	From   []FilePath
 	Where  Expr // nil if absent
 	SortBy []SortTerm
@@ -175,12 +176,13 @@ const (
 	BinAnd              // and
 
 	// Comparison operators.
-	BinEq // =
-	BinNe // !=
-	BinLt // <
-	BinLe // <=
-	BinGt // >
-	BinGe // >=
+	BinEq      // =
+	BinNe      // !=
+	BinLt      // <
+	BinLe      // <=
+	BinGt      // >
+	BinGe      // >=
+	BinOverlap // <=>  set overlap (lists share ≥1 element)
 
 	// Arithmetic operators.
 	BinAdd // +

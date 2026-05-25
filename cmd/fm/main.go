@@ -12,20 +12,24 @@ import (
 
 type Semver struct{ Major, Minor, Patch int }
 
+var Commit = ""
+
 func (v Semver) String() string {
 	return fmt.Sprintf("v%d.%d.%d", v.Major, v.Minor, v.Patch)
 }
 
-var VERSION = Semver{0, 1, 0}
+var VERSION = Semver{0, 2, 0}
 
 type options struct {
 	dryRun             bool
 	silent             bool
 	verbose            bool
 	includeHiddenFiles bool
+	maxColumns         int
 }
 
-const usage = `fm -- Markdown frontmatter batch editor
+var usage = `fm -- Markdown frontmatter batch editor
+` + VERSION.String() + ` (` + Commit + `)
 
 Usage:
   fm [query] [flags]
@@ -37,9 +41,10 @@ piped in:
   fm < script.sql
 
 Flags:
-  -h, --help      Show this message.
-  -d, --dry-run   Simulate the operation without editing any files.
-  -H, --hidden    Include hidden files (ignored by default).
+  -h, --help              Show this message.
+  -d, --dry-run           Simulate the operation without editing any files.
+  -H, --hidden            Include hidden files (ignored by default).
+      --max-columns N     Column cap for 'select *' output (default 20).
 `
 
 func main() {
@@ -59,7 +64,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	if ok := prog.Run(fm.ExecOptions{DryRun: opts.dryRun}, okOut, errOut); !ok {
+	if ok := prog.Run(fm.ExecOptions{DryRun: opts.dryRun, MaxColumns: opts.maxColumns}, okOut, errOut); !ok {
 		os.Exit(1)
 	}
 }
@@ -72,6 +77,7 @@ func parseFlags(args []string) (options, []string, error) {
 	fs.BoolVar(&opts.dryRun, "dry-run", false, "")
 	fs.BoolVar(&opts.silent, "silent", false, "")
 	fs.BoolVar(&opts.verbose, "v", false, "")
+	fs.IntVar(&opts.maxColumns, "max-columns", 0, "")
 	help := fs.Bool("help", false, "")
 	helpShort := fs.Bool("h", false, "")
 
@@ -112,16 +118,8 @@ func readProgramString(args []string, in io.Reader) (string, error) {
 	if len(args) == 1 {
 		return args[0], nil
 	}
-	if len(args) > 0 {
-		parts := make([]string, len(args))
-		for i, arg := range args {
-			if strings.ContainsAny(arg, " \t") {
-				parts[i] = `"` + strings.ReplaceAll(arg, `"`, `\"`) + `"`
-			} else {
-				parts[i] = arg
-			}
-		}
-		return strings.Join(parts, " "), nil
+	if len(args) > 1 {
+		return "", fmt.Errorf("expected single query argument, got %d", len(args))
 	}
 	b, err := io.ReadAll(in)
 	if err != nil {

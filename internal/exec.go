@@ -10,7 +10,15 @@ import (
 type ExecOptions struct {
 	// DryRun runs all statements in memory but does not write mutated documents back to disk.
 	DryRun bool
+	// MaxColumns caps the number of frontmatter columns rendered for `select *`
+	// output. Zero means use DefaultMaxColumns. Excess columns are dropped from
+	// the printed table; row count is unaffected.
+	MaxColumns int
 }
+
+// DefaultMaxColumns is the column cap applied to `select *` output when
+// ExecOptions does not set an explicit value.
+const DefaultMaxColumns = 20
 
 // Run executes the program. For each file in the union of all statement globs,
 // the document is read once, every applicable statement runs against the
@@ -22,7 +30,13 @@ type ExecOptions struct {
 // file failed to read, write, or evaluate.
 func (p Program) Run(opts ExecOptions, okOut, errOut io.Writer) (ok bool) {
 	ok = true
-	out := NewOutput(&p, errOut)
+
+	maxColumns := opts.MaxColumns
+	if maxColumns <= 0 {
+		maxColumns = DefaultMaxColumns
+	}
+
+	out := NewOutput(&p, errOut, maxColumns)
 
 	stmtPaths, allPaths, err := expandPlan(p)
 	if err != nil {

@@ -17,8 +17,15 @@ func (q query) q() query { return q }
 
 func (q query) evalSelect(fm FrontMatter) *TableRow {
 	res := q.newResult()
-	for i, f := range q.Select {
-		res.print[i] = f.Eval(fm)
+	if q.Star {
+		res.star = make(map[string]Value, len(fm))
+		for name, raw := range fm {
+			res.star[name] = valueFromAny(raw)
+		}
+	} else {
+		for i, f := range q.Select {
+			res.print[i] = f.Eval(fm)
+		}
 	}
 	for i, f := range q.SortBy {
 		res.sort[i] = f.Eval(fm)

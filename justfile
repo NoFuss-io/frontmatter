@@ -3,8 +3,10 @@ _default: dev
 help:
     just --list
 
+commit := `git rev-parse --short HEAD`
+
 build:
-    go build -o fm ./cmd/fm
+    go build -ldflags "-X main.Commit={{ commit }}" -o fm ./cmd/fm
 
 lint:
     go fmt ./...
@@ -14,6 +16,14 @@ lint:
 test:
     go test ./...
 
+new-integration-test NAME:
+    mkdir -p test/integration/cases/{{ NAME }}/input
+    touch test/integration/cases/{{ NAME }}/input/a.md
+    touch test/integration/cases/{{ NAME }}/input/b.md
+    touch test/integration/cases/{{ NAME }}/cmd
+    touch test/integration/cases/{{ NAME }}/expected
+    touch test/integration/cases/{{ NAME }}/expected_stderr
+
 vendor:
     go mod tidy
     go mod vendor
@@ -22,7 +32,7 @@ dev *args:
     go run ./cmd/fm {{ args }}
 
 install:
-    go build -o $(go env GOPATH)/bin/fm ./cmd/fm
+    go build -ldflags "-X main.Commit={{ commit }}" -o $(go env GOPATH)/bin/fm ./cmd/fm
 
 install-skill: install
     mkdir -p ~/.claude/skills/fm/docs

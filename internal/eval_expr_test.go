@@ -197,6 +197,36 @@ func TestBinExpr_Compare(t *testing.T) {
 	}
 }
 
+// ── Set overlap operator (<=>) ────────────────────────────────────────────────
+
+func TestCompare_Overlap(t *testing.T) {
+	tests := []struct {
+		name string
+		l, r Value
+		want bool
+	}{
+		{"list_list_share_one", vList(vStr("value"), vStr("string")), vList(vStr("value"), vStr("Value")), true},
+		{"list_list_case_sensitive_miss", vList(vStr("string")), vList(vStr("Value")), false},
+		{"list_list_disjoint", vList(vStr("a"), vStr("b")), vList(vStr("c"), vStr("d")), false},
+		{"list_list_identical", vList(vStr("x")), vList(vStr("x")), true},
+		{"list_scalar_hit", vList(vStr("a"), vStr("b")), vStr("b"), true},
+		{"list_scalar_miss", vList(vStr("a"), vStr("b")), vStr("c"), false},
+		{"scalar_list_hit", vStr("b"), vList(vStr("a"), vStr("b")), true},
+		{"scalar_scalar_eq", vStr("a"), vStr("a"), true},
+		{"scalar_scalar_ne", vStr("a"), vStr("b"), false},
+		{"empty_lists", vList(), vList(), false},
+		{"null_lhs", vNull(), vList(vStr("a")), false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := compare(BinOverlap, tc.l, tc.r)
+			if !valEq(got, vBool(tc.want)) {
+				t.Errorf("compare(BinOverlap, %+v, %+v) = %+v, want %v", tc.l, tc.r, got, tc.want)
+			}
+		})
+	}
+}
+
 // ── Row 9: SortTerm.Eval ──────────────────────────────────────────────────────
 
 func TestSortTerm_Eval(t *testing.T) {

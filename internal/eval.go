@@ -425,7 +425,7 @@ func (e BinExpr) Eval(fm FrontMatter) Value {
 		return Value{Kind: TypeBool, Data: truthy(e.Left.Eval(fm)) || truthy(e.Right.Eval(fm))}
 	case BinAdd, BinSub, BinMul, BinDiv:
 		return arith(e.Op, e.Left.Eval(fm), e.Right.Eval(fm))
-	case BinEq, BinNe, BinLt, BinLe, BinGt, BinGe:
+	case BinEq, BinNe, BinLt, BinLe, BinGt, BinGe, BinOverlap:
 		return compare(e.Op, e.Left.Eval(fm), e.Right.Eval(fm))
 	}
 	return Value{Null: true}
@@ -451,6 +451,8 @@ func compare(op BinOp, l, r Value) Value {
 		return Value{Kind: TypeBool, Data: scalarEq(l, r)}
 	case BinNe:
 		return Value{Kind: TypeBool, Data: !scalarEq(l, r)}
+	case BinOverlap:
+		return Value{Kind: TypeBool, Data: scalarEq(l, r)}
 	}
 	lf, errL := Cast(l, TypeNumber)
 	rf, errR := Cast(r, TypeNumber)
@@ -495,19 +497,36 @@ func scalarEq(l, r Value) bool {
 func compareList(op BinOp, l, r Value) Value {
 	switch {
 	case l.Kind == TypeList && r.Kind == TypeList:
-		eq := listSetEq(l.Data.([]Value), r.Data.([]Value))
+		la, rb := l.Data.([]Value), r.Data.([]Value)
 		switch op {
 		case BinEq:
-			return Value{Kind: TypeBool, Data: eq}
+			return Value{Kind: TypeBool, Data: listSetEq(la, rb)}
 		case BinNe:
-			return Value{Kind: TypeBool, Data: !eq}
+			return Value{Kind: TypeBool, Data: !listSetEq(la, rb)}
+		case BinOverlap:
+			return Value{Kind: TypeBool, Data: listOverlap(la, rb)}
 		}
 	case l.Kind == TypeList && op == BinGe:
 		return Value{Kind: TypeBool, Data: listContains(l.Data.([]Value), r)}
 	case r.Kind == TypeList && op == BinLe:
 		return Value{Kind: TypeBool, Data: listContains(r.Data.([]Value), l)}
+	case l.Kind == TypeList && op == BinOverlap:
+		return Value{Kind: TypeBool, Data: listContains(l.Data.([]Value), r)}
+	case r.Kind == TypeList && op == BinOverlap:
+		return Value{Kind: TypeBool, Data: listContains(r.Data.([]Value), l)}
 	}
 	return Value{Kind: TypeBool, Data: false}
+}
+
+func listOverlap(a, b []Value) bool {
+	for _, x := range a {
+		for _, y := range b {
+			if scalarEq(x, y) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func listSetEq(a, b []Value) bool {
@@ -670,12 +689,23 @@ func applyListAdd(fm FrontMatter, name string, v Value) error {
 			list = []any{cur}
 		}
 	}
+	var toAdd []Value
 	if v.Kind == TypeList {
-		for _, e := range v.Data.([]Value) {
+		toAdd = v.Data.([]Value)
+	} else {
+		toAdd = []Value{v}
+	}
+	for _, e := range toAdd {
+		dup := false
+		for _, x := range list {
+			if scalarEq(valueFromAny(x), e) {
+				dup = true
+				break
+			}
+		}
+		if !dup {
 			list = append(list, anyFromValue(e))
 		}
-	} else {
-		list = append(list, anyFromValue(v))
 	}
 	(fm)[name] = list
 	return nil

@@ -8,13 +8,16 @@ import (
 	"time"
 )
 
-// NewOutput allocates one Table per statement, in source order.
-func NewOutput(p *Program, err io.Writer) *Output {
+// NewOutput allocates one Table per statement, in source order. maxColumns
+// caps the column count rendered for `select *` tables; non-star tables are
+// unaffected.
+func NewOutput(p *Program, err io.Writer, maxColumns int) *Output {
 	tables := make([]*Table, len(p.Stmts))
 	for i, stmt := range p.Stmts {
 		tables[i] = &Table{
-			sel:       stmt.q(),
-			mutation:  stmt.IsMutation(),
+			sel:        stmt.q(),
+			mutation:   stmt.IsMutation(),
+			maxColumns: maxColumns,
 		}
 	}
 	return &Output{tables: tables, errors: err}
@@ -70,9 +73,10 @@ func (o *Output) Print(w io.Writer) {
 
 // Table holds the accumulated rows for one statement.
 type Table struct {
-	sel      query
-	mutation bool
-	rows     []TableRow
+	sel        query
+	mutation   bool
+	rows       []TableRow
+	maxColumns int
 }
 
 func (t *Table) append(row TableRow) (done bool) {
@@ -113,20 +117,25 @@ func (t *Table) finalize() {
 }
 
 // TableRow is one projected row: the file it came from and the materialized
-// values for the statement's Select and SortBy expressions.
+// values for the statement's Select and SortBy expressions. star is populated
+// instead of print when the source statement was `select *`.
 type TableRow struct {
 	path  FilePath
 	print []Value
+	star  map[string]Value
 	sort  []Value
 }
 
 func (r TableRow) IsZero() bool { return r.path == "" }
 
 func (q query) newResult() *TableRow {
-	return &TableRow{
-		print: make([]Value, len(q.Select)),
-		sort:  make([]Value, len(q.SortBy)),
+	r := &TableRow{
+		sort: make([]Value, len(q.SortBy)),
 	}
+	if !q.Star {
+		r.print = make([]Value, len(q.Select))
+	}
+	return r
 }
 
 // compareValues returns -1, 0, +1. Null sorts after non-null. Numeric values

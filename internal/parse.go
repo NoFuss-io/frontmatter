@@ -591,11 +591,17 @@ func (q *SelectQuery) parse(c *cursor) error {
 		return err
 	}
 
-	fields, err := readExprList(c, "from")
-	if err != nil {
-		return err
+	skipWS(c)
+	if b := c.peekN(1); len(b) > 0 && b[0] == '*' {
+		consumeBytes(c, 1)
+		q.Star = true
+	} else {
+		fields, err := readExprList(c, "from")
+		if err != nil {
+			return err
+		}
+		q.Select = fields
 	}
-	q.Select = fields
 
 	if err := expectKeyword(c, "from"); err != nil {
 		return err
@@ -1084,10 +1090,12 @@ func parseComparison(c *cursor) (Expr, error) {
 		return nil, err
 	}
 	skipWS(c)
-	b := c.peekN(2)
+	b := c.peekN(3)
 	var op BinOp
 	var n int
 	switch {
+	case len(b) >= 3 && b[0] == '<' && b[1] == '=' && b[2] == '>':
+		op, n = BinOverlap, 3
 	case len(b) >= 2 && b[0] == '!' && b[1] == '=':
 		op, n = BinNe, 2
 	case len(b) >= 2 && b[0] == '<' && b[1] == '=':
