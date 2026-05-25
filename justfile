@@ -10,20 +10,19 @@ build:
 
 lint:
     go fmt ./...
-    go vet ./...
-    staticcheck ./...
+    golangci-lint run ./...
 
 test FLAGS="":
     go test ./internal/... {{ FLAGS }}
     go test -count=1 ./test/... {{ FLAGS }}
 
-new-integration-test NAME:
-    mkdir -p test/integration/cases/{{ NAME }}/input
-    touch test/integration/cases/{{ NAME }}/input/a.md
-    touch test/integration/cases/{{ NAME }}/input/b.md
-    touch test/integration/cases/{{ NAME }}/cmd
-    touch test/integration/cases/{{ NAME }}/expected
-    touch test/integration/cases/{{ NAME }}/expected_stderr
+new-e2e-test NAME:
+    mkdir -p test/e2e/cases/{{ NAME }}/input
+    touch test/e2e/cases/{{ NAME }}/input/a.md
+    touch test/e2e/cases/{{ NAME }}/input/b.md
+    touch test/e2e/cases/{{ NAME }}/cmd
+    touch test/e2e/cases/{{ NAME }}/expected
+    touch test/e2e/cases/{{ NAME }}/expected_stderr
 
 vendor:
     go mod tidy
