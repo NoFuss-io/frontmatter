@@ -84,7 +84,7 @@ func runCase(t *testing.T, caseDir string) {
 		}
 	}
 
-	cmd := exec.Command("sh", "-c", script)
+	cmd := exec.Command("sh", "-ec", script)
 	cmd.Dir = work
 	cmd.Env = append(os.Environ(), "PATH="+filepath.Dir(fmBin)+string(os.PathListSeparator)+os.Getenv("PATH"))
 	var stdout, stderr strings.Builder

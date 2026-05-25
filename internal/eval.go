@@ -325,6 +325,14 @@ func (e LitExpr) Eval(_ FrontMatter) Value {
 	}
 	return Value{Null: true}
 }
+func (e ListExpr) Eval(fm FrontMatter) Value {
+	els := make([]Value, len(e.Elems))
+	for i, ex := range e.Elems {
+		els[i] = ex.Eval(fm)
+	}
+	return Value{Kind: TypeList, Data: els}
+}
+
 func (e FieldExpr) Eval(fm FrontMatter) Value {
 	if fm == nil {
 		return Value{Null: true}

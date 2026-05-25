@@ -163,6 +163,13 @@ type LitExpr struct {
 	Value string
 }
 
+// ListExpr is a bracketed list literal: [e1, e2, ...]. Evaluates element-wise.
+type ListExpr struct {
+	Elems []Expr
+}
+
+func (ListExpr) expr() {}
+
 func (LitExpr) expr() {}
 
 // --- Operators ---

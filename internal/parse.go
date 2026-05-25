@@ -1205,6 +1205,8 @@ func parsePrimary(c *cursor) (Expr, error) {
 			return nil, fmt.Errorf("expected ')'")
 		}
 		return e, nil
+	case b0 == '[':
+		return parseListLiteral(c)
 	case b0 == '"' || b0 == '\'' || (b0 >= '0' && b0 <= '9') || b0 == '.':
 		var lit LitExpr
 		if err := lit.parse(c); err != nil {
@@ -1242,6 +1244,41 @@ func parsePrimary(c *cursor) (Expr, error) {
 		return FieldExpr{Field: f}, nil
 	}
 	return nil, fmt.Errorf("unexpected character %q", b0)
+}
+
+func parseListLiteral(c *cursor) (Expr, error) {
+	consumeBytes(c, 1) // '['
+	var elems []Expr
+	for {
+		skipWS(c)
+		b := c.peekN(1)
+		if len(b) == 0 {
+			return nil, fmt.Errorf("unterminated list literal")
+		}
+		if b[0] == ']' {
+			consumeBytes(c, 1)
+			return ListExpr{Elems: elems}, nil
+		}
+		e, err := parseOrExpr(c)
+		if err != nil {
+			return nil, err
+		}
+		elems = append(elems, e)
+		skipWS(c)
+		b = c.peekN(1)
+		if len(b) == 0 {
+			return nil, fmt.Errorf("unterminated list literal")
+		}
+		switch b[0] {
+		case ',':
+			consumeBytes(c, 1)
+		case ']':
+			consumeBytes(c, 1)
+			return ListExpr{Elems: elems}, nil
+		default:
+			return nil, fmt.Errorf("expected ',' or ']' in list literal, got %q", b[0])
+		}
+	}
 }
 
 // peekKeyword returns the next ASCII identifier without consuming it.
