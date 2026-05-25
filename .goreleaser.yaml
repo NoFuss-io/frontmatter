@@ -67,3 +67,20 @@ changelog:
 release:
   draft: false
   prerelease: auto
+
+brews:
+  - name: fm
+    repository:
+      owner: NoFuss-io
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: https://github.com/NoFuss-io/frontmatter
+    description: Markdown frontmatter batch editor with an SQL-style DSL.
+    license: MIT
+    install: |
+      bin.install "fm"
+      man1.install "docs/man/fm.1"
+      generate_completions_from_executable(bin/"fm", "completion")
+    test: |
+      assert_match "fm", shell_output("#{bin}/fm --help")
