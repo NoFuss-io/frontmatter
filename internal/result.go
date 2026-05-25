@@ -64,9 +64,13 @@ func (o *Output) Finalize() {
 	}
 }
 
-// Print writes every table to w in source order.
+// Print writes every table to w in source order. Multi-statement programs
+// separate consecutive tables with a blank line.
 func (o *Output) Print(w io.Writer) {
-	for _, t := range o.tables {
+	for i, t := range o.tables {
+		if i > 0 {
+			fmt.Fprintln(w)
+		}
 		t.print(w)
 	}
 }

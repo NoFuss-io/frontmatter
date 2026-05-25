@@ -1,0 +1,10 @@
+filename  tags
+--------  ----
+a.md      visible-a
+b.md      visible-b
+---
+filename    tags
+--------    ----
+.hidden.md  secret
+a.md        visible-a
+b.md        visible-b

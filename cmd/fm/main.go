@@ -64,7 +64,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	if ok := prog.Run(fm.ExecOptions{DryRun: opts.dryRun, MaxColumns: opts.maxColumns}, okOut, errOut); !ok {
+	if ok := prog.Run(fm.ExecOptions{DryRun: opts.dryRun, MaxColumns: opts.maxColumns, IncludeHidden: opts.includeHiddenFiles}, okOut, errOut); !ok {
 		os.Exit(1)
 	}
 }
@@ -78,6 +78,8 @@ func parseFlags(args []string) (options, []string, error) {
 	fs.BoolVar(&opts.silent, "silent", false, "")
 	fs.BoolVar(&opts.verbose, "v", false, "")
 	fs.IntVar(&opts.maxColumns, "max-columns", 0, "")
+	fs.BoolVar(&opts.includeHiddenFiles, "hidden", false, "")
+	fs.BoolVar(&opts.includeHiddenFiles, "H", false, "")
 	help := fs.Bool("help", false, "")
 	helpShort := fs.Bool("h", false, "")
 
