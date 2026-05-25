@@ -41,3 +41,19 @@ install-skill: install
     mkdir -p ~/.claude/skills/fm/docs
     cp SKILL.md ~/.claude/skills/fm/SKILL.md
     cp docs/manual.md ~/.claude/skills/fm/docs/manual.md
+
+man:
+    mkdir -p docs/man
+    pandoc -s -t man docs/fm.1.md -o docs/man/fm.1
+
+completions: build
+    mkdir -p completions
+    ./fm completion bash > completions/fm.bash
+    ./fm completion zsh  > completions/fm.zsh
+    ./fm completion fish > completions/fm.fish
+
+release-check:
+    goreleaser check
+
+release-snapshot:
+    goreleaser release --snapshot --clean

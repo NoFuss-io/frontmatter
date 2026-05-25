@@ -1,6 +1,9 @@
-architecture/PLAN_*
-architecture/TARGET_*
 .obsidian
 
 # Binary
 /fm
+
+# Generated release artifacts
+/dist/
+/completions/
+/docs/man/

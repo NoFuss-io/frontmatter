@@ -66,9 +66,24 @@ Flags:
   -d, --dry-run           Simulate the operation without editing any files.
   -H, --hidden            Include hidden files (ignored by default).
       --max-columns N     Column cap for 'select *' output (default 20).
+
+Subcommands:
+  fm completion {bash|zsh|fish}   Print shell-completion script to stdout.
 `
 
 func main() {
+	if len(os.Args) >= 2 && os.Args[1] == "completion" {
+		if len(os.Args) != 3 {
+			fmt.Fprintln(os.Stderr, "usage: fm completion {bash|zsh|fish}")
+			os.Exit(2)
+		}
+		if err := writeCompletion(os.Args[2], os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		return
+	}
+
 	opts, args, err := parseFlags(os.Args[1:])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
