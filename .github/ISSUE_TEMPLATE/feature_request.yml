@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest a new capability or behaviour change.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: |
+        What are you trying to accomplish? Concrete example beats abstract
+        description.
+    validations:
+      required: true
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed syntax or behaviour
+      description: |
+        If you have a syntax in mind, sketch it here. Otherwise describe
+        the desired behaviour.
+      render: shell
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: |
+        Workarounds you have today, or other tools you'd reach for if `fm`
+        didn't support this.
+  - type: checkboxes
+    id: scope-check
+    attributes:
+      label: Scope check
+      options:
+        - label: I have read [docs/manual.md](https://github.com/NoFuss-io/frontmatter/blob/main/docs/manual.md) to confirm this is not already supported.
+          required: true

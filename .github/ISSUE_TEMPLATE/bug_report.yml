@@ -1,0 +1,51 @@
+name: Bug report
+description: Report something that fm does wrong or crashes on.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: fm version
+      description: Output of `fm --help` first line (or `fm --version` once supported).
+      placeholder: v0.2.1 (abc1234)
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Ubuntu 24.04 / macOS 14.5 / Windows 11
+    validations:
+      required: true
+  - type: textarea
+    id: input
+    attributes:
+      label: Minimal input
+      description: |
+        Smallest set of Markdown file(s) and frontmatter that reproduces the
+        bug. Paste the file contents inside fenced code blocks.
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command run
+      description: The exact `fm …` invocation.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: Output, error message, or how the file ended up.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
