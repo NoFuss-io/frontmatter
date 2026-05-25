@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -90,7 +91,7 @@ func runCase(t *testing.T, caseDir string) {
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	runErr := cmd.Run()
+	_ = cmd.Run()
 
 	expectedPath := filepath.Join(caseDir, "expected")
 	checkGolden(t, expectedPath, stdout.String(), "stdout")
@@ -98,12 +99,24 @@ func runCase(t *testing.T, caseDir string) {
 	// Optional stderr golden.
 	if stderrPath := filepath.Join(caseDir, "expected_stderr"); fileExists(stderrPath) || *update && stderr.Len() > 0 {
 		checkGolden(t, stderrPath, stderr.String(), "stderr")
-	} else if stderr.Len() > 0 && runErr == nil {
+	} else if stderr.Len() > 0 {
 		t.Logf("stderr (unchecked):\n%s", stderr.String())
 	}
 
-	if runErr != nil && !fileExists(filepath.Join(caseDir, "expect_failure")) {
-		t.Fatalf("cmd failed: %v\nstderr:\n%s", runErr, stderr.String())
+	wantExit := 0
+	if exitPath := filepath.Join(caseDir, "expected_exit"); fileExists(exitPath) {
+		raw, err := os.ReadFile(exitPath)
+		if err != nil {
+			t.Fatalf("read expected_exit: %v", err)
+		}
+		wantExit, err = strconv.Atoi(strings.TrimSpace(string(raw)))
+		if err != nil {
+			t.Fatalf("parse expected_exit %q: %v", raw, err)
+		}
+	}
+	gotExit := cmd.ProcessState.ExitCode()
+	if gotExit != wantExit {
+		t.Fatalf("exit code = %d, want %d\nstderr:\n%s", gotExit, wantExit, stderr.String())
 	}
 
 	// Optional post-run file goldens.

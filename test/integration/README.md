@@ -13,7 +13,7 @@ cases/<case-name>/
 ├── expected_stderr         # (optional) golden stderr
 ├── expected_files/         # (optional) post-run file contents
 │   └── note.md
-└── expect_failure          # (optional, empty file) tolerate non-zero exit
+└── expected_exit           # (optional) expected exit code (defaults to 0)
 ```
 
 The runner builds `fm` once, prepends its directory to `PATH`, then for each
