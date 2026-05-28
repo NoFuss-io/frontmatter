@@ -1,6 +1,6 @@
 # Tutorial
 
-Folder [tutorial](./tutorial/) contains sample files from a recipe collection demonstrating `fm` core features.
+Folder [recipes](./recipes/) contains sample files from a recipe collection demonstrating `fm` core features.
 
 ## Goal
 
@@ -26,7 +26,7 @@ fm update tutorial/* set \
   veggie:bool
 ```
 
-- Casts each field to specified type. Missing fields created with `null`. 
+- Casts each field to specified type. Missing fields created with `null`.
 - Errors if a field exists but cannot cast to the target type (file left unchanged).
 
 ## Step 3: Populate `diet` from existing fields

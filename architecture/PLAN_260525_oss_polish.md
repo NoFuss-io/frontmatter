@@ -187,19 +187,19 @@ the polished page.
 
 The payoff.
 
-- [ ] Final sanity sweep: `just lint && just test`, no uncommitted changes
+- [x] Final sanity sweep: `just lint && just test`, no uncommitted changes
       on `main`.
-- [ ] Refresh `architecture/BASELINE.md` if any structural details drifted
+- [x] Refresh `architecture/BASELINE.md` if any structural details drifted
       since the last baseline (paths now `cmd/fm` + `internal/`, not the
       stale `cli/` + `lib/` references). Out of scope for this target but
       worth doing in the same release window.
-- [ ] Tag: `git tag -a v0.2.1 -m "First proper release"`.
-- [ ] Push: `git push origin main v0.2.1`.
-- [ ] Watch `release.yml` complete. Verify:
+- Tag: `git tag -a v0.2.1 -m "First proper release"`.
+- Push: `git push origin main v0.2.1`.
+- Watch `release.yml` complete. Verify:
       - GitHub Release page populated with archives + checksums.
       - `homebrew-tap` repo has a new `Formula/fm.rb` commit.
       - `brew install nofuss-io/tap/fm && fm --version` prints `v0.2.1`.
-- [ ] Commit: none — this phase is operational, not code.
+- Commit: none — this phase is operational, not code.
 
 ## Out of scope
 

@@ -6,11 +6,11 @@ help:
 setup:
     git config core.hooksPath .githooks
     go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+    cargo install lychee
 
-commit      := `git rev-parse --short HEAD`
+commit := `git rev-parse --short HEAD`
 raw_version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
-version     := trim_start_match(raw_version, "v")
-
+version := trim_start_match(raw_version, "v")
 ldflags := "-X main.Version=" + version + " -X main.Commit=" + commit
 
 build:
@@ -66,3 +66,12 @@ release-check:
 
 release-snapshot:
     goreleaser release --snapshot --clean
+
+# Check that http(s) links in docs and Go source resolve.
+
+# Requires `lychee` (https://github.com/lycheeverse/lychee).
+check-links:
+    lychee --no-progress \
+        README.md SECURITY.md CONTRIBUTING.md SKILL.md \
+        docs/ architecture/ .github/ frontmatter.go \
+        --exclude-path docs/tutorial/

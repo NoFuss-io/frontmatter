@@ -15,7 +15,7 @@ Flags:
 - `-d`, `--dry-run`: Simulates the operation without editing any files.
 - `-s`, `--silent`: Suppress all output.
 - `-v`, `--verbose`: Runs a `select` query on affected files and fields after `update` or `alter`.
-- `-H`, `--include-hidden`: Include hidden files, see [glob expansion](Manual#Globs).
+- `-H`, `--include-hidden`: Include hidden files, see [glob expansion](#Globs).
 
 Query is read from `stdin` if omitted.
 Query results and logs are written to `stdout`.
@@ -206,7 +206,7 @@ Strict to loose:
 
 Cast between `link` and `mdlink` is always possible (reversible format conversion).
 
-Cast from `datetime` to `date` is lossy (time part truncated). 
+Cast from `datetime` to `date` is lossy (time part truncated).
 
 Scalar may be cast to a single-element list and vice versa. When casting to `list`, each element is coerced to `string`.
 
@@ -419,7 +419,7 @@ Binary assignment assigns new value to field, optionally casts to specific type 
 > update * set foo = bar + 3
 > ```
 > Errors if `bar` cannot be casted to numeric (required by addition, see [[#Expressions]]).
-> 
+>
 > Type of `foo` is inferred automatically since type is not explicitly state. This may produce different types in different documents (`int` or `numeric`).
 > To ensure field type:
 > ```
@@ -450,7 +450,7 @@ or expressions to expand (hidden files are ignored)
 fm select url from page/*.md
 ```
 
-`fm` also implements its own glob expansion capability, 
+`fm` also implements its own glob expansion capability,
 identical to glob expansion in POSIX shells (e.g. bash or zsh),
 to provide the same functionality when called programatically or run on Windows.
 

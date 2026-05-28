@@ -1,8 +1,8 @@
 # `fm`: Markdown frontmatter batch editor
 
 [![CI](https://github.com/NoFuss-io/frontmatter/actions/workflows/ci.yml/badge.svg)](https://github.com/NoFuss-io/frontmatter/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/NoFuss-io/frontmatter)](https://github.com/NoFuss-io/frontmatter/releases)
-[![License](https://img.shields.io/github/license/NoFuss-io/frontmatter)](./LICENSE)
+[![Release](https://img.shields.io/github/v/release/NoFuss-io/frontmatter?cacheSeconds=3600)](https://github.com/NoFuss-io/frontmatter/releases)
+[![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 [![Go Reference](https://pkg.go.dev/badge/github.com/nofuss-io/frontmatter.svg)](https://pkg.go.dev/github.com/nofuss-io/frontmatter)
 [![Go Report Card](https://goreportcard.com/badge/github.com/nofuss-io/frontmatter)](https://goreportcard.com/report/github.com/nofuss-io/frontmatter)
 
@@ -149,8 +149,7 @@ like SQL and round-trips Obsidian-specific link types.
 ## Roadmap
 
 - Functions in expressions.
-- See open [Issues](https://github.com/NoFuss-io/frontmatter/issues) and
-  [Discussions](https://github.com/NoFuss-io/frontmatter/discussions) for
+- See open [Issues](https://github.com/NoFuss-io/frontmatter/issues) for
   what's being kicked around.
 
 ## Contributing

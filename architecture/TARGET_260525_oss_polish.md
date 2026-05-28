@@ -8,10 +8,6 @@ single-maintainer hobby project routed through GitHub — no community
 bureaucracy, just the minimum that lets a drive-by contributor know what to
 expect. Documentation hosting will be handled manually outside this target.
 
-Supersedes [TARGET_260511_homebrew.md](TARGET_260511_homebrew.md): the Homebrew
-formula now flows through goreleaser as part of §2 below; the manual
-`scripts/make-formula.sh` / `scripts/fm.rb.tmpl` approach is dropped.
-
 ---
 
 ## 1. CI/release

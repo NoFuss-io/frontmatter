@@ -1,17 +1,17 @@
-<!-- baseline-sha: 0b7b09b3645a094b0b06efc7f97c8428d5002825 -->
+<!-- baseline-sha: a190ec3c1c81e314a36b8e9b2adea903b60ce9aa -->
 
 # Architecture Baseline
 
 ## Overview
 
 `fm` is a command-line tool for querying and mutating YAML frontmatter in Markdown
-files. It is aimed at knowledge management workflows (e.g. Obsidian vaults) where
+files. It targets knowledge management workflows (e.g. Obsidian vaults) where
 structured metadata sits in the `---` YAML block at the top of `.md` files.
 
 The tool exposes an SQL-inspired DSL with three top-level statements:
 
 ```
-select <exprs> from <globs> [where <expr>] [sort by <terms>] [limit <n>]
+select <exprs|*> from <globs> [where <expr>] [sort by <terms>] [limit <n>]
 update <globs> set <assigns> [where <expr>]
 alter  <globs> drop   <fields>  [where <expr>]
 alter  <globs> rename <pairs>   [where <expr>]
@@ -19,11 +19,16 @@ alter  <globs> rename <pairs>   [where <expr>]
 
 Multiple statements may be combined into an SQL-style script separated by `;`,
 with `--` line comments. Scripts can be read from stdin (`fm < script.sql`) or
-passed as positional arguments.
+passed as a single positional argument.
 
 Module path: `github.com/nofuss-io/frontmatter`
 Language: Go 1.23
 Binary name: `fm`
+
+The engine is also published as a reusable Go library: the root package
+`frontmatter` re-exports the public types and entry points from `internal`
+(`Program`, `Query`, `ExecOptions`, `Document`, `ReadDocument`, `Write`,
+`ParseProgram`, `ParseQuery`, `ExpandGlobs`, `NewOutput`, `PrintTable`).
 
 ---
 
@@ -31,235 +36,253 @@ Binary name: `fm`
 
 ```
 fm/
-├── cli/                    # Application entrypoint (package main)
-│   ├── main.go             # Flag parsing, script dispatch
-│   ├── select.go           # runSelect — query + render
-│   ├── update.go           # runUpdate — apply assignments, write
-│   └── alter.go            # runAlter — drop/rename fields, write
-├── lib/                    # Reusable library (package lib)
-│   ├── ast.go              # Query/Expr/Field/Assign type definitions
-│   ├── parse.go            # Recursive-descent parser for queries + expressions
-│   ├── exec.go             # Value system, casts, expression eval, mutations
-│   ├── file.go             # Frontmatter file read/write + glob expansion
-│   ├── format.go           # Tab-aligned table rendering + row sorting
-│   └── *_test.go           # Unit tests for parser, exec, casts, file I/O
+├── cmd/fm/                 # Application entrypoint (package main)
+│   ├── main.go             # Flag parsing, completion subcommand dispatch, Program.Run
+│   └── completion.go       # Static bash/zsh/fish completion scripts
+├── internal/               # Core engine (package internal)
+│   ├── ast.go              # Program / Query interface / SelectQuery / UpdateQuery / AlterQuery / Expr nodes / operators / FieldType / LiteralKind
+│   ├── parse.go            # Recursive-descent cursor-based parser for the DSL
+│   ├── parse_fuzz_test.go  # go test -fuzz fuzz target for ParseProgram
+│   ├── eval.go             # Value model, Cast pipeline, expression eval, list/scalar comparisons, Assign.Apply
+│   ├── eval_query.go       # Query.Eval implementations (select/update/alter projection + mutation)
+│   ├── exec.go             # Program.Run orchestrator: glob plan, per-file loop, mutation write-back
+│   ├── result.go           # Output / Table / TableRow result accumulator + sort/limit/short-circuit
+│   ├── format.go           # Tab-aligned table rendering (regular + `select *`) with cell truncation
+│   ├── document.go         # ReadDocument / Write — `---` YAML block parse + emit
+│   ├── file.go             # FrontMatter / Document / FilePath types, ExpandGlobs
+│   └── *_test.go           # Unit tests: parse, eval_cast, eval_expr, eval_query, eval_types, file
+├── frontmatter.go          # Root package: public re-exports of internal types/funcs
+├── test/
+│   ├── README.md
+│   └── e2e/                # Black-box golden tests against the compiled binary
+│       ├── integration_test.go
+│       ├── README.md
+│       └── cases/<name>/   # input/, cmd, expected, expected_stderr, expected_exit
 ├── docs/
-│   ├── Manual.md           # Full DSL reference (syntax, semantics, edge cases)
-│   ├── tutorial.md         # Step-by-step walkthrough
-│   ├── tutorial_script.sql # Tutorial captured as a script
-│   ├── tutorial_quoted.sh  # Tutorial as separate quoted `fm` calls
-│   ├── tutorial_unquoted.sh# Tutorial without shell quoting (zsh-friendly)
-│   ├── tutorial/           # Sample recipe `.md` files (manual fixtures)
-│   └── man/                # Generated man pages (git-ignored)
+│   ├── manual.md           # Full DSL reference (renamed from Manual.md)
+│   ├── fm.1.md             # Pandoc source for the top-level man page
+│   ├── man/                # Generated roff man pages (fm.1, fm-select.1, …)
+│   └── tutorial/           # Step-by-step walkthrough
+│       ├── tutorial.md
+│       ├── tutorial_script.sql
+│       ├── tutorial_quoted.sh
+│       ├── tutorial_unquoted.sh
+│       └── recipes/        # Sample `.md` fixtures
 ├── architecture/
 │   ├── BASELINE.md         # This file
 │   ├── FEATURE_WINDOWS.md  # Future feature: window/aggregate clauses
-│   ├── PLAN_260511_homebrew.md   # Homebrew distribution plan
-│   └── TARGET_260511_homebrew.md # Homebrew distribution target state
-├── vendor/                 # Vendored Go dependencies (only yaml.v3)
-├── go.mod / go.sum         # Module definition and checksums
-├── justfile                # Build automation (build, install, test, lint, dev)
-├── README.md               # Quick start and examples
+│   ├── PLAN_260525_oss_polish.md
+│   └── TARGET_260525_oss_polish.md
+├── .github/
+│   ├── workflows/ci.yml        # lint + test on push/PR to main
+│   ├── workflows/release.yml   # tag-triggered goreleaser + homebrew publish
+│   ├── ISSUE_TEMPLATE/*        # bug report, feature request, config
+│   ├── PULL_REQUEST_TEMPLATE.md
+│   └── dependabot.yml
+├── .githooks/pre-commit    # gofmt staged Go, just lint, just test
+├── .golangci.yml           # golangci-lint v2 config (errcheck/govet/staticcheck/…)
+├── .goreleaser.yaml        # Multi-OS archives, checksums, Homebrew tap
+├── .editorconfig
+├── vendor/                 # Vendored Go dependencies (yaml.v3)
+├── go.mod / go.sum
+├── justfile                # build, install, install-skill, lint[-fix], test, vendor, dev, man, completions, release-check, release-snapshot, new-e2e-test, setup
+├── CONTRIBUTING.md
+├── CODEOWNERS
+├── SECURITY.md
+├── LICENSE                 # MIT
+├── README.md
 ├── SKILL.md                # Claude Code skill describing how to drive `fm`
-├── CLAUDE.md               # Agent guidance — points to AGENTS.md
-├── AGENTS.md               # Repository map for AI agents
-└── .gitignore              # Ignores fm binary, .obsidian/, docs/man/
+├── CLAUDE.md → AGENTS.md   # Agent guidance / repository map
+└── .gitignore              # ignores fm binary, .obsidian/, docs/man/, completions/, Q.md
 ```
 
 ---
 
 ## Package Structure
 
-Two Go packages:
+Three Go packages:
 
-| Package | Path  | Role |
-|:--------|:------|:-----|
-| `main`  | `cli/` | Thin entry-point: flag parsing, file iteration, error reporting |
-| `lib`   | `lib/` | Reusable library: AST, parser, evaluator, file I/O, formatting |
+| Package        | Path             | Role |
+|:---------------|:-----------------|:-----|
+| `main`         | `cmd/fm/`        | CLI: flag parsing, `completion` subcommand, `Version`/`Commit` ldflags init, calls `Program.Run` |
+| `frontmatter`  | `./` (root)      | Public library API: thin re-export shell over `internal` |
+| `internal`     | `internal/`      | Engine: AST, parser, evaluator, executor, formatter, file/document I/O |
+| `integration`  | `test/e2e/`      | Black-box golden tests (package only used by `go test`) |
 
-The CLI imports `lib` and contains no business logic of its own beyond glue
-between flags, the parser, and the evaluator.
+`cmd/fm` imports `frontmatter` (not `internal` directly) so the CLI exercises
+the same public surface as third-party consumers.
 
 ---
 
-## CLI Entry Point (`cli/main.go`)
+## CLI Entry Point (`cmd/fm/main.go`)
 
 ### Flags
 
-| Flag | Effect |
-|:-----|:-------|
-| `--dry-run` | Simulate without writing. Rejected for multi-statement scripts (no transactional layer) |
-| `--silent`  | Discard stdout and stderr |
-| `-v`        | After `update`/`alter`, run an implicit `select` over affected files/fields |
-| `-h`, `--help` | Print usage and exit |
+| Flag                  | Effect |
+|:----------------------|:-------|
+| `-h`, `--help`        | Print usage and exit |
+| `-d`, `--dry-run`     | Run all statements in memory; suppress writes to disk |
+| `-H`, `--hidden`      | Include dot-prefixed files in glob expansion |
+| `--max-columns N`     | Column cap for `select *` output (default `internal.DefaultMaxColumns` = 20) |
+| `--silent`            | Parsed but currently unused by the executor |
+| `-v`                  | Parsed but currently unused by the executor |
+
+Positional tokens before the first `-`-prefixed token are treated as the query
+source; flags follow. `parseFlags` splits args at the first dash-prefixed token,
+so query positional args can precede flags.
+
+### Subcommands
+
+`fm completion {bash|zsh|fish}` writes a static completion script to stdout
+(`completion.go`). Powershell is documented via `docs/man/fm-completion-powershell.1`
+but not emitted by the binary.
 
 ### Query input
 
-`readQuery` picks the source in this priority order:
+`readProgramString` selects the source:
 
-1. Single positional arg → used verbatim.
-2. Multiple positional args → joined with spaces; args containing whitespace are double-quoted.
-3. No positional args → read the full query from stdin.
+1. Exactly one positional arg → used verbatim.
+2. Two or more positional args → error (`expected single query argument, got N`).
+3. No positional args → read full program from stdin.
+
+### Version / Commit
+
+`Version` and `Commit` package-level vars default to `"dev"` / `""` and are
+overridden by `-ldflags '-X main.Version=… -X main.Commit=…'` from `justfile`
+and `.goreleaser.yaml`. `init` also falls back to `debug.ReadBuildInfo` so
+`go install` builds carry the module version and the truncated VCS revision.
 
 ### Dispatch
 
-`run` calls `internal.ParseProgram` on the source, then iterates `Stmts` through
-`runStatement`, which type-switches on `internal.Query` (`SelectQuery`, `UpdateQuery`,
-`AlterQuery`) and delegates to `runSelect`/`runUpdate`/`runAlter`.
-
-Per-file errors (read failures, cast failures, write failures) are reported to
-`errOut` and the loop continues. Multi-statement failure messages are prefixed
-with the statement index.
-
-### Verbose mode (`update`, `alter`)
-
-After mutating, `printAffected` re-renders touched files as a select-style table
-restricted to the fields that were assigned (update) or dropped/renamed (alter).
-For renames, the *new* names are shown.
+`main` calls `fm.ParseProgram`, refuses an empty `Stmts`, then invokes
+`prog.Run(ExecOptions{DryRun, MaxColumns, IncludeHidden}, stdout, stderr)`.
+Run-level success determines exit code (0 = all files ok, 1 = at least one
+per-file error, 2 = pre-execution failure).
 
 ---
 
-## Library: `lib/`
+## Engine (`internal/`)
 
-### Data model (`lib/file.go`)
+### Data model (`internal/file.go`, `internal/document.go`)
 
 ```go
+type FilePath = string
+
 type FrontMatter map[string]any
 
-type File struct {
-    Path        string
+type Document struct {
     FrontMatter FrontMatter
     Body        string
 }
 ```
 
-| Function       | Purpose |
-|:---------------|:--------|
-| `ReadFile(path)` | Parse `---\nYAML\n---\n` header, leave the rest as `Body`. Handles a closing fence without trailing newline. Files without a leading `---\n` are treated as body-only with empty frontmatter. |
-| `File.Write()` | Re-emit `---` YAML block + body to the original path (mode 0644). YAML is re-encoded with `gopkg.in/yaml.v3` at indent 2. |
-| `ExpandGlobs(patterns)` | Resolve glob patterns and bare paths. Patterns with `*?[` go through `filepath.Glob`; bare tokens must exist or an error is returned. Non-regular files (directories, sockets) are silently skipped from glob matches. |
+| Function | Purpose |
+|:---------|:--------|
+| `ReadDocument(path)` | Parse the leading `---\nYAML\n---\n` block; missing fence → body-only doc with empty frontmatter. Tolerates a closing `---` without trailing newline. |
+| `Write(path, *Document)` | Re-emit `---\nYAML---\n` + body to disk (mode 0644) via `gopkg.in/yaml.v3` encoder at indent 2. |
+| `ExpandGlobs(patterns)` | Resolve glob patterns and bare paths. Tokens with `*?[` go through `filepath.Glob`; non-regular matches are silently skipped. Bare-token tokens must exist or it errors. |
 
-### AST (`lib/ast.go`)
+### AST (`internal/ast.go`)
 
 ```go
-type Query interface { query() }
+type Program struct { Stmts []Query }
 
-type SelectQuery struct {
-    Fields []Expr
-    From   []string
+type Query interface {
+    Eval(fm FrontMatter) (*TableRow, error)
+    IsMutation() bool
+    Globs() []string
+    q() query        // unexported: shared shape used by Output/Table
+}
+
+type query struct {
+    Select []Expr
+    Star   bool        // true when source had `select *`; Select is ignored
+    From   []FilePath
     Where  Expr        // nil if absent
     SortBy []SortTerm
     Limit  int         // 0 = no limit
 }
 
+type SelectQuery = query
+
 type UpdateQuery struct {
-    From  []string
-    Set   []Assign
-    Where Expr
+    query
+    Set []Assign
 }
 
 type AlterQuery struct {
-    From   []string
-    Op     AlterOp     // AlterDrop | AlterRename
-    Drop   []Field     // populated when Op == AlterDrop
-    Rename []RenamePair// populated when Op == AlterRename
-    Where  Expr
+    query
+    Op     AlterOp         // AlterDrop | AlterRename
+    Drop   []Field
+    Rename []RenamePair
 }
-
-type Program struct { Stmts []Query }
 ```
 
-#### Field, Assign, SortTerm, RenamePair
+Field / Assign / SortTerm / RenamePair, AssignOp (`= += -=`), AlterOp
+(`Drop|Rename`) are unchanged from the previous baseline in spirit.
 
-| Type         | Definition |
-|:-------------|:-----------|
-| `Field`      | `{Name string, Type FieldType}` — type annotation defaults to `any`. |
-| `Assign`     | `{Field Field, Op AssignOp, Value Expr}` — `Value` is nil for the cast-only form (e.g. `set foo:int`). |
-| `SortTerm`   | `{Expr Expr, Desc bool}` |
-| `RenamePair` | `{From string, To string}` |
-| `AssignOp`   | `OpSet (=) \| OpAdd (+=) \| OpSub (-=)` |
-| `AlterOp`    | `AlterDrop \| AlterRename` |
+#### Expression nodes
 
-#### Expressions
+| Node       | Shape                                | Notes |
+|:-----------|:-------------------------------------|:------|
+| `BinExpr`  | `{Op BinOp, Left, Right Expr}`       | Boolean, comparison, set-overlap, arithmetic |
+| `UnaryExpr`| `{Op UnaryOp, Operand Expr}`         | `not`, arithmetic `-` |
+| `FieldExpr`| `{Field Field}`                      | Field reference with optional type annotation |
+| `LitExpr`  | `{Kind LiteralKind, Value string}`   | string / int / numeric / bool / null literal |
+| `ListExpr` | `{Elems []Expr}`                     | Bracketed list literal `[e1, e2, …]`; evaluates element-wise to a `TypeList` value |
 
-`Expr` is an interface implemented by four node types:
+#### Operators
 
-| Node       | Shape                       | Notes |
-|:-----------|:----------------------------|:------|
-| `BinExpr`  | `{Op BinOp, Left, Right Expr}` | Boolean, comparison, and arithmetic operators |
-| `UnaryExpr`| `{Op UnaryOp, Operand Expr}` | `not` (boolean) or `-` (arithmetic negation) |
-| `FieldExpr`| `{Field Field}`             | Field reference with optional type annotation |
-| `LitExpr`  | `{Kind LiteralKind, Value string}` | String/int/numeric/bool/null literal |
+| Group     | Operators                                     |
+|:----------|:----------------------------------------------|
+| Boolean   | `or`, `and`, `not`                            |
+| Compare   | `=`, `!=`, `<`, `<=`, `>`, `>=`, `<=>`        |
+| Additive  | `+`, `-`                                      |
+| Multiplicative | `*`, `/`                                 |
+| Unary     | `-` (negation), `not`                         |
 
-Operators:
-
-| Group     | Operators                            | Precedence (lowest → highest) |
-|:----------|:-------------------------------------|:------------------------------|
-| Boolean   | `or`, `and`, `not`                   | 1 |
-| Compare   | `=`, `!=`, `<`, `<=`, `>`, `>=`      | 2 |
-| Additive  | `+`, `-`                             | 3 |
-| Multiplicative | `*`, `/`                        | 4 |
-| Unary     | `-` (negation), `not`                | 5 |
-
-Parentheses are accepted for grouping.
+`<=>` (`BinOverlap`) is set overlap: scalar/scalar acts like `=`, list/list is
+"share ≥1 element", scalar/list is membership.
 
 #### Field type system
 
-10 type tags. The default when no annotation is given is `any`.
-
-| Category   | Types                                                |
-|:-----------|:-----------------------------------------------------|
-| Wildcard   | `any` |
-| Primitives | `string`, `bool`, `int`, `numeric`, `date`, `datetime` |
-| Links      | `link` (`[[ref\|title]]`), `mdlink` (`[title](ref)`) |
-| Compound   | `list` (list-of-string; element-type annotation is a parse error) |
+10 type tags (default `any`): `any`, `string`, `bool`, `int`, `number` (the
+former `numeric`), `date`, `datetime`, `link`, `mdlink`, `list` (uniformly
+list-of-string; an element-type annotation is a parse error).
 
 Annotations appear after a colon: `tags:list`. Field names may be wrapped in
-backticks to allow spaces or other non-identifier characters: ``select `Last modified` from *``.
+backticks to allow spaces or non-identifier characters.
 
-### Parser (`lib/parse.go`)
+### Parser (`internal/parse.go`)
 
-Recursive-descent parser over an in-memory byte cursor. Public entry points
-(`ParseProgram`, `ParseQuery`, `ParseExpr`, and the per-node `Parse(io.Reader)`
-methods) `io.ReadAll` the input once, build a `cursor{src []byte, pos int}`,
-then delegate to the cursor-based helpers. Entry points:
+Recursive-descent parser over an in-memory cursor (`*cursor{src []byte, pos int}`).
+Public entry points (`ParseProgram`, `ParseQuery`, `ParseExpr`, and per-node
+`Parse(io.Reader)` methods) `io.ReadAll` once into the cursor, then delegate
+to cursor-based helpers.
 
 | Function | Purpose |
 |:---------|:--------|
-| `ParseProgram(r)` | Read a sequence of `;`-separated statements. Tolerates leading, trailing, and consecutive separators. `--` is a line comment treated as whitespace. |
-| `ParseQuery(r)`   | Parse a single statement (no trailing-input check). |
-| `ParseExpr(r)`    | Parse a standalone expression. |
-| `Field.Parse`, `Assign.Parse`, `SortTerm.Parse`, `RenamePair.Parse` | Per-node parsers (used by tests). |
+| `ParseProgram(r)` | Read a sequence of `;`-separated statements. Tolerates leading/trailing/consecutive separators. `--` is a line comment. |
+| `ParseQuery(r)`   | Parse a single statement; trailing input is allowed. |
+| `ParseExpr(r)`    | Standalone expression. |
+| `Field.Parse`, `Assign.Parse`, `SortTerm.Parse`, `RenamePair.Parse` | Per-node parsers (mostly used by tests). |
 
-Each query type has a `parse(*cursor)` method invoked via the dispatch in
-`parseOneQuery`. Clause helpers (`readGlobs`, `readFieldList`, `readExprList`,
-`readSortTermList`, `readAssignList`, `readRenamePairs`, `parseOptionalWhere`,
-`readIntLit`, `expectKeyword`, `atStopKeyword`) share whitespace and stop-keyword
-handling so each clause stops cleanly at the next SQL keyword (`from`, `set`,
-`drop`, `rename`, `where`, `sort`, `limit`, `by`) or at `;`.
+Each query type has a `parse(*cursor)` method dispatched from `parseOneQuery`.
+Clause helpers (`readGlobs`, `readFieldList`, `readExprList`, `readSortTermList`,
+`readAssignList`, `readRenamePairs`, `parseOptionalWhere`, `readIntLit`,
+`expectKeyword`, `atStopKeyword`) share whitespace and stop-keyword handling so
+each clause stops cleanly at the next SQL keyword or at `;`.
 
-#### String literals
-
-`LitExpr.parseString` supports:
-
-- Single (`'…'`) and double (`"…"`) quoted strings.
-- Triple-quoted forms (`"""…"""`, `'''…'''`) for multi-line literals.
-- Raw-string prefix (`r"…"` / `r'…'` / `R"…"`) disabling escape interpretation.
-- C-style escape sequences: `\a \b \f \n \r \t \v \\ \' \" \` \?`, octal `\NNN`, `\xHH`, `\uHHHH`, `\UHHHHHHHH`.
-
-#### Numeric literals
-
-Integers (decimal and `0x…` hex) or floats (with optional fraction and exponent).
-A leading `-` is folded into the literal when followed by a digit or `.`;
-otherwise `-` becomes a `UnaryNeg`.
-
-#### Static lit-vs-field validation
+String literals support `'…' / "…" / """…""" / '''…''' / r"…" / R'…'` and the
+usual C-style escapes (`\a \b \f \n \r \t \v \\ \' \" \` \?`, octal `\NNN`,
+`\xHH`, `\uHHHH`, `\UHHHHHHHH`). Integers accept decimal and `0x…` hex; floats
+have optional fraction/exponent; a leading `-` is folded into the literal when
+followed by a digit or `.`, otherwise becomes `UnaryNeg`.
 
 `validateLitAssign` rejects obviously impossible literal assignments at parse
-time (e.g. `count:int = "hello"`). Runtime cast failures still fall through to
-the executor for non-literal expressions.
+time (e.g. `count:int = "hello"`); runtime cast failures handle the rest.
 
-### Evaluator (`lib/exec.go`)
+### Evaluator (`internal/eval.go`)
 
 #### Value model
 
@@ -269,111 +292,137 @@ type Value struct {
     Data any
     Null bool
 }
-type Row []Value
 ```
 
-`Null` marks absence — missing fields or failed casts. Null propagates through
-arithmetic and is falsey in boolean context. A bare field reference acts as an
-existence check via `truthy`.
+`Null` marks absence. It propagates through arithmetic and is falsey in
+boolean context. A bare field reference acts as an existence check via
+`truthy`.
 
 #### Cast pipeline
 
 `Cast(v, target)` dispatches on `target`:
 
-- `any` is pass-through.
-- `list` always coerces every element to `string` (scalars are wrapped first).
-  Lists are uniformly list-of-string.
-- Same-kind non-list targets are pass-through.
-- One-element `list` → scalar unwraps then recurses.
-- Per-pair `castTo<Bool|Int|Number|String|Date|Datetime|Link|MdLink>` handles
-  remaining cross-type conversions.
+- `any` → pass-through.
+- `list` → wrap scalar, then cast every element to `string` (lists are
+  uniformly list-of-string).
+- Same-kind non-list → pass-through.
+- One-element `list` → unwrap and recurse.
+- Otherwise: per-pair `castTo<Bool|Int|Number|String|Date|Datetime|Link|MdLink>`.
 
-Bool ↔ int conversion is restricted to `0`/`1` to avoid surprises. Date strings
-must match `2006-01-02`; datetime strings `2006-01-02T15:04:05`. `link` is
-`[[ref]]` or `[[ref|title]]`; `mdlink` is `[title](ref)`; they round-trip
-through each other via `parseWikiLink` / `parseMdLink`.
+Bool ↔ numeric conversion is restricted to `0`/`1`. Date strings must match
+`2006-01-02`; datetime strings `2006-01-02T15:04:05`. `link`/`mdlink`
+round-trip via `parseWikiLink` / `parseMdLink`. Casting `Null` is an error
+(callers convert that error to a propagated null at the expression boundary).
 
 #### Expression evaluation
 
-| Node                | Behavior |
-|:--------------------|:---------|
-| `LitExpr.Eval`      | Parse the raw `Value` string to its `Kind`. `null` → null `Value`. |
-| `FieldExpr.Eval`    | Look up `fm[name]`; absent → null. If a type annotation is present, runs `Cast`; cast failure → null. |
-| `UnaryExpr.Eval`    | `not` returns `bool(!truthy(v))`; `-` negates int/number, nulls everything else. |
-| `BinExpr.Eval`      | `and`/`or` short-circuit-style on `truthy(...)`; arithmetic in `arith` (int stays int unless division has a remainder, then it promotes to number; div-by-zero → null); comparisons in `compare` (list cases routed to `compareList`). |
+| Node           | Behavior |
+|:---------------|:---------|
+| `LitExpr.Eval` | Parse raw text into a `Value` of the matching `Kind`; `null` → null. |
+| `FieldExpr.Eval` | Look up `fm[name]` (null on absence); if typed, `Cast`; cast failure → null. |
+| `ListExpr.Eval` | Evaluate every element; assemble a `TypeList` value. |
+| `UnaryExpr.Eval` | `not` → `!truthy(v)`; `-` negates int/number, otherwise null. |
+| `BinExpr.Eval`   | `and`/`or` short-circuit via `truthy`; arithmetic via `arith` (int stays int unless `/` has a remainder, then promotes to number; div-by-zero → null); comparisons via `compare` (lists routed to `compareList`). |
 
 `scalarEq` compares same-kind values directly (with `time.Time.Equal` for
-dates/datetimes), falling back to numeric and then string coercion across
-kinds.
+date/datetime), falling back to numeric and then string coercion.
 
 List comparisons:
 
-| Pattern              | Operator | Semantics |
-|:---------------------|:---------|:----------|
-| `list = list`        | `=`/`!=` | Set equality (same length, same multiset of elements) |
-| `list >= scalar`     | `>=`     | List contains scalar |
-| `scalar <= list`     | `<=`     | List contains scalar (mirror form) |
-| Anything else with a list operand | ordering | `false` |
+| Pattern               | Operator   | Semantics |
+|:----------------------|:-----------|:----------|
+| `list = list`         | `=` / `!=` | Set equality (same length, same multiset of elements) |
+| `list <=> list`       | `<=>`      | Set overlap (share ≥1 element) |
+| `list >= scalar`      | `>=`       | List contains scalar |
+| `scalar <= list`      | `<=`       | List contains scalar (mirror) |
+| `list <=> scalar` / `scalar <=> list` | `<=>` | Membership |
+| anything else with a list operand and an ordering operator | `<`/`<=`/`>`/`>=` | `false` |
 
-#### Mutations
+#### Assignments
 
 | Method            | Behavior |
 |:------------------|:---------|
-| `Assign.Apply`    | Eval `Value`, cast to `Field.Type` (if not `any`), then write/add/subtract. Cast-only form (no value) ensures the field exists (`nil` if absent) and recasts an existing value. |
-| `applyListAdd`    | `+=` appends scalar(s) to a list. A `nil` current value is treated as an empty list (no leading `null` element); a non-list, non-nil current value is promoted to a one-element list first. |
-| `applyListSub`    | `-=` removes any element matching the supplied scalar(s) by `scalarEq`. A missing or `nil` current value is a no-op. |
-| `UpdateQuery.Apply`, `AlterQuery.Apply`, `SelectQuery.Eval` | Top-level driver methods; honor an optional `Where` via `truthy`. |
+| `Assign.Apply`    | Eval `Value`, cast to `Field.Type` (skip for `any`), then `=` / `+=` / `-=`. Cast-only form (no value) ensures the field exists (`nil` if absent) and recasts an existing value. |
+| `applyListAdd`    | `+=` appends scalar(s) to a list. Nil current value is treated as empty list; non-list current value is promoted to a one-element list first. Duplicates (by `scalarEq`) are skipped. |
+| `applyListSub`    | `-=` removes any element matching the supplied scalar(s) by `scalarEq`. A missing or non-list current value is a no-op. |
 
-`anyFromValue` lowers `Value` back to the `any` form used by the YAML map
-(recursive for lists; `nil` for null).
+`anyFromValue` lowers `Value` back to the YAML-compatible `any` (recursive for
+lists; `nil` for null). `valueFromAny` lifts the inverse direction; `time.Time`
+with zero time components is classified as `date`, otherwise `datetime`.
 
-`valueFromAny` lifts raw YAML values into `Value`. `time.Time` with all-zero
-time components is classified as `date`; otherwise `datetime`.
+### Query evaluation (`internal/eval_query.go`)
 
-### Formatting (`lib/format.go`)
+| Method | Behavior |
+|:-------|:---------|
+| `query.Eval` (select)      | Returns `(nil, nil)` if `where` is falsey/null; otherwise projects `Select` (or `Star`) into a `TableRow` and materializes `SortBy` keys. |
+| `UpdateQuery.Eval`         | Where-check, then `Assign.Apply` each `Set` entry in order (first failure aborts), then project. `IsMutation() == true`. |
+| `AlterQuery.Eval`          | Where-check, then `drop`/`rename`. For `drop`, projection happens *before* deletion so dropped values still appear in output. For `rename`, projection happens *after* so headers match new names. `IsMutation() == true`. |
 
-| Function | Purpose |
-|:---------|:--------|
-| `FieldName(e, idx)` | Column header: field name for `FieldExpr`, else `expr<idx+1>`. |
-| `FormatValue(v)` | Plain string view of a `Value` for tables. Null → empty; lists rendered as `[a, b, c]`. |
-| `PrintTable(w, headers, paths, rows)` | Tab-writer output with a `filename` column prepended and a dashed separator row. |
-| `SortRows(paths, rows, terms, fms)` | In-place stable sort by `SortTerm` evaluations. Null sorts last; numerics compare numerically; dates use `time.Time.Before/After`; everything else falls back to `FormatValue` string compare. |
+### Executor (`internal/exec.go`)
 
----
+```go
+type ExecOptions struct {
+    DryRun        bool
+    MaxColumns    int    // 0 → DefaultMaxColumns (20)
+    IncludeHidden bool
+}
 
-## Query Workflows
-
-### Select
-
-```
-ExpandGlobs → for each path:
-    ReadFile → SelectQuery.Eval (where + project Fields → Row)
-    drop rows that the where-clause filtered out
-collect rows → SortRows (if sort-by) → trim (if limit) → PrintTable
+func (Program) Run(opts ExecOptions, okOut, errOut io.Writer) (ok bool)
 ```
 
-### Update
+Lifecycle:
 
-```
-ExpandGlobs → for each path:
-    ReadFile → optional Where truthiness check
-    applyAssignments (each Assign.Apply in order; first failure halts file)
-    File.Write (skipped on --dry-run)
-collect touched paths → printAffected (if -v)
+1. **`expandPlan`** — call `ExpandGlobs` once per statement; the union (in
+   first-encounter order) drives the outer file loop. When `IncludeHidden` is
+   false, dot-prefixed basenames are dropped *unless* they were named by a
+   non-glob bare-path token.
+2. **Per file**: `ReadDocument` once. Iterate statements; skip those whose path
+   list doesn't contain the current file or whose `Output.Done` short-circuit
+   has fired. Each surviving statement runs `Eval` against the in-memory
+   frontmatter; output rows are routed to the per-statement `Table` via
+   `Output.Append`. A mutation statement that succeeds marks the file dirty;
+   the first evaluation error halts further statements for that file and
+   skips the write-back.
+3. **Write-back** if the file was mutated, no statement halted, and `DryRun`
+   is false.
+4. **`Output.Finalize`** sorts each Select table by `SortBy` (null sorts last;
+   numeric kinds compare numerically; date kinds compare temporally; everything
+   else falls back to `FormatValue` string compare) and truncates by `Limit`.
+5. **`Output.Print`** writes each table to `okOut` in source order, separated
+   by blank lines. Per-file errors go to `errOut` as `ERROR: <path>: <msg>`.
+
+`Output.Done(i)` returns true once a non-mutation, no-sort statement has
+collected `Limit` rows — this lets the file loop skip those statements (and
+break out entirely when every table is `Done`).
+
+### Result accumulator (`internal/result.go`)
+
+```go
+type Output struct { tables []*Table; errors io.Writer }
+type Table  struct { sel query; mutation bool; rows []TableRow; maxColumns int }
+
+type TableRow struct {
+    path  FilePath
+    print []Value           // populated for non-star selects
+    star  map[string]Value  // populated for select *
+    sort  []Value
+}
 ```
 
-### Alter
+`compareValues` provides the stable-sort ordering (null last, numeric numeric,
+dates by `Before/After`, otherwise `FormatValue` string compare).
 
-```
-ExpandGlobs → for each path:
-    ReadFile → optional Where truthiness check
-    AlterQuery.Apply (drop fields or rename pairs)
-    File.Write (skipped on --dry-run)
-collect touched paths → printAffected (if -v)
-```
+### Formatting (`internal/format.go`)
 
-For `alter rename` in verbose mode, the projection uses the *new* field names so
-the output reflects post-mutation state.
+| Function / type          | Purpose |
+|:-------------------------|:--------|
+| `FieldName(e, idx)`      | Column header: field name for `FieldExpr`, else `expr<idx+1>`. |
+| `FormatValue(v)`         | Plain string view (null → empty; lists → `[a, b, c]`). |
+| `Value.String()`         | Debug-style `kind(data)` form, used by error messages and tests. |
+| `Table.print`            | Dispatches between `printStarTable` and `PrintTable`. |
+| `PrintTable(w, headers, rows)` | Tab-writer output with a leading `filename` column and a dashed separator row. |
+| `printStarTable`         | Alphabetical union of field names seen across rows, capped at `maxColumns`; trailing `(N more column(s) hidden …)` note when truncated. |
+| `truncCell` / `maxCellWidth=30` | Cells exceeding 30 runes are truncated with a trailing ellipsis. |
 
 ---
 
@@ -384,52 +433,142 @@ the output reflects post-mutation state.
 | `gopkg.in/yaml.v3`  | v3.0.1  | YAML parse/serialize for the `---` frontmatter block |
 | `gopkg.in/check.v1` | (test-only, indirect via yaml.v3) | Not used by our code |
 
-No CLI framework: argument and flag handling is hand-rolled with `flag` from
-the standard library so positional query tokens can precede flags.
+No CLI framework: argument and flag handling is hand-rolled with the standard
+library `flag` package so positional query tokens can precede flags.
 
 ---
 
-## Build & Tooling
+## Build, Test & Tooling
 
-| Tool        | Config     | Targets |
-|:------------|:-----------|:--------|
-| Just        | `justfile` | `build`, `install`, `install-skill`, `lint`, `test`, `vendor`, `dev`, `help` |
-| Go          | `go.mod`   | `go build ./cli`, `go run ./cli`, `go test ./...` |
-| staticcheck | (via `lint`) | Static analysis on top of `go fmt` + `go vet` |
+### Just targets (`justfile`)
 
-`install-skill` installs the binary to `$GOPATH/bin/fm` and then copies
-`SKILL.md` to `~/.claude/skills/fm/SKILL.md` so Claude Code can drive `fm`
-through a registered skill.
+| Target              | Action |
+|:--------------------|:-------|
+| `build`             | `go build -ldflags … -o fm ./cmd/fm` (Version/Commit injected from `git describe` / short HEAD) |
+| `install`           | `go build` into `$GOPATH/bin/fm` |
+| `install-skill`     | `install` then copy `SKILL.md` + `docs/manual.md` into `~/.claude/skills/fm/` |
+| `lint` / `lint-fix` | `go fmt ./...` + `golangci-lint run [--fix] ./...` |
+| `test FLAGS=""`     | `go test ./internal/... [FLAGS]` then `go test -count=1 ./test/... [FLAGS]` |
+| `new-e2e-test NAME` | Scaffold a fresh case directory under `test/e2e/cases/<NAME>/` |
+| `vendor`            | `go mod tidy && go mod vendor` |
+| `dev *args`         | `go run ./cmd/fm <args>` |
+| `man`               | `pandoc -s -t man docs/fm.1.md -o docs/man/fm.1` |
+| `completions`       | Build, then write `completions/fm.{bash,zsh,fish}` |
+| `release-check`     | `goreleaser check` |
+| `release-snapshot`  | `goreleaser release --snapshot --clean` |
+| `setup`             | Wire `core.hooksPath = .githooks`; install golangci-lint |
 
-Tests live alongside source in `lib/`: `parse_test.go`, `exec_test.go`,
-`exec_cast_test.go`, `file_test.go`. The recipe files under `docs/tutorial/`
-act as fixtures for manual smoke-testing of the tutorial (reset with
-`git restore docs/tutorial`).
+### Pre-commit hook (`.githooks/pre-commit`)
 
-No CI/CD pipeline is configured.
+`gofmt -w` staged Go files, re-stage, then `just lint && just test`.
+Activated via `just setup`.
+
+### Linting (`.golangci.yml`)
+
+golangci-lint v2 with `errcheck`, `govet`, `ineffassign`, `misspell`,
+`staticcheck` (all checks except `-ST1000`), `unconvert`, `unused`. Formatters
+`gofmt` and `goimports` (local prefix `github.com/nofuss-io/frontmatter`).
+
+### Tests
+
+- **Unit tests** in `internal/`: `parse_test.go`, `parse_fuzz_test.go`,
+  `eval_test.go`, `eval_cast_test.go`, `eval_expr_test.go`,
+  `eval_query_test.go`, `eval_types_test.go`, `file_test.go`.
+- **End-to-end tests** in `test/e2e/`: `integration_test.go` builds `fm` once,
+  copies each `cases/<name>/input/` into a `t.TempDir()`, runs `sh -ec` on
+  `cmd`, and diffs `expected` / `expected_stderr` / `expected_exit` /
+  `expected_files/*`. `-update` flag regenerates goldens.
+
+### CI / Release (`.github/`)
+
+- `workflows/ci.yml`: on push & PR to `main` — `just lint` then `just test`
+  on Ubuntu, Go 1.23, with `extractions/setup-just` and golangci-lint.
+- `workflows/release.yml`: on `v*.*.*` tag — install pandoc + just, then
+  `goreleaser/goreleaser-action` with `args: release --clean`.
+- `dependabot.yml`: keeps Go modules and GitHub Actions up to date.
+- Issue/PR templates and `CODEOWNERS` under `.github/`.
+
+### Goreleaser (`.goreleaser.yaml`)
+
+`before.hooks` runs `just man` and `just completions`. Build matrix
+linux/darwin/windows × amd64/arm64 (windows: amd64 only), CGO disabled,
+`-s -w` plus `main.Version`/`main.Commit` ldflags. Archives bundle
+`LICENSE`, `README.md`, `docs/manual.md`, `docs/man/fm.1`, and
+`completions/*`. Changelog groups by Conventional Commits. Homebrew tap
+publishes to `NoFuss-io/homebrew-tap` (Formula directory) and installs
+the binary, the man page, and shell completions via
+`generate_completions_from_executable`.
+
+---
+
+## Query Workflows
+
+### Select
+
+```
+Program.Run → expandPlan → for each file in union:
+    ReadDocument → for each select stmt whose globs include this file:
+        Eval (where + project Select|Star → TableRow) → Output.Append
+collect rows → Output.Finalize (sort + limit) → Output.Print
+```
+
+### Update
+
+```
+Program.Run → expandPlan → for each file in union:
+    ReadDocument → for each update stmt:
+        Eval (where + apply Set in order)
+        → mark file dirty, Append projected row
+    write doc back (unless DryRun or any stmt errored on this file)
+```
+
+### Alter
+
+```
+Program.Run → expandPlan → for each file in union:
+    ReadDocument → for each alter stmt:
+        Eval (drop or rename)
+        → mark file dirty, Append projected row
+            (drop projects pre-deletion values; rename projects post-rename names)
+    write doc back (unless DryRun or any stmt errored on this file)
+```
 
 ---
 
 ## Notable Design Decisions
 
-- **Library + thin CLI split.** Everything that's testable (parsing, casts,
-  evaluation, file I/O, formatting) lives in `lib`. The `cli` package only
-  wires flags to library calls — keeps unit tests focused and lets external
-  callers reuse the engine without inheriting the CLI.
-- **Single `any`-typed frontmatter map.** Flexibility wins over compile-time
-  type safety: every field is `any` in memory, with types enforced at
-  query/mutation time via `Cast`.
-- **Null as a first-class value.** Missing fields and failed casts collapse to
-  the same `Null` sentinel rather than `nil`/error pairs, so expressions stay
-  composable: `where missing_field + 1 > 0` quietly returns false instead of
-  exploding.
-- **No transactional layer for scripts.** Each statement re-reads files from
-  disk. `--dry-run` is rejected for multi-statement scripts because skipped
-  writes would make later statements observe stale state.
-- **Hand-rolled DSL parser.** Recursive descent over an in-memory byte cursor keeps the
-  parser dependency-free, supports backtick-quoted identifiers, raw and
-  triple-quoted strings, and lets clause helpers share stop-keyword handling
+- **Library + thin CLI split, with a public Go API.** The engine lives in
+  `internal/` and is re-exported through the root `frontmatter` package, so
+  third-party Go consumers get a stable surface without inheriting the CLI.
+- **Single-pass multi-statement execution.** `Program.Run` reads each file once
+  and runs every matching statement against the same in-memory frontmatter,
+  with a single write-back per file. This makes scripts behave consistently
+  and eliminates the previous "no `--dry-run` for multi-statement scripts"
+  caveat at the CLI layer.
+- **Halted statements skip the write.** Any per-file evaluation error aborts
+  further statements for that file *and* cancels its write-back, so partially
+  mutated frontmatter never reaches disk.
+- **Short-circuit limit.** `Output.Done` lets a `select … limit N` (without
+  `sort by`) stop consuming files as soon as it has enough rows; when every
+  statement is done, the outer file loop exits early.
+- **`select *` with a column cap.** Star selects materialize the union of
+  field names across all matched files; `--max-columns` (default 20) caps the
+  rendered width with a trailing "(N more column(s) hidden)" note.
+- **Hidden files opt-in.** `filterHidden` drops dot-prefixed basenames from
+  glob expansion by default; explicit bare-path tokens (`fm select … from .hidden.md`)
+  bypass the filter. `-H/--hidden` re-enables them globally.
+- **Single `any`-typed frontmatter map.** Every field is `any` in memory;
+  types are enforced at query/mutation time via `Cast`.
+- **Null as a first-class value.** Missing fields and failed casts collapse
+  to the same `Null` sentinel so expressions stay composable.
+- **Hand-rolled DSL parser.** Recursive descent over an in-memory byte cursor
+  keeps the parser dependency-free, supports backtick-quoted identifiers, raw
+  and triple-quoted strings, list literals, and shared stop-keyword handling
   without a separate lexer.
 - **Obsidian alignment.** Wikilink (`[[ref|title]]`) and Markdown-link
-  (`[title](ref)`) are first-class field types with bidirectional casts.
+  (`[title](ref)`) are first-class field types with bidirectional casts;
   `.obsidian/` is git-ignored.
+- **Distribution-ready.** goreleaser produces archived binaries for
+  linux/darwin/windows (amd64+arm64), a Homebrew tap formula, and bundles
+  man pages and shell completions generated from `docs/fm.1.md` and the
+  `completion` subcommand.
