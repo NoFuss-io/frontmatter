@@ -3,27 +3,38 @@ _default: dev
 help:
     just --list
 
-commit := `git rev-parse --short HEAD`
+setup:
+    git config core.hooksPath .githooks
+    go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+
+commit      := `git rev-parse --short HEAD`
+raw_version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
+version     := trim_start_match(raw_version, "v")
+
+ldflags := "-X main.Version=" + version + " -X main.Commit=" + commit
 
 build:
-    go build -ldflags "-X main.Commit={{ commit }}" -o fm ./cmd/fm
+    go build -ldflags "{{ ldflags }}" -o fm ./cmd/fm
 
 lint:
     go fmt ./...
-    go vet ./...
-    staticcheck ./...
+    golangci-lint run ./...
 
-test:
-    go test ./internal/...
-    go test -count=1 ./test/...
+lint-fix:
+    go fmt ./...
+    golangci-lint run --fix ./...
 
-new-integration-test NAME:
-    mkdir -p test/integration/cases/{{ NAME }}/input
-    touch test/integration/cases/{{ NAME }}/input/a.md
-    touch test/integration/cases/{{ NAME }}/input/b.md
-    touch test/integration/cases/{{ NAME }}/cmd
-    touch test/integration/cases/{{ NAME }}/expected
-    touch test/integration/cases/{{ NAME }}/expected_stderr
+test FLAGS="":
+    go test ./internal/... {{ FLAGS }}
+    go test -count=1 ./test/... {{ FLAGS }}
+
+new-e2e-test NAME:
+    mkdir -p test/e2e/cases/{{ NAME }}/input
+    touch test/e2e/cases/{{ NAME }}/input/a.md
+    touch test/e2e/cases/{{ NAME }}/input/b.md
+    touch test/e2e/cases/{{ NAME }}/cmd
+    touch test/e2e/cases/{{ NAME }}/expected
+    touch test/e2e/cases/{{ NAME }}/expected_stderr
 
 vendor:
     go mod tidy
@@ -33,9 +44,25 @@ dev *args:
     go run ./cmd/fm {{ args }}
 
 install:
-    go build -ldflags "-X main.Commit={{ commit }}" -o $(go env GOPATH)/bin/fm ./cmd/fm
+    go build -ldflags "{{ ldflags }}" -o $(go env GOPATH)/bin/fm ./cmd/fm
 
 install-skill: install
     mkdir -p ~/.claude/skills/fm/docs
     cp SKILL.md ~/.claude/skills/fm/SKILL.md
     cp docs/manual.md ~/.claude/skills/fm/docs/manual.md
+
+man:
+    mkdir -p docs/man
+    pandoc -s -t man docs/fm.1.md -o docs/man/fm.1
+
+completions: build
+    mkdir -p completions
+    ./fm completion bash > completions/fm.bash
+    ./fm completion zsh  > completions/fm.zsh
+    ./fm completion fish > completions/fm.fish
+
+release-check:
+    goreleaser check
+
+release-snapshot:
+    goreleaser release --snapshot --clean

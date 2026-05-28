@@ -1,0 +1,86 @@
+version: 2
+
+project_name: fm
+
+before:
+  hooks:
+    - just man
+    - just completions
+
+builds:
+  - id: fm
+    main: ./cmd/fm
+    binary: fm
+    env:
+      - CGO_ENABLED=0
+    targets:
+      - linux_amd64
+      - linux_arm64
+      - darwin_amd64
+      - darwin_arm64
+      - windows_amd64
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.Commit={{.ShortCommit}}
+
+archives:
+  - id: fm
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+      - docs/manual.md
+      - docs/man/fm.1
+      - completions/*
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github
+  filters:
+    exclude:
+      - "^chore"
+      - "^docs"
+      - "^test"
+      - "^Merge"
+  groups:
+    - title: Features
+      regexp: "^feat(\\(.+\\))?:"
+      order: 0
+    - title: Bug fixes
+      regexp: "^fix(\\(.+\\))?:"
+      order: 1
+    - title: Performance
+      regexp: "^perf(\\(.+\\))?:"
+      order: 2
+    - title: Refactoring
+      regexp: "^refactor(\\(.+\\))?:"
+      order: 3
+    - title: Other
+      order: 999
+
+release:
+  draft: false
+  prerelease: auto
+
+brews:
+  - name: fm
+    repository:
+      owner: NoFuss-io
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: https://github.com/NoFuss-io/frontmatter
+    description: Markdown frontmatter batch editor with an SQL-style DSL.
+    license: MIT
+    install: |
+      bin.install "fm"
+      man1.install "docs/man/fm.1"
+      generate_completions_from_executable(bin/"fm", "completion")
+    test: |
+      assert_match "fm", shell_output("#{bin}/fm --help")
