@@ -1,5 +1,1 @@
 blank_issues_enabled: false
-contact_links:
-  - name: Questions and discussion
-    url: https://github.com/NoFuss-io/frontmatter/discussions
-    about: Usage questions, design discussion, and feature ideation belong in Discussions, not Issues.
