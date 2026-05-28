@@ -149,8 +149,7 @@ like SQL and round-trips Obsidian-specific link types.
 ## Roadmap
 
 - Functions in expressions.
-- See open [Issues](https://github.com/NoFuss-io/frontmatter/issues) and
-  [Discussions](https://github.com/NoFuss-io/frontmatter/discussions) for
+- See open [Issues](https://github.com/NoFuss-io/frontmatter/issues) for
   what's being kicked around.
 
 ## Contributing
