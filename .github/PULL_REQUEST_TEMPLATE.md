@@ -5,10 +5,3 @@
 ## Linked issue
 
 Closes #
-
-## Checklist
-
-- [ ] `just lint && just test` passes locally
-- [ ] Tests added or updated where behavior changed
-- [ ] Docs updated (`docs/manual.md`, `README.md`, `architecture/BASELINE.md`)
-      where relevant

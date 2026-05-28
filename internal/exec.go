@@ -45,7 +45,7 @@ func (p Program) Run(opts ExecOptions, okOut, errOut io.Writer) (ok bool) {
 
 	stmtPaths, allPaths, err := expandPlan(p, opts.IncludeHidden)
 	if err != nil {
-		fmt.Fprintln(errOut, err)
+		_, _ = fmt.Fprintln(errOut, err)
 		return false
 	}
 

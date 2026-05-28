@@ -45,7 +45,7 @@ func (q UpdateQuery) Eval(fm FrontMatter) (*TableRow, error) {
 			return nil, err
 		}
 	}
-	return q.query.evalSelect(fm), nil
+	return q.evalSelect(fm), nil
 }
 
 func (q UpdateQuery) IsMutation() bool { return true }
@@ -59,7 +59,7 @@ func (q AlterQuery) Eval(fm FrontMatter) (*TableRow, error) {
 	}
 	switch q.Op {
 	case AlterDrop:
-		res := q.query.evalSelect(fm)
+		res := q.evalSelect(fm)
 		for _, f := range q.Drop {
 			delete(fm, f.Name)
 		}
@@ -71,7 +71,7 @@ func (q AlterQuery) Eval(fm FrontMatter) (*TableRow, error) {
 				delete(fm, p.From)
 			}
 		}
-		return q.query.evalSelect(fm), nil
+		return q.evalSelect(fm), nil
 	}
 	return nil, nil
 }

@@ -3,8 +3,13 @@ _default: dev
 help:
     just --list
 
-commit  := `git rev-parse --short HEAD`
-version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
+setup:
+    git config core.hooksPath .githooks
+    go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+
+commit      := `git rev-parse --short HEAD`
+raw_version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
+version     := trim_start_match(raw_version, "v")
 
 ldflags := "-X main.Version=" + version + " -X main.Commit=" + commit
 
@@ -14,6 +19,10 @@ build:
 lint:
     go fmt ./...
     golangci-lint run ./...
+
+lint-fix:
+    go fmt ./...
+    golangci-lint run --fix ./...
 
 test FLAGS="":
     go test ./internal/... {{ FLAGS }}

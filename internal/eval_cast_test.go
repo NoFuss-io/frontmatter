@@ -6,20 +6,20 @@ import (
 
 func TestCastReversible(t *testing.T) {
 	testCases := [][]Value{
-		[]Value{vBool(true), vInt(1), vNum(1.0)},
-		[]Value{vBool(true), vStr("true")},
-		[]Value{vInt(1), vNum(1.0)},
-		[]Value{vInt(3), vStr("3")},
-		[]Value{vNum(4.56), vStr("4.56")},
+		{vBool(true), vInt(1), vNum(1.0)},
+		{vBool(true), vStr("true")},
+		{vInt(1), vNum(1.0)},
+		{vInt(3), vStr("3")},
+		{vNum(4.56), vStr("4.56")},
 
-		[]Value{vLink("[[ref]]"), vStr("[[ref]]")},
-		[]Value{vMdLink("[ref](ref)"), vStr("[ref](ref)")},
-		[]Value{vLink("[[ref]]"), vMdLink("[ref](ref)")},
+		{vLink("[[ref]]"), vStr("[[ref]]")},
+		{vMdLink("[ref](ref)"), vStr("[ref](ref)")},
+		{vLink("[[ref]]"), vMdLink("[ref](ref)")},
 
-		[]Value{vStr("2026-05-14"), vDate(2026, 5, 14)},
-		[]Value{vStr("2026-05-14T21:02:30"), vDatetime(2026, 5, 14, 21, 2, 30)},
+		{vStr("2026-05-14"), vDate(2026, 5, 14)},
+		{vStr("2026-05-14T21:02:30"), vDatetime(2026, 5, 14, 21, 2, 30)},
 
-		[]Value{vStr("hello")},
+		{vStr("hello")},
 	}
 
 	for _, tc := range testCases {

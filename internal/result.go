@@ -54,7 +54,7 @@ func (o *Output) AllDone() bool {
 
 // Error reports a per-file evaluation error to the configured error sink.
 func (o *Output) Error(path FilePath, err error) {
-	fmt.Fprintf(o.errors, "ERROR: %s: %s\n", path, err)
+	_, _ = fmt.Fprintf(o.errors, "ERROR: %s: %s\n", path, err)
 }
 
 // Finalize sorts and truncates each table according to its source statement.
@@ -69,7 +69,7 @@ func (o *Output) Finalize() {
 func (o *Output) Print(w io.Writer) {
 	for i, t := range o.tables {
 		if i > 0 {
-			fmt.Fprintln(w)
+			_, _ = fmt.Fprintln(w)
 		}
 		t.print(w)
 	}

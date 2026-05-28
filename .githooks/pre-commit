@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+staged_go=$(git diff --cached --name-only --diff-filter=ACM -- '*.go')
+
+if [ -n "$staged_go" ]; then
+    echo "$staged_go" | xargs gofmt -w
+    echo "$staged_go" | xargs git add
+fi
+
+just lint
+just test

@@ -50,7 +50,7 @@ type options struct {
 }
 
 var usage = `fm -- Markdown frontmatter batch editor
-` + Version + ` (` + Commit + `)
+` + Version + `
 
 Usage:
   fm [query] [flags]
@@ -96,7 +96,7 @@ func main() {
 
 	prog, err := parseProgram(args, os.Stdin)
 	if err != nil {
-		fmt.Fprintln(errOut, err)
+		_, _ = fmt.Fprintln(errOut, err)
 		os.Exit(2)
 	}
 

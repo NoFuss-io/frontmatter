@@ -618,7 +618,7 @@ func arith(op BinOp, l, r Value) Value {
 	return Value{Kind: TypeNumber, Data: f}
 }
 
-// SortTerm.Eval is a thin wrapper around the underlying expression.
+// Eval is a thin wrapper around the underlying expression.
 func (s SortTerm) Eval(fm FrontMatter) Value { return s.Expr.Eval(fm) }
 
 // ── Assignment ────────────────────────────────────────────────────────────────

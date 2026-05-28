@@ -93,8 +93,8 @@ func printStarTable(w io.Writer, rows []TableRow, maxColumns int) {
 	for i, h := range hs {
 		seps[i] = strings.Repeat("-", len(h))
 	}
-	fmt.Fprintln(tw, strings.Join(hs, "\t"))
-	fmt.Fprintln(tw, strings.Join(seps, "\t"))
+	_, _ = fmt.Fprintln(tw, strings.Join(hs, "\t"))
+	_, _ = fmt.Fprintln(tw, strings.Join(seps, "\t"))
 	for _, row := range rows {
 		cells := make([]string, len(headers)+1)
 		cells[0] = truncCell(row.path)
@@ -103,11 +103,11 @@ func printStarTable(w io.Writer, rows []TableRow, maxColumns int) {
 				cells[j+1] = truncCell(FormatValue(v))
 			}
 		}
-		fmt.Fprintln(tw, strings.Join(cells, "\t"))
+		_, _ = fmt.Fprintln(tw, strings.Join(cells, "\t"))
 	}
-	tw.Flush()
+	_ = tw.Flush()
 	if hidden > 0 {
-		fmt.Fprintf(w, "(%d more column(s) hidden; raise --max-columns to show)\n", hidden)
+		_, _ = fmt.Fprintf(w, "(%d more column(s) hidden; raise --max-columns to show)\n", hidden)
 	}
 }
 
@@ -120,17 +120,17 @@ func PrintTable(w io.Writer, headers []string, rows []TableRow) {
 	for i, h := range hs {
 		seps[i] = strings.Repeat("-", len(h))
 	}
-	fmt.Fprintln(tw, strings.Join(hs, "\t"))
-	fmt.Fprintln(tw, strings.Join(seps, "\t"))
+	_, _ = fmt.Fprintln(tw, strings.Join(hs, "\t"))
+	_, _ = fmt.Fprintln(tw, strings.Join(seps, "\t"))
 	for _, row := range rows {
 		cells := make([]string, len(row.print)+1)
 		cells[0] = truncCell(row.path)
 		for j, v := range row.print {
 			cells[j+1] = truncCell(FormatValue(v))
 		}
-		fmt.Fprintln(tw, strings.Join(cells, "\t"))
+		_, _ = fmt.Fprintln(tw, strings.Join(cells, "\t"))
 	}
-	tw.Flush()
+	_ = tw.Flush()
 }
 
 // maxCellWidth caps the rune length of any printed table cell. Longer strings

@@ -8,6 +8,7 @@ I try to be helpful but respond when I can.
 **Open an issue first.** A short description of the change and the use case
 is enough. Unsolicited large PRs may be closed unmerged because shape and
 scope haven't been agreed.
+If so, you are of course welcome to keep the change in your own fork.
 
 ## Local checks
 
@@ -17,6 +18,12 @@ just test
 ```
 
 Both must pass. CI re-runs the same checks on every push.
+
+These may also be automatiocally with a pre-commit git-hook installed by:
+
+```sh
+just setup
+```
 
 ## Commit style
 
@@ -44,9 +51,3 @@ to review and harder to revert.
   model, parser/evaluator overview.
 - [AGENTS.md](AGENTS.md) — repository guide aimed at AI coding assistants;
   also a fast read for humans.
-
-## Questions, not bugs
-
-Use [GitHub Discussions](https://github.com/NoFuss-io/frontmatter/discussions)
-for usage questions, design discussion, or feature ideation. Issues are for
-concrete bugs and accepted feature requests.

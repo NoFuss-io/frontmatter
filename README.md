@@ -10,12 +10,22 @@
 
 Harmonize, refactor, and batch edit YAML frontmatter using SQL expressions.
 
-Designed for Markdown in general and [Obsidian](https://obsidian.md) in particular.
-Vaults are modelled as big jagged tables where documents are rows and [fields](https://obsidian.md/help/properties) are columns.
-
 - [Manual](./docs/manual.md)
 - [Tutorial](./docs/tutorial/tutorial.md)
 - [Blog post](https://nofuss.io/en/frontmatter/)
+
+
+## Tailormade for Obsidian
+
+`fm` is designed for Markdown in general and [Obsidian](https://obsidian.md) in particular.
+Vaults are modelled as big jagged tables where documents are rows and [fields](https://obsidian.md/help/properties) are columns.
+
+SQL is the de facto standard data manipulation language for tabular data.
+[jq](https://jqlang.github.io/jq/), [yq](https://github.com/mikefarah/yq) and
+[dasel](https://github.com/tomwright/dasel) are great for deeply nested complex data,
+but their syntax is hard and Obsidian frontmatter is not nested anyways.
+So let's keep it simple!
+
 
 ## Installation
 
@@ -138,7 +148,6 @@ like SQL and round-trips Obsidian-specific link types.
 
 ## Roadmap
 
-- Window and aggregate clauses — see [architecture/FEATURE_WINDOWS.md](./architecture/FEATURE_WINDOWS.md).
 - Functions in expressions.
 - See open [Issues](https://github.com/NoFuss-io/frontmatter/issues) and
   [Discussions](https://github.com/NoFuss-io/frontmatter/discussions) for
@@ -146,5 +155,7 @@ like SQL and round-trips Obsidian-specific link types.
 
 ## Contributing
 
-This is a hobby project — open an issue before sending a PR. See
-[CONTRIBUTING.md](./CONTRIBUTING.md) for details.
+Open an issue before sending a PR.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
+
+Contributions are most welcome and I do my best to respond quickly.
