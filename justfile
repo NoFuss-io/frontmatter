@@ -66,3 +66,11 @@ release-check:
 
 release-snapshot:
     goreleaser release --snapshot --clean
+
+# Check that http(s) links in docs and Go source resolve.
+# Requires `lychee` (https://github.com/lycheeverse/lychee).
+check-links:
+    lychee --no-progress \
+        README.md SECURITY.md CONTRIBUTING.md SKILL.md \
+        docs/ architecture/ .github/ \
+        cmd/ internal/ frontmatter.go
