@@ -187,9 +187,9 @@ the polished page.
 
 The payoff.
 
-- [ ] Final sanity sweep: `just lint && just test`, no uncommitted changes
+- [x] Final sanity sweep: `just lint && just test`, no uncommitted changes
       on `main`.
-- [ ] Refresh `architecture/BASELINE.md` if any structural details drifted
+- [x] Refresh `architecture/BASELINE.md` if any structural details drifted
       since the last baseline (paths now `cmd/fm` + `internal/`, not the
       stale `cli/` + `lib/` references). Out of scope for this target but
       worth doing in the same release window.
