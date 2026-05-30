@@ -24,7 +24,7 @@ jobs:
           cache: true
 
       - name: Install just
-        uses: extractions/setup-just@v3
+        uses: extractions/setup-just@v4
 
       - name: Install pandoc
         run: sudo apt-get update && sudo apt-get install -y pandoc
