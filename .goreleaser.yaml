@@ -84,3 +84,13 @@ homebrew_casks:
       bash: completions/fm.bash
       zsh: completions/fm.zsh
       fish: completions/fm.fish
+    # fm ships unsigned/un-notarized, so Homebrew's quarantine xattr makes
+    # Gatekeeper block first run ("Apple cannot verify..."). Strip it on
+    # install. Bypasses Gatekeeper for this binary — acceptable for an
+    # unsigned CLI; proper fix is codesign + notarize (see plan, out of scope).
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/fm"]
+          end
