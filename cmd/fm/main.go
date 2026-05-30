@@ -63,6 +63,7 @@ piped in:
 
 Flags:
   -h, --help              Show this message.
+  -V, --version           Print version and exit.
   -d, --dry-run           Simulate the operation without editing any files.
   -H, --hidden            Include hidden files (ignored by default).
       --max-columns N     Column cap for 'select *' output (default 20).
@@ -118,6 +119,8 @@ func parseFlags(args []string) (options, []string, error) {
 	fs.BoolVar(&opts.includeHiddenFiles, "H", false, "")
 	help := fs.Bool("help", false, "")
 	helpShort := fs.Bool("h", false, "")
+	version := fs.Bool("version", false, "")
+	versionShort := fs.Bool("V", false, "")
 
 	split := len(args)
 	for i, arg := range args {
@@ -132,6 +135,10 @@ func parseFlags(args []string) (options, []string, error) {
 	}
 	if *help || *helpShort {
 		fmt.Print(usage)
+		os.Exit(0)
+	}
+	if *version || *versionShort {
+		fmt.Println(Version)
 		os.Exit(0)
 	}
 	return opts, args[:split], nil
