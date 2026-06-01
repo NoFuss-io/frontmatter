@@ -12,30 +12,29 @@ Query is input either as command line arguments or over stdin.
 
 Flags:
 - `-h`, `--help`: Show help.
+- `-V`, `--version`: Print version and exit.
 - `-d`, `--dry-run`: Simulates the operation without editing any files.
 - `-s`, `--silent`: Suppress all output.
 - `-v`, `--verbose`: Runs a `select` query on affected files and fields after `update` or `alter`.
 - `-H`, `--include-hidden`: Include hidden files, see [glob expansion](#Globs).
+- `--max-columns N`: Cap number of columns in `select *` output (default 20).
 
 Query is read from `stdin` if omitted.
 Query results and logs are written to `stdout`.
 Errors are written to `stderr` and return exit code 1.
 
 
-### Query using command line argumnets
+### Query using command line arguments
 
-Done either as a single quoted argument, which is easiest to read:
+Pass the whole query as a single quoted argument:
 
 ```sh
 fm 'select url from pages/* where tags>="wiki"'
 ```
 
-or as multiple arguments, which is convenient for tab completion
-but may require awkward quoting to bypass shell functionality:
-
-```sh
-fm select url from pages/* where tags '>="wiki"'
-```
+Quoting the entire query stops the shell from interpreting operators
+(`>`, `*`, `"`), glob characters, and whitespace, so `fm` receives the
+query verbatim.
 
 
 ### Query using stdin
@@ -441,13 +440,13 @@ Statically invalid assignments raise parse errors and halt program before any fi
 Can be a list of files
 
 ```sh
-fm select url from page/index.md page/account.md
+fm 'select url from page/index.md page/account.md'
 ```
 
 or expressions to expand (hidden files are ignored)
 
 ```sh
-fm select url from page/*.md
+fm 'select url from page/*.md'
 ```
 
 `fm` also implements its own glob expansion capability,

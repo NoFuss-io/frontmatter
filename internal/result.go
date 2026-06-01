@@ -65,12 +65,18 @@ func (o *Output) Finalize() {
 }
 
 // Print writes every table to w in source order. Multi-statement programs
-// separate consecutive tables with a blank line.
+// separate consecutive tables with a blank line. Empty mutation tables
+// (produced when verbose is off) are skipped entirely.
 func (o *Output) Print(w io.Writer) {
-	for i, t := range o.tables {
-		if i > 0 {
+	first := true
+	for _, t := range o.tables {
+		if t.mutation && len(t.rows) == 0 {
+			continue
+		}
+		if !first {
 			_, _ = fmt.Fprintln(w)
 		}
+		first = false
 		t.print(w)
 	}
 }
