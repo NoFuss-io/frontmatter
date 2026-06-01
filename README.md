@@ -64,25 +64,22 @@ just install-skill
 
 ## In a nutshell
 
+Pass the whole query as a single quoted argument:
+
 ```sh
-fm \
-    SELECT [expression], ... \
-    FROM [files] \
-    WHERE [condition] \
-    SORT BY [expression], ... \
-    LIMIT [number]
+fm 'SELECT [expression], ... FROM [files] WHERE [condition] SORT BY [expression], ... LIMIT [number]'
 ```
 
 ```sh
-fm UPDATE [files] SET [assignment], ... WHERE [condition];
-fm ALTER [files] DROP [field], ... WHERE [condition];
-fm ALTER [files] RENAME [field] TO [field], ... WHERE [condition];
+fm 'UPDATE [files] SET [assignment], ... WHERE [condition]'
+fm 'ALTER [files] DROP [field], ... WHERE [condition]'
+fm 'ALTER [files] RENAME [field] TO [field], ... WHERE [condition]'
 ```
 
 For example:
 
 ```sh
-fm select vegan, vegetarian from recipes/*
+fm 'select vegan, vegetarian from recipes/*'
 ```
 
 ```

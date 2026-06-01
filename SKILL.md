@@ -27,10 +27,12 @@ Full manual is available in @docs/manual.md but only load if anything is unclear
 (to save tokens and time).
 
 Examples:
+Pass the whole query as a single quoted argument:
+
 ```
-fm select [<field>[, <field>]...] from <glob>... [where <expr>] [sort by <field> [desc]] [limit <n>]
-fm update <glob>... set <assignment>[, <assignment>]...          [where <expr>]
-fm alter  <glob>... drop <field>[, <field>]...                   [where <expr>]
+fm 'select [<field>[, <field>]...] from <glob>... [where <expr>] [sort by <field> [desc]] [limit <n>]'
+fm 'update <glob>... set <assignment>[, <assignment>]...          [where <expr>]'
+fm 'alter  <glob>... drop <field>[, <field>]...                   [where <expr>]'
 ```
 
 ### Assignments (`update set`)
@@ -71,23 +73,23 @@ Dates are stored as `YYYY-MM-DD`; also parsed from `MM/DD/YYYY`, `DD.MM.YYYY`, R
 
 ```sh
 # Query
-fm select title, tags from 'notes/*.md' where published=true sort by date desc limit 10
+fm 'select title, tags from notes/*.md where published=true sort by date desc limit 10'
 
 # Batch cast
-fm update 'notes/*.md' set date:date, rating:int
+fm 'update notes/*.md set date:date, rating:int'
 
 # Conditional set
-fm update 'notes/*.md' set status=published where status=draft
+fm 'update notes/*.md set status=published where status=draft'
 
 # Append to list
-fm update 'notes/*.md' set tags+=cooking where category=recipe
+fm 'update notes/*.md set tags+=cooking where category=recipe'
 
 # Remove field when condition met
-fm alter 'notes/*.md' drop draft where published=true
+fm 'alter notes/*.md drop draft where published=true'
 
 # Rename a field (two-step: copy then drop)
-fm update 'notes/*.md' set category=cooking where from=cooking
-fm alter  'notes/*.md' drop from where from=cooking
+fm 'update notes/*.md set category=cooking where from=cooking'
+fm 'alter  notes/*.md drop from where from=cooking'
 ```
 
 ---

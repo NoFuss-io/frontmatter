@@ -1,5 +1,3 @@
--- Extract from tutorial.md - quoted command variants
-
 -- Step 1: Inspect current state
 select vegan, vegetarian, veggie, diet from tutorial/*;
 
