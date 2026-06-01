@@ -12,10 +12,12 @@ Query is input either as command line arguments or over stdin.
 
 Flags:
 - `-h`, `--help`: Show help.
+- `-V`, `--version`: Print version and exit.
 - `-d`, `--dry-run`: Simulates the operation without editing any files.
 - `-s`, `--silent`: Suppress all output.
 - `-v`, `--verbose`: Runs a `select` query on affected files and fields after `update` or `alter`.
 - `-H`, `--include-hidden`: Include hidden files, see [glob expansion](#Globs).
+- `--max-columns N`: Cap number of columns in `select *` output (default 20).
 
 Query is read from `stdin` if omitted.
 Query results and logs are written to `stdout`.

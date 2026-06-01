@@ -12,6 +12,11 @@ import (
 type ExecOptions struct {
 	// DryRun runs all statements in memory but does not write mutated documents back to disk.
 	DryRun bool
+	// Silent suppresses all normal output (errors are still written to errOut).
+	Silent bool
+	// Verbose prints the affected fields after update or alter statements.
+	// Without this flag, mutation statements produce no output.
+	Verbose bool
 	// MaxColumns caps the number of frontmatter columns rendered for `select *`
 	// output. Zero means use DefaultMaxColumns. Excess columns are dropped from
 	// the printed table; row count is unaffected.
@@ -39,6 +44,10 @@ func (p Program) Run(opts ExecOptions, okOut, errOut io.Writer) (ok bool) {
 	maxColumns := opts.MaxColumns
 	if maxColumns <= 0 {
 		maxColumns = DefaultMaxColumns
+	}
+
+	if opts.Silent {
+		okOut = io.Discard
 	}
 
 	out := NewOutput(&p, errOut, maxColumns)
@@ -82,6 +91,9 @@ func (p Program) Run(opts ExecOptions, okOut, errOut io.Writer) (ok bool) {
 			}
 			if stmt.IsMutation() {
 				mutated = true
+				if !opts.Verbose {
+					continue
+				}
 			}
 			out.Append(path, i, row)
 		}

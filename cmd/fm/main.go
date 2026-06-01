@@ -49,7 +49,7 @@ type options struct {
 	maxColumns         int
 }
 
-var usage = `fm -- Markdown frontmatter batch editor
+var usage = `fm - Markdown frontmatter batch editor
 ` + Version + `
 
 Usage:
@@ -59,13 +59,16 @@ Query is read from stdin if omitted. Multiple queries may be separated
 by ';' and '--' starts a line comment, so an SQL-style script can be
 piped in:
 
+  cat script.sql | fm
   fm < script.sql
 
 Flags:
   -h, --help              Show this message.
   -V, --version           Print version and exit.
   -d, --dry-run           Simulate the operation without editing any files.
-  -H, --hidden            Include hidden files (ignored by default).
+  -s, --silent            Suppress all output.
+  -v, --verbose           Print affected fields after update or alter.
+  -H, --include-hidden    Include hidden files (ignored by default).
       --max-columns N     Column cap for 'select *' output (default 20).
 
 Subcommands:
@@ -101,7 +104,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	if ok := prog.Run(fm.ExecOptions{DryRun: opts.dryRun, MaxColumns: opts.maxColumns, IncludeHidden: opts.includeHiddenFiles}, okOut, errOut); !ok {
+	if ok := prog.Run(fm.ExecOptions{DryRun: opts.dryRun, Silent: opts.silent, Verbose: opts.verbose, MaxColumns: opts.maxColumns, IncludeHidden: opts.includeHiddenFiles}, okOut, errOut); !ok {
 		os.Exit(1)
 	}
 }
@@ -112,9 +115,13 @@ func parseFlags(args []string) (options, []string, error) {
 
 	var opts options
 	fs.BoolVar(&opts.dryRun, "dry-run", false, "")
+	fs.BoolVar(&opts.dryRun, "d", false, "")
 	fs.BoolVar(&opts.silent, "silent", false, "")
+	fs.BoolVar(&opts.silent, "s", false, "")
+	fs.BoolVar(&opts.verbose, "verbose", false, "")
 	fs.BoolVar(&opts.verbose, "v", false, "")
 	fs.IntVar(&opts.maxColumns, "max-columns", 0, "")
+	fs.BoolVar(&opts.includeHiddenFiles, "include-hidden", false, "")
 	fs.BoolVar(&opts.includeHiddenFiles, "hidden", false, "")
 	fs.BoolVar(&opts.includeHiddenFiles, "H", false, "")
 	help := fs.Bool("help", false, "")
@@ -141,7 +148,7 @@ func parseFlags(args []string) (options, []string, error) {
 		fmt.Println(Version)
 		os.Exit(0)
 	}
-	return opts, args[:split], nil
+	return opts, append(args[:split], fs.Args()...), nil
 }
 
 func parseProgram(args []string, in io.Reader) (*fm.Program, error) {
