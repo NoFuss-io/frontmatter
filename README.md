@@ -58,7 +58,7 @@ Requirements: Git, [Go](https://go.dev/), and [Just](https://just.systems/):
 git clone https://github.com/NoFuss-io/frontmatter.git
 cd frontmatter
 just install
-just install-skill
+fm install-skill claude
 ```
 
 

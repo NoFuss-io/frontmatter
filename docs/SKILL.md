@@ -11,7 +11,7 @@ user's natural language request.
 ## Workflow
 
 1. **Clarify** target files if the glob is ambiguous — ask before assuming.
-2. **Preview** with `fm select` before any destructive mutation, unless the user's
+2. **Preview** with `fm 'select ...'` before any destructive mutation, unless the user's
    request is already precise.
 3. **Execute** the mutation command(s).
 4. Show a brief summary of what changed (e.g. `git diff --stat` or `fm select` output).

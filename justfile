@@ -46,11 +46,6 @@ dev *args:
 install:
     go build -ldflags "{{ ldflags }}" -o $(go env GOPATH)/bin/fm ./cmd/fm
 
-install-skill: install
-    mkdir -p ~/.claude/skills/fm/docs
-    cp SKILL.md ~/.claude/skills/fm/SKILL.md
-    cp docs/manual.md ~/.claude/skills/fm/docs/manual.md
-
 man:
     mkdir -p docs/man
     pandoc -s -t man docs/fm.1.md -o docs/man/fm.1
