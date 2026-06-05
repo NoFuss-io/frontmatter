@@ -2,9 +2,11 @@ filename  tags
 --------  ----
 a.md      visible-a
 b.md      visible-b
+(2 rows)
 ---
 filename    tags
 --------    ----
 .hidden.md  secret
 a.md        visible-a
 b.md        visible-b
+(3 rows)

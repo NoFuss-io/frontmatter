@@ -53,22 +53,34 @@ func FormatValue(v Value) string {
 }
 
 func (t *Table) print(w io.Writer) {
+	var hiddenCols int
 	if t.sel.Star {
-		printStarTable(w, t.rows, t.maxColumns)
-		return
+		hiddenCols = printStarTable(w, t.rows, t.maxColumns, t.noFile)
+	} else {
+		headers := make([]string, len(t.sel.Select))
+		for i, e := range t.sel.Select {
+			headers[i] = FieldName(e, i)
+		}
+		PrintTable(w, headers, t.rows, t.noFile)
 	}
-	headers := make([]string, len(t.sel.Select))
-	for i, e := range t.sel.Select {
-		headers[i] = FieldName(e, i)
+	if !t.mutation {
+		n := len(t.rows)
+		if n == 1 {
+			_, _ = fmt.Fprintln(w, "(1 row)")
+		} else {
+			_, _ = fmt.Fprintf(w, "(%d rows)\n", n)
+		}
 	}
-	PrintTable(w, headers, t.rows)
+	if hiddenCols > 0 {
+		_, _ = fmt.Fprintf(w, "(%d more column(s) hidden; raise --max-columns to show)\n", hiddenCols)
+	}
 }
 
 // printStarTable renders rows produced by `select *`. The header set is the
 // alphabetical union of field names seen across all rows, capped at
 // maxColumns; any extra columns are dropped and a trailing note reports the
 // hidden count. maxColumns <= 0 disables the cap.
-func printStarTable(w io.Writer, rows []TableRow, maxColumns int) {
+func printStarTable(w io.Writer, rows []TableRow, maxColumns int, noFile bool) (hiddenCols int) {
 	seen := make(map[string]struct{})
 	for _, r := range rows {
 		for name := range r.star {
@@ -87,13 +99,7 @@ func printStarTable(w io.Writer, rows []TableRow, maxColumns int) {
 		headers = headers[:maxColumns]
 	}
 
-	showFile := len(rows) == 0
-	for _, row := range rows {
-		if row.path != "" {
-			showFile = true
-			break
-		}
-	}
+	showFile := !noFile
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	var hs []string
@@ -130,23 +136,14 @@ func printStarTable(w io.Writer, rows []TableRow, maxColumns int) {
 		_, _ = fmt.Fprintln(tw, strings.Join(cells, "\t"))
 	}
 	_ = tw.Flush()
-	if hidden > 0 {
-		_, _ = fmt.Fprintf(w, "(%d more column(s) hidden; raise --max-columns to show)\n", hidden)
-	}
+	return hidden
 }
 
 // PrintTable writes a tab-separated table to w: filename column plus the
 // supplied headers and the materialized values from each TableRow.
-// The filename column is omitted when all rows are from a FROM-less select
-// (all paths empty). Empty result sets always include the filename column.
-func PrintTable(w io.Writer, headers []string, rows []TableRow) {
-	showFile := len(rows) == 0
-	for _, row := range rows {
-		if row.path != "" {
-			showFile = true
-			break
-		}
-	}
+// noFile suppresses the filename column (used for FROM-less selects).
+func PrintTable(w io.Writer, headers []string, rows []TableRow, noFile bool) {
+	showFile := !noFile
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	var hs []string

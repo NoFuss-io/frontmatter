@@ -17,6 +17,7 @@ func NewOutput(p *Program, err io.Writer, maxColumns int) *Output {
 		tables[i] = &Table{
 			sel:        stmt.q(),
 			mutation:   stmt.IsMutation(),
+			noFile:     len(stmt.Globs()) == 0 && !stmt.IsMutation(),
 			maxColumns: maxColumns,
 		}
 	}
@@ -85,6 +86,7 @@ func (o *Output) Print(w io.Writer) {
 type Table struct {
 	sel        query
 	mutation   bool
+	noFile     bool // true for FROM-less selects: filename column is suppressed
 	rows       []TableRow
 	maxColumns int
 }
