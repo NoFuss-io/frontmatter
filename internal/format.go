@@ -87,8 +87,22 @@ func printStarTable(w io.Writer, rows []TableRow, maxColumns int) {
 		headers = headers[:maxColumns]
 	}
 
+	showFile := len(rows) == 0
+	for _, row := range rows {
+		if row.path != "" {
+			showFile = true
+			break
+		}
+	}
+
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	hs := append([]string{"filename"}, headers...)
+	var hs []string
+	if showFile {
+		hs = append([]string{"filename"}, headers...)
+	} else {
+		hs = make([]string, len(headers))
+		copy(hs, headers)
+	}
 	seps := make([]string, len(hs))
 	for i, h := range hs {
 		seps[i] = strings.Repeat("-", len(h))
@@ -96,11 +110,21 @@ func printStarTable(w io.Writer, rows []TableRow, maxColumns int) {
 	_, _ = fmt.Fprintln(tw, strings.Join(hs, "\t"))
 	_, _ = fmt.Fprintln(tw, strings.Join(seps, "\t"))
 	for _, row := range rows {
-		cells := make([]string, len(headers)+1)
-		cells[0] = truncCell(row.path)
-		for j, name := range headers {
-			if v, ok := row.star[name]; ok {
-				cells[j+1] = truncCell(FormatValue(v))
+		var cells []string
+		if showFile {
+			cells = make([]string, len(headers)+1)
+			cells[0] = truncCell(row.path)
+			for j, name := range headers {
+				if v, ok := row.star[name]; ok {
+					cells[j+1] = truncCell(FormatValue(v))
+				}
+			}
+		} else {
+			cells = make([]string, len(headers))
+			for j, name := range headers {
+				if v, ok := row.star[name]; ok {
+					cells[j] = truncCell(FormatValue(v))
+				}
 			}
 		}
 		_, _ = fmt.Fprintln(tw, strings.Join(cells, "\t"))
@@ -113,9 +137,25 @@ func printStarTable(w io.Writer, rows []TableRow, maxColumns int) {
 
 // PrintTable writes a tab-separated table to w: filename column plus the
 // supplied headers and the materialized values from each TableRow.
+// The filename column is omitted when all rows are from a FROM-less select
+// (all paths empty). Empty result sets always include the filename column.
 func PrintTable(w io.Writer, headers []string, rows []TableRow) {
+	showFile := len(rows) == 0
+	for _, row := range rows {
+		if row.path != "" {
+			showFile = true
+			break
+		}
+	}
+
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	hs := append([]string{"filename"}, headers...)
+	var hs []string
+	if showFile {
+		hs = append([]string{"filename"}, headers...)
+	} else {
+		hs = make([]string, len(headers))
+		copy(hs, headers)
+	}
 	seps := make([]string, len(hs))
 	for i, h := range hs {
 		seps[i] = strings.Repeat("-", len(h))
@@ -123,10 +163,18 @@ func PrintTable(w io.Writer, headers []string, rows []TableRow) {
 	_, _ = fmt.Fprintln(tw, strings.Join(hs, "\t"))
 	_, _ = fmt.Fprintln(tw, strings.Join(seps, "\t"))
 	for _, row := range rows {
-		cells := make([]string, len(row.print)+1)
-		cells[0] = truncCell(row.path)
-		for j, v := range row.print {
-			cells[j+1] = truncCell(FormatValue(v))
+		var cells []string
+		if showFile {
+			cells = make([]string, len(row.print)+1)
+			cells[0] = truncCell(row.path)
+			for j, v := range row.print {
+				cells[j+1] = truncCell(FormatValue(v))
+			}
+		} else {
+			cells = make([]string, len(row.print))
+			for j, v := range row.print {
+				cells[j] = truncCell(FormatValue(v))
+			}
 		}
 		_, _ = fmt.Fprintln(tw, strings.Join(cells, "\t"))
 	}

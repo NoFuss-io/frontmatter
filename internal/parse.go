@@ -603,15 +603,15 @@ func (q *SelectQuery) parse(c *cursor) error {
 		q.Select = fields
 	}
 
-	if err := expectKeyword(c, "from"); err != nil {
-		return err
+	skipWS(c)
+	if strings.ToLower(peekKeyword(c)) == "from" {
+		consumeBytes(c, 4)
+		globs := readGlobs(c, "where", "sort", "limit")
+		if len(globs) == 0 {
+			return fmt.Errorf("expected glob after 'from'")
+		}
+		q.From = globs
 	}
-
-	globs := readGlobs(c, "where", "sort", "limit")
-	if len(globs) == 0 {
-		return fmt.Errorf("expected glob after 'from'")
-	}
-	q.From = globs
 
 	if err := parseOptionalWhere(c, &q.Where); err != nil {
 		return err

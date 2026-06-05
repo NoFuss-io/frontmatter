@@ -106,6 +106,21 @@ func (p Program) Run(opts ExecOptions, okOut, errOut io.Writer) (ok bool) {
 		}
 	}
 
+	// Handle FROM-less select queries: evaluate once against empty frontmatter.
+	for i, stmt := range p.Stmts {
+		if len(stmtPaths[i]) == 0 && !stmt.IsMutation() {
+			row, evalErr := stmt.Eval(FrontMatter{})
+			if evalErr != nil {
+				ok = false
+				_, _ = fmt.Fprintln(errOut, evalErr)
+				continue
+			}
+			if row != nil {
+				out.Append("", i, row)
+			}
+		}
+	}
+
 	out.Finalize()
 	out.Print(okOut)
 	return ok
