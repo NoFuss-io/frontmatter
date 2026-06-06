@@ -23,6 +23,15 @@ func New() store.Store {
 // Format implements store.Format for Markdown files with YAML frontmatter.
 // The bodies sync.Map caches the non-frontmatter body text keyed by path so
 // that Write can reconstruct the full file without data loss.
+//
+// Body preservation is a general problem for any file-based format: an image
+// store must preserve pixel data, an audio store must preserve audio frames,
+// etc. The sidecar here is Markdown-specific, but the pattern would be the
+// same. A cleaner long-term solution is to move the sidecar up into
+// store.FileStore by introducing a File{Fields, Opaque any} type — Format
+// returns it from Read and receives it back in Write, FileStore manages the
+// map. That would make every Format implementation stateless. It is left as a
+// future refactor to keep this first implementation simple.
 type Format struct {
 	bodies sync.Map // key: string path → value: string body
 }
