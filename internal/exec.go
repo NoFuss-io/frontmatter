@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	tablepkg "github.com/nofuss-io/frontmatter/internal/table"
 )
 
 // ExecOptions controls how a Program is executed.
@@ -24,6 +26,8 @@ type ExecOptions struct {
 	// IncludeHidden includes files whose basename begins with '.' in glob
 	// expansion. Default skips them.
 	IncludeHidden bool
+	// Renderer controls how result tables are formatted. Nil defaults to Simple.
+	Renderer tablepkg.Renderer
 }
 
 // DefaultMaxColumns is the column cap applied to `select *` output when
@@ -50,7 +54,11 @@ func (p Program) Run(opts ExecOptions, okOut, errOut io.Writer) (ok bool) {
 		okOut = io.Discard
 	}
 
-	out := NewOutput(&p, errOut, maxColumns)
+	renderer := opts.Renderer
+	if renderer == nil {
+		renderer = tablepkg.Simple{}
+	}
+	out := NewOutput(&p, errOut, maxColumns, renderer)
 
 	stmtPaths, allPaths, err := expandPlan(p, opts.IncludeHidden)
 	if err != nil {

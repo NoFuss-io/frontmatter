@@ -5,8 +5,9 @@ import (
 	"io"
 	"sort"
 	"strings"
-	"text/tabwriter"
 	"time"
+
+	tablepkg "github.com/nofuss-io/frontmatter/internal/table"
 )
 
 // FieldName returns a sensible column header for an expression. Field references
@@ -53,142 +54,135 @@ func FormatValue(v Value) string {
 }
 
 func (t *Table) print(w io.Writer) {
+	var tbl tablepkg.Table
+	var hiddenCols int
+
 	if t.sel.Star {
-		printStarTable(w, t.rows, t.maxColumns)
-		return
+		tbl, hiddenCols = t.buildStarTable()
+	} else {
+		tbl = t.buildTable()
 	}
+
+	_ = t.renderer.Render(tbl, w)
+
+	if !t.mutation {
+		n := len(t.rows)
+		if n == 1 {
+			_, _ = fmt.Fprintln(w, "(1 row)")
+		} else {
+			_, _ = fmt.Fprintf(w, "(%d rows)\n", n)
+		}
+	}
+	if hiddenCols > 0 {
+		_, _ = fmt.Fprintf(w, "(%d more column(s) hidden; raise --max-columns to show)\n", hiddenCols)
+	}
+}
+
+func (t *Table) buildTable() tablepkg.Table {
 	headers := make([]string, len(t.sel.Select))
 	for i, e := range t.sel.Select {
 		headers[i] = FieldName(e, i)
 	}
-	PrintTable(w, headers, t.rows)
+	if !t.noFile {
+		headers = append([]string{"filename"}, headers...)
+	}
+	rows := make([][]string, len(t.rows))
+	for i, row := range t.rows {
+		if !t.noFile {
+			cells := make([]string, len(row.print)+1)
+			cells[0] = row.path
+			for j, v := range row.print {
+				cells[j+1] = FormatValue(v)
+			}
+			rows[i] = cells
+		} else {
+			cells := make([]string, len(row.print))
+			for j, v := range row.print {
+				cells[j] = FormatValue(v)
+			}
+			rows[i] = cells
+		}
+	}
+	return tablepkg.Table{Headers: headers, Rows: rows}
 }
 
-// printStarTable renders rows produced by `select *`. The header set is the
-// alphabetical union of field names seen across all rows, capped at
-// maxColumns; any extra columns are dropped and a trailing note reports the
-// hidden count. maxColumns <= 0 disables the cap.
-func printStarTable(w io.Writer, rows []TableRow, maxColumns int) {
+func (t *Table) buildStarTable() (tablepkg.Table, int) {
 	seen := make(map[string]struct{})
-	for _, r := range rows {
+	for _, r := range t.rows {
 		for name := range r.star {
 			seen[name] = struct{}{}
 		}
 	}
-	headers := make([]string, 0, len(seen))
+	colNames := make([]string, 0, len(seen))
 	for name := range seen {
-		headers = append(headers, name)
+		colNames = append(colNames, name)
 	}
-	sort.Strings(headers)
+	sort.Strings(colNames)
 
 	hidden := 0
-	if maxColumns > 0 && len(headers) > maxColumns {
-		hidden = len(headers) - maxColumns
-		headers = headers[:maxColumns]
+	if t.maxColumns > 0 && len(colNames) > t.maxColumns {
+		hidden = len(colNames) - t.maxColumns
+		colNames = colNames[:t.maxColumns]
 	}
 
-	showFile := len(rows) == 0
-	for _, row := range rows {
-		if row.path != "" {
-			showFile = true
-			break
+	var headers []string
+	if !t.noFile {
+		headers = append([]string{"filename"}, colNames...)
+	} else {
+		headers = colNames
+	}
+
+	rows := make([][]string, len(t.rows))
+	for i, row := range t.rows {
+		if !t.noFile {
+			cells := make([]string, len(colNames)+1)
+			cells[0] = row.path
+			for j, name := range colNames {
+				if v, ok := row.star[name]; ok {
+					cells[j+1] = FormatValue(v)
+				}
+			}
+			rows[i] = cells
+		} else {
+			cells := make([]string, len(colNames))
+			for j, name := range colNames {
+				if v, ok := row.star[name]; ok {
+					cells[j] = FormatValue(v)
+				}
+			}
+			rows[i] = cells
 		}
 	}
+	return tablepkg.Table{Headers: headers, Rows: rows}, hidden
+}
 
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+// PrintTable writes a tab-separated table to w: optional filename column plus
+// the supplied headers and the materialized values from each TableRow.
+// noFile suppresses the filename column (used for FROM-less selects).
+func PrintTable(w io.Writer, headers []string, rows []TableRow, noFile bool) {
 	var hs []string
-	if showFile {
+	if !noFile {
 		hs = append([]string{"filename"}, headers...)
 	} else {
 		hs = make([]string, len(headers))
 		copy(hs, headers)
 	}
-	seps := make([]string, len(hs))
-	for i, h := range hs {
-		seps[i] = strings.Repeat("-", len(h))
-	}
-	_, _ = fmt.Fprintln(tw, strings.Join(hs, "\t"))
-	_, _ = fmt.Fprintln(tw, strings.Join(seps, "\t"))
-	for _, row := range rows {
-		var cells []string
-		if showFile {
-			cells = make([]string, len(headers)+1)
-			cells[0] = truncCell(row.path)
-			for j, name := range headers {
-				if v, ok := row.star[name]; ok {
-					cells[j+1] = truncCell(FormatValue(v))
-				}
-			}
-		} else {
-			cells = make([]string, len(headers))
-			for j, name := range headers {
-				if v, ok := row.star[name]; ok {
-					cells[j] = truncCell(FormatValue(v))
-				}
-			}
-		}
-		_, _ = fmt.Fprintln(tw, strings.Join(cells, "\t"))
-	}
-	_ = tw.Flush()
-	if hidden > 0 {
-		_, _ = fmt.Fprintf(w, "(%d more column(s) hidden; raise --max-columns to show)\n", hidden)
-	}
-}
-
-// PrintTable writes a tab-separated table to w: filename column plus the
-// supplied headers and the materialized values from each TableRow.
-// The filename column is omitted when all rows are from a FROM-less select
-// (all paths empty). Empty result sets always include the filename column.
-func PrintTable(w io.Writer, headers []string, rows []TableRow) {
-	showFile := len(rows) == 0
-	for _, row := range rows {
-		if row.path != "" {
-			showFile = true
-			break
-		}
-	}
-
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	var hs []string
-	if showFile {
-		hs = append([]string{"filename"}, headers...)
-	} else {
-		hs = make([]string, len(headers))
-		copy(hs, headers)
-	}
-	seps := make([]string, len(hs))
-	for i, h := range hs {
-		seps[i] = strings.Repeat("-", len(h))
-	}
-	_, _ = fmt.Fprintln(tw, strings.Join(hs, "\t"))
-	_, _ = fmt.Fprintln(tw, strings.Join(seps, "\t"))
-	for _, row := range rows {
-		var cells []string
-		if showFile {
-			cells = make([]string, len(row.print)+1)
-			cells[0] = truncCell(row.path)
+	tableRows := make([][]string, len(rows))
+	for i, row := range rows {
+		if !noFile {
+			cells := make([]string, len(row.print)+1)
+			cells[0] = row.path
 			for j, v := range row.print {
-				cells[j+1] = truncCell(FormatValue(v))
+				cells[j+1] = FormatValue(v)
 			}
+			tableRows[i] = cells
 		} else {
-			cells = make([]string, len(row.print))
+			cells := make([]string, len(row.print))
 			for j, v := range row.print {
-				cells[j] = truncCell(FormatValue(v))
+				cells[j] = FormatValue(v)
 			}
+			tableRows[i] = cells
 		}
-		_, _ = fmt.Fprintln(tw, strings.Join(cells, "\t"))
 	}
-	_ = tw.Flush()
-}
-
-// maxCellWidth caps the rune length of any printed table cell. Longer strings
-// are truncated with a trailing ellipsis so columns stay readable.
-const maxCellWidth = 30
-
-func truncCell(s string) string {
-	runes := []rune(s)
-	if len(runes) <= maxCellWidth {
-		return s
-	}
-	return string(runes[:maxCellWidth-1]) + "…"
+	_ = tablepkg.Simple{}.Render(tablepkg.Table{Headers: hs, Rows: tableRows}, w)
 }

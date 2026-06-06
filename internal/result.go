@@ -6,18 +6,22 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	tablepkg "github.com/nofuss-io/frontmatter/internal/table"
 )
 
 // NewOutput allocates one Table per statement, in source order. maxColumns
 // caps the column count rendered for `select *` tables; non-star tables are
 // unaffected.
-func NewOutput(p *Program, err io.Writer, maxColumns int) *Output {
+func NewOutput(p *Program, err io.Writer, maxColumns int, renderer tablepkg.Renderer) *Output {
 	tables := make([]*Table, len(p.Stmts))
 	for i, stmt := range p.Stmts {
 		tables[i] = &Table{
 			sel:        stmt.q(),
 			mutation:   stmt.IsMutation(),
+			noFile:     len(stmt.Globs()) == 0 && !stmt.IsMutation(),
 			maxColumns: maxColumns,
+			renderer:   renderer,
 		}
 	}
 	return &Output{tables: tables, errors: err}
@@ -85,8 +89,10 @@ func (o *Output) Print(w io.Writer) {
 type Table struct {
 	sel        query
 	mutation   bool
+	noFile     bool // true for FROM-less selects: filename column is suppressed
 	rows       []TableRow
 	maxColumns int
+	renderer   tablepkg.Renderer
 }
 
 func (t *Table) append(row TableRow) (done bool) {
