@@ -11,7 +11,7 @@ func (q query) Eval(fm FrontMatter) (*TableRow, error) {
 
 func (q query) IsMutation() bool { return false }
 
-func (q query) Globs() []string { return q.From }
+func (q query) Patterns() []string { return q.From }
 
 func (q query) q() query { return q }
 

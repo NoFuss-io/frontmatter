@@ -150,7 +150,7 @@ func expandPlan(p Program, s store.Store, includeHidden bool) ([][]string, []str
 	var all []string
 	seen := make(map[string]bool)
 	for i, stmt := range p.Stmts {
-		keys, err := s.Enumerate(stmt.Globs(), store.EnumOptions{IncludeHidden: includeHidden})
+		keys, err := s.Enumerate(stmt.Patterns(), store.EnumOptions{IncludeHidden: includeHidden})
 		if err != nil {
 			return nil, nil, fmt.Errorf("statement %d: %w", i+1, err)
 		}

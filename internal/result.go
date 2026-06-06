@@ -19,7 +19,7 @@ func NewOutput(p *Program, err io.Writer, maxColumns int, renderer tablepkg.Rend
 		tables[i] = &Table{
 			sel:        stmt.q(),
 			mutation:   stmt.IsMutation(),
-			noFile:     len(stmt.Globs()) == 0 && !stmt.IsMutation(),
+			noFile:     len(stmt.Patterns()) == 0 && !stmt.IsMutation(),
 			maxColumns: maxColumns,
 			renderer:   renderer,
 		}
