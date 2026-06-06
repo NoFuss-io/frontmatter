@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -424,6 +425,8 @@ func truthy(v Value) bool {
 	case TypeString:
 		s := v.Data.(string)
 		return s != "" && strings.ToLower(s) != "false"
+	case TypeList:
+		return len(v.Data.([]Value)) > 0
 	default:
 		return true
 	}
@@ -436,8 +439,12 @@ func (e BinExpr) Eval(fm FrontMatter) Value {
 		return Value{Kind: TypeBool, Data: truthy(e.Left.Eval(fm)) || truthy(e.Right.Eval(fm))}
 	case BinAdd, BinSub, BinMul, BinDiv:
 		return arith(e.Op, e.Left.Eval(fm), e.Right.Eval(fm))
-	case BinEq, BinNe, BinLt, BinLe, BinGt, BinGe, BinIntersect:
+	case BinEq, BinNe, BinLt, BinLe, BinGt, BinGe:
 		return compare(e.Op, e.Left.Eval(fm), e.Right.Eval(fm))
+	case BinIntersect, BinUnion:
+		return setOp(e.Op, e.Left.Eval(fm), e.Right.Eval(fm))
+	case BinLike, BinNotLike, BinILike, BinNotILike, BinRegexp, BinNotRegexp:
+		return matchOp(e.Op, e.Left.Eval(fm), e.Right.Eval(fm))
 	}
 	return Value{Null: true}
 }
@@ -462,8 +469,6 @@ func compare(op BinOp, l, r Value) Value {
 		return Value{Kind: TypeBool, Data: scalarEq(l, r)}
 	case BinNe:
 		return Value{Kind: TypeBool, Data: !scalarEq(l, r)}
-	case BinIntersect:
-		return Value{Kind: TypeBool, Data: scalarEq(l, r)}
 	}
 	lf, errL := Cast(l, TypeNumber)
 	rf, errR := Cast(r, TypeNumber)
@@ -514,30 +519,13 @@ func compareList(op BinOp, l, r Value) Value {
 			return Value{Kind: TypeBool, Data: listSetEq(la, rb)}
 		case BinNe:
 			return Value{Kind: TypeBool, Data: !listSetEq(la, rb)}
-		case BinIntersect:
-			return Value{Kind: TypeBool, Data: listOverlap(la, rb)}
 		}
 	case l.Kind == TypeList && op == BinGe:
 		return Value{Kind: TypeBool, Data: listContains(l.Data.([]Value), r)}
 	case r.Kind == TypeList && op == BinLe:
 		return Value{Kind: TypeBool, Data: listContains(r.Data.([]Value), l)}
-	case l.Kind == TypeList && op == BinIntersect:
-		return Value{Kind: TypeBool, Data: listContains(l.Data.([]Value), r)}
-	case r.Kind == TypeList && op == BinIntersect:
-		return Value{Kind: TypeBool, Data: listContains(r.Data.([]Value), l)}
 	}
 	return Value{Kind: TypeBool, Data: false}
-}
-
-func listOverlap(a, b []Value) bool {
-	for _, x := range a {
-		for _, y := range b {
-			if scalarEq(x, y) {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func listSetEq(a, b []Value) bool {
@@ -568,6 +556,103 @@ func listContains(list []Value, v Value) bool {
 		}
 	}
 	return false
+}
+
+// setOp implements <=> (intersection) and >=< (union), returning a TypeList.
+// Scalar operands are treated as single-element lists.
+func setOp(op BinOp, l, r Value) Value {
+	if l.Null || r.Null {
+		return Value{Null: true}
+	}
+	la := toValueSlice(l)
+	rb := toValueSlice(r)
+	var out []Value
+	switch op {
+	case BinIntersect:
+		for _, x := range la {
+			for _, y := range rb {
+				if scalarEq(x, y) {
+					out = append(out, x)
+					break
+				}
+			}
+		}
+	case BinUnion:
+		out = append(out, la...)
+		for _, y := range rb {
+			if !listContains(out, y) {
+				out = append(out, y)
+			}
+		}
+	}
+	if out == nil {
+		out = []Value{}
+	}
+	return Value{Kind: TypeList, Data: out}
+}
+
+func toValueSlice(v Value) []Value {
+	if v.Kind == TypeList {
+		return v.Data.([]Value)
+	}
+	return []Value{v}
+}
+
+// matchOp implements LIKE, ILIKE, REGEXP and their NOT variants.
+func matchOp(op BinOp, l, r Value) Value {
+	ls, err := Cast(l, TypeString)
+	if err != nil || ls.Null {
+		return Value{Null: true}
+	}
+	rs, err := Cast(r, TypeString)
+	if err != nil || rs.Null {
+		return Value{Null: true}
+	}
+	subject, pattern := ls.Data.(string), rs.Data.(string)
+
+	var matched bool
+	switch op {
+	case BinLike, BinNotLike:
+		matched = likeMatch(pattern, subject, false)
+	case BinILike, BinNotILike:
+		matched = likeMatch(pattern, subject, true)
+	case BinRegexp, BinNotRegexp:
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return Value{Null: true}
+		}
+		matched = re.MatchString(subject)
+	}
+	if op == BinNotLike || op == BinNotILike || op == BinNotRegexp {
+		matched = !matched
+	}
+	return Value{Kind: TypeBool, Data: matched}
+}
+
+// likeMatch converts a SQL LIKE pattern (% / _) to a regexp and matches.
+func likeMatch(pattern, subject string, caseInsensitive bool) bool {
+	var sb strings.Builder
+	sb.WriteString(`\A`)
+	for _, ch := range pattern {
+		switch ch {
+		case '%':
+			sb.WriteString(`.*`)
+		case '_':
+			sb.WriteString(`.`)
+		default:
+			sb.WriteString(regexp.QuoteMeta(string(ch)))
+		}
+	}
+	sb.WriteString(`\z`)
+	pat := sb.String()
+	if caseInsensitive {
+		pat = `(?i)` + pat
+	}
+	re, err := regexp.Compile(pat)
+	if err != nil {
+		return false
+	}
+	return re.MatchString(subject)
 }
 
 // arith performs +, -, *, / with numeric coercion. Both ints stays int unless

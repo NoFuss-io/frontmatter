@@ -197,31 +197,93 @@ func TestBinExpr_Compare(t *testing.T) {
 	}
 }
 
-// ── Set overlap operator (<=>) ────────────────────────────────────────────────
+// ── Set intersection operator (<=>) ──────────────────────────────────────────
 
-func TestCompare_Overlap(t *testing.T) {
+func TestSetOp_Intersect(t *testing.T) {
 	tests := []struct {
 		name string
 		l, r Value
-		want bool
+		want Value
 	}{
-		{"list_list_share_one", vList(vStr("value"), vStr("string")), vList(vStr("value"), vStr("Value")), true},
-		{"list_list_case_sensitive_miss", vList(vStr("string")), vList(vStr("Value")), false},
-		{"list_list_disjoint", vList(vStr("a"), vStr("b")), vList(vStr("c"), vStr("d")), false},
-		{"list_list_identical", vList(vStr("x")), vList(vStr("x")), true},
-		{"list_scalar_hit", vList(vStr("a"), vStr("b")), vStr("b"), true},
-		{"list_scalar_miss", vList(vStr("a"), vStr("b")), vStr("c"), false},
-		{"scalar_list_hit", vStr("b"), vList(vStr("a"), vStr("b")), true},
-		{"scalar_scalar_eq", vStr("a"), vStr("a"), true},
-		{"scalar_scalar_ne", vStr("a"), vStr("b"), false},
-		{"empty_lists", vList(), vList(), false},
-		{"null_lhs", vNull(), vList(vStr("a")), false},
+		{"list_list_overlap", vList(vStr("a"), vStr("b"), vStr("c")), vList(vStr("b"), vStr("c"), vStr("d")), vList(vStr("b"), vStr("c"))},
+		{"list_list_disjoint", vList(vStr("a"), vStr("b")), vList(vStr("c"), vStr("d")), vList()},
+		{"list_list_identical", vList(vStr("x"), vStr("y")), vList(vStr("x"), vStr("y")), vList(vStr("x"), vStr("y"))},
+		{"scalar_scalar_eq", vStr("a"), vStr("a"), vList(vStr("a"))},
+		{"scalar_scalar_ne", vStr("a"), vStr("b"), vList()},
+		{"null_lhs", vNull(), vList(vStr("a")), vNull()},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := compare(BinIntersect, tc.l, tc.r)
-			if !valEq(got, vBool(tc.want)) {
-				t.Errorf("compare(BinIntersect, %+v, %+v) = %+v, want %v", tc.l, tc.r, got, tc.want)
+			got := setOp(BinIntersect, tc.l, tc.r)
+			if !valEq(got, tc.want) {
+				t.Errorf("setOp(BinIntersect, %v, %v) = %v, want %v", tc.l, tc.r, got, tc.want)
+			}
+		})
+	}
+}
+
+// ── Set union operator (>=<) ──────────────────────────────────────────────────
+
+func TestSetOp_Union(t *testing.T) {
+	tests := []struct {
+		name string
+		l, r Value
+		want Value
+	}{
+		{"distinct_merge", vList(vStr("a"), vStr("b")), vList(vStr("b"), vStr("c")), vList(vStr("a"), vStr("b"), vStr("c"))},
+		{"no_overlap", vList(vStr("a")), vList(vStr("b")), vList(vStr("a"), vStr("b"))},
+		{"identical", vList(vStr("x")), vList(vStr("x")), vList(vStr("x"))},
+		{"scalar_scalar", vStr("a"), vStr("b"), vList(vStr("a"), vStr("b"))},
+		{"null_lhs", vNull(), vList(vStr("a")), vNull()},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := setOp(BinUnion, tc.l, tc.r)
+			if !valEq(got, tc.want) {
+				t.Errorf("setOp(BinUnion, %v, %v) = %v, want %v", tc.l, tc.r, got, tc.want)
+			}
+		})
+	}
+}
+
+// ── Match operators (LIKE / ILIKE / REGEXP) ───────────────────────────────────
+
+func TestMatchOp(t *testing.T) {
+	tests := []struct {
+		name string
+		op   BinOp
+		l, r Value
+		want Value
+	}{
+		// LIKE
+		{"like_prefix", BinLike, vStr("foobar"), vStr("foo%"), vBool(true)},
+		{"like_suffix", BinLike, vStr("foobar"), vStr("%bar"), vBool(true)},
+		{"like_contains", BinLike, vStr("foobar"), vStr("%oba%"), vBool(true)},
+		{"like_underscore", BinLike, vStr("foobar"), vStr("f_obar"), vBool(true)},
+		{"like_miss", BinLike, vStr("foobar"), vStr("baz%"), vBool(false)},
+		{"like_case_sensitive", BinLike, vStr("Foobar"), vStr("foo%"), vBool(false)},
+		// NOT LIKE
+		{"not_like_hit", BinNotLike, vStr("foobar"), vStr("baz%"), vBool(true)},
+		{"not_like_miss", BinNotLike, vStr("foobar"), vStr("foo%"), vBool(false)},
+		// ILIKE
+		{"ilike_case", BinILike, vStr("Foobar"), vStr("foo%"), vBool(true)},
+		{"ilike_miss", BinILike, vStr("Foobar"), vStr("baz%"), vBool(false)},
+		// NOT ILIKE
+		{"not_ilike_hit", BinNotILike, vStr("Foobar"), vStr("baz%"), vBool(true)},
+		// REGEXP
+		{"regexp_match", BinRegexp, vStr("abc123"), vStr(`[a-z]+\d+`), vBool(true)},
+		{"regexp_miss", BinRegexp, vStr("abc"), vStr(`^\d+`), vBool(false)},
+		// NOT REGEXP
+		{"not_regexp_hit", BinNotRegexp, vStr("abc"), vStr(`^\d+`), vBool(true)},
+		// null propagation
+		{"null_subject", BinLike, vNull(), vStr("%foo%"), vNull()},
+		{"null_pattern", BinLike, vStr("foo"), vNull(), vNull()},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := matchOp(tc.op, tc.l, tc.r)
+			if !valEq(got, tc.want) {
+				t.Errorf("matchOp(%v, %v, %v) = %v, want %v", tc.op, tc.l, tc.r, got, tc.want)
 			}
 		})
 	}
