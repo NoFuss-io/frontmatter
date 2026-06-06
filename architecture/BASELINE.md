@@ -1,4 +1,4 @@
-<!-- baseline-sha: 36b91a49954be6c1bd800f4d16a46021b1f87ec6 -->
+<!-- baseline-sha: c7ebc00 -->
 
 # Architecture Baseline
 
@@ -26,9 +26,10 @@ Language: Go 1.23
 Binary name: `fm`
 
 The engine is also published as a reusable Go library: the root package
-`frontmatter` re-exports the public types and entry points from `internal`
-(`Program`, `Query`, `ExecOptions`, `Document`, `ReadDocument`, `Write`,
-`ParseProgram`, `ParseQuery`, `ExpandGlobs`, `NewOutput`, `PrintTable`).
+`frontmatter` re-exports the public types and entry points from `internal` and
+`store` (`Program`, `Query`, `ExecOptions`, `Store`, `Format`, `FileStore`,
+`EnumOptions`, `ParseProgram`, `ParseQuery`, `NewOutput`, `PrintTable`,
+`NewMarkdownStore`).
 
 ---
 
@@ -46,11 +47,10 @@ fm/
 │   ├── parse_fuzz_test.go   # go test -fuzz fuzz target for ParseProgram
 │   ├── eval.go              # Value model, Cast pipeline, expression eval, list/scalar comparisons, Assign.Apply
 │   ├── eval_query.go        # Query.Eval implementations (select/update/alter projection + mutation)
-│   ├── exec.go              # Program.Run orchestrator: glob plan, per-file loop, mutation write-back
+│   ├── exec.go              # Program.Run orchestrator: store-based enumeration, per-item loop, mutation write-back
 │   ├── result.go            # Output / Table / TableRow result accumulator + sort/limit/short-circuit
 │   ├── format.go            # Table building for regular + `select *` queries; delegates rendering to table.Renderer
-│   ├── document.go          # ReadDocument / Write — `---` YAML block parse + emit
-│   ├── file.go              # FrontMatter / Document / FilePath types, ExpandGlobs
+│   ├── file.go              # FrontMatter / Document / FilePath types
 │   ├── table/               # Pluggable table rendering (package table)
 │   │   ├── table.go         # Table struct + Renderer interface
 │   │   ├── simple.go        # Simple: tab-aligned with dashed separator (default)
@@ -58,7 +58,13 @@ fm/
 │   │   ├── markdown.go      # Markdown: GFM pipe-table
 │   │   ├── full.go          # Full: box-drawing Unicode borders
 │   │   └── *_test.go        # Renderer unit tests
-│   └── *_test.go            # Unit tests: parse, eval_cast, eval_expr, eval_query, eval_types, file
+│   └── *_test.go            # Unit tests: parse, eval_cast, eval_expr, eval_query, eval_types
+├── store/                   # Pluggable store API (package store)
+│   ├── store.go             # Store / Format / FileStore interfaces + EnumOptions; glob helpers
+│   └── store_test.go        # Unit tests for FileStore.Enumerate
+├── store/markdown/          # Markdown store implementation (package markdown)
+│   ├── markdown.go          # Format: YAML frontmatter parse + emit; body sidecar via sync.Map
+│   └── markdown_test.go     # Unit tests: Read, Read without block, Read→Write→Read round-trip
 ├── docs/                    # Documentation + embedded assets (package docs)
 │   ├── embed.go             # go:embed exposes SkillMD and SkillManualMD byte slices
 │   ├── SKILL.md             # Claude Code skill (embedded, installed via `fm install-skill`)
@@ -70,7 +76,7 @@ fm/
 │       ├── tutorial.sql     # SQL-style script variant
 │       ├── tutorial.sh      # Shell script variant
 │       └── recipes/         # Sample `.md` fixtures
-├── frontmatter.go           # Root package: public re-exports of internal types/funcs
+├── frontmatter.go           # Root package: public re-exports of internal + store types/funcs
 ├── test/
 │   ├── README.md
 │   └── e2e/                 # Black-box golden tests against the compiled binary
@@ -81,7 +87,9 @@ fm/
 │   ├── BASELINE.md          # This file
 │   ├── FEATURE_WINDOWS.md   # Future feature: window/aggregate clauses
 │   ├── PLAN_260525_oss_polish.md
-│   └── TARGET_260525_oss_polish.md
+│   ├── TARGET_260525_oss_polish.md
+│   ├── PLAN_260606_pluggable_engines.md
+│   └── TARGET_260606_pluggable_engines.md
 ├── .github/
 │   ├── workflows/ci.yml         # lint + test on push/PR to main
 │   ├── workflows/release.yml    # tag-triggered goreleaser + homebrew publish
@@ -108,19 +116,127 @@ fm/
 
 ## Package Structure
 
-Five Go packages:
+Seven Go packages:
 
-| Package        | Path                  | Role |
-|:---------------|:----------------------|:-----|
-| `main`         | `cmd/fm/`             | CLI: flag parsing, `completion`/`install-skill` subcommands, `Version`/`Commit` ldflags init, calls `Program.Run` |
-| `frontmatter`  | `./` (root)           | Public library API: thin re-export shell over `internal` |
-| `internal`     | `internal/`           | Engine: AST, parser, evaluator, executor, formatter, file/document I/O |
-| `table`        | `internal/table/`     | Pluggable table rendering: `Simple`, `CSV`, `Markdown`, `Full` renderers |
-| `docs`         | `docs/`               | Embedded assets: `SkillMD` and `SkillManualMD` byte slices via `go:embed` |
-| `integration`  | `test/e2e/`           | Black-box golden tests (package only used by `go test`) |
+| Package           | Path                  | Role |
+|:------------------|:----------------------|:-----|
+| `main`            | `cmd/fm/`             | CLI: flag parsing, `completion`/`install-skill` subcommands, `Version`/`Commit` ldflags init, calls `Program.Run` |
+| `frontmatter`     | `./` (root)           | Public library API: re-exports from `internal` and `store` |
+| `internal`        | `internal/`           | Engine: AST, parser, evaluator, executor, result accumulator, table formatting |
+| `table`           | `internal/table/`     | Pluggable table rendering: `Simple`, `CSV`, `Markdown`, `Full` renderers |
+| `store`           | `store/`              | Pluggable data-source API: `Store` / `Format` interfaces, `FileStore`, `EnumOptions` |
+| `markdown`        | `store/markdown/`     | Markdown store: `---` YAML frontmatter parse + emit; implements `store.Format` |
+| `docs`            | `docs/`               | Embedded assets: `SkillMD` and `SkillManualMD` byte slices via `go:embed` |
+| `integration`     | `test/e2e/`           | Black-box golden tests (package only used by `go test`) |
 
 `cmd/fm` imports `frontmatter` (not `internal` directly) so the CLI exercises
 the same public surface as third-party consumers.
+
+### Package dependency graph
+
+```
+store/                   (Store + Format interfaces + FileStore; no internal deps)
+    ↑
+internal/                (imports store/ for Store interface; imports store/markdown for default)
+store/markdown/          (imports store/)
+frontmatter.go           (re-exports from internal/ + store/ + store/markdown/)
+cmd/fm/                  (imports frontmatter)
+```
+
+No import cycles. Third-party store authors import only `store/` to implement
+either `Format` (file-based) or `Store` (API-based), with no dependency on
+`internal/`.
+
+---
+
+## Store API (`store/`)
+
+The executor is decoupled from file I/O through a formal `Store` interface.
+
+### `Store` — what the executor sees
+
+```go
+type Store interface {
+    // Enumerate resolves FROM-clause pattern tokens into opaque item keys.
+    Enumerate(patterns []string, opts EnumOptions) ([]string, error)
+
+    // Read returns the field map for one item.
+    Read(key string) (map[string]any, error)
+
+    // Write persists a mutated field map.
+    Write(key string, fields map[string]any) error
+
+    // Label returns a human-readable display name for the key.
+    Label(key string) string
+}
+
+type EnumOptions struct {
+    IncludeHidden bool
+}
+```
+
+### `Format` — what file-format authors implement
+
+```go
+type Format interface {
+    Read(path string) (map[string]any, error)
+    Write(path string, fields map[string]any) error
+}
+```
+
+`Label` is absent from `Format`. For any file-based store the label is always
+the path — only API-based stores need a custom label.
+
+### `FileStore` — shared base for file-based stores
+
+```go
+type FileStore struct {
+    Fmt Format
+}
+```
+
+`FileStore` implements `Store` by: handling glob expansion and hidden-basename
+filtering in `Enumerate`, delegating `Read`/`Write` to `Fmt`, and returning
+the path as the `Label`. All file-based stores share this behaviour for free.
+
+### Implementing a new store
+
+**File-based** (e.g. image EXIF): implement `store.Format` — two methods.
+
+```go
+store.FileStore{Fmt: image.Format{}}
+// glob expansion, hidden filter, and Label are provided for free
+```
+
+**API-based** (e.g. Jira): implement `store.Store` — four methods.
+
+```go
+jira.Store{Client: …}
+// Enumerate calls the Jira search API; Label returns the issue key
+```
+
+---
+
+## Markdown Store (`store/markdown/`)
+
+Implements `store.Format` for Markdown files with YAML frontmatter. Contains
+the `---`-block parse and emit logic.
+
+```go
+type Format struct {
+    bodies sync.Map // key: string path → value: string body
+}
+
+func New() store.Store { return store.FileStore{Fmt: &Format{}} }
+```
+
+| Method  | Behavior |
+|:--------|:---------|
+| `Read`  | Parse leading `---\nYAML\n---\n` block; missing fence → body-only, empty map. Stashes the body in `bodies` for round-trip. |
+| `Write` | Loads body from `bodies`, reconstructs `---\nYAML\n---\nbody` and writes to disk via `gopkg.in/yaml.v3` at indent 2. |
+
+`Format` is instantiated once per `Run` call via `markdown.New()`. The body
+sidecar (`sync.Map`) is GC'd when `Run` returns.
 
 ---
 
@@ -176,7 +292,7 @@ per-file error, 2 = pre-execution failure).
 
 ## Engine (`internal/`)
 
-### Data model (`internal/file.go`, `internal/document.go`)
+### Data model (`internal/file.go`)
 
 ```go
 type FilePath = string
@@ -189,11 +305,9 @@ type Document struct {
 }
 ```
 
-| Function | Purpose |
-|:---------|:--------|
-| `ReadDocument(path)` | Parse the leading `---\nYAML\n---\n` block; missing fence → body-only doc with empty frontmatter. Tolerates a closing `---` without trailing newline. |
-| `Write(path, *Document)` | Re-emit `---\nYAML---\n` + body to disk (mode 0644) via `gopkg.in/yaml.v3` encoder at indent 2. |
-| `ExpandGlobs(patterns)` | Resolve glob patterns and bare paths. Tokens with `*?[` go through `filepath.Glob`; non-regular matches are silently skipped. Bare-token tokens must exist or it errors. |
+`Document` is kept in `internal/file.go` for backwards compatibility as an
+internal type. File I/O (read/write of the `---` block) now lives in
+`store/markdown/`.
 
 ### AST (`internal/ast.go`)
 
@@ -203,7 +317,7 @@ type Program struct { Stmts []Query }
 type Query interface {
     Eval(fm FrontMatter) (*TableRow, error)
     IsMutation() bool
-    Globs() []string
+    Patterns() []string
     q() query        // unexported: shared shape used by Output/Table
 }
 
@@ -233,6 +347,10 @@ type AlterQuery struct {
 
 Field / Assign / SortTerm / RenamePair, AssignOp (`= += -=`), AlterOp
 (`Drop|Rename`) are unchanged from the previous baseline in spirit.
+
+`Query.Patterns()` replaces the former `Query.Globs()` — the new name is
+store-neutral: file stores receive glob strings; API stores receive
+domain-specific identifiers.
 
 #### Expression nodes
 
@@ -381,6 +499,7 @@ type ExecOptions struct {
     MaxColumns    int              // 0 → DefaultMaxColumns (20)
     IncludeHidden bool
     Renderer      table.Renderer  // nil → table.Simple{}
+    Store         store.Store     // nil → markdown.New()
 }
 
 func (Program) Run(opts ExecOptions, okOut, errOut io.Writer) (ok bool)
@@ -388,32 +507,34 @@ func (Program) Run(opts ExecOptions, okOut, errOut io.Writer) (ok bool)
 
 Lifecycle:
 
-1. **`expandPlan`** — call `ExpandGlobs` once per statement; the union (in
-   first-encounter order) drives the outer file loop. When `IncludeHidden` is
-   false, dot-prefixed basenames are dropped *unless* they were named by a
-   non-glob bare-path token.
-2. **Per file**: `ReadDocument` once. Iterate statements; skip those whose path
-   list doesn't contain the current file or whose `Output.Done` short-circuit
+1. **Store init** — if `opts.Store == nil`, use `markdown.New()` as the default
+   (preserves existing behaviour for all CLI and library consumers that do not
+   supply a custom store).
+2. **`expandPlan`** — call `s.Enumerate(stmt.Patterns(), EnumOptions{IncludeHidden})`
+   once per statement; the union (in first-encounter order) drives the outer
+   item loop.
+3. **Per item**: `s.Read(key)` once. Iterate statements; skip those whose key
+   list doesn't contain the current key or whose `Output.Done` short-circuit
    has fired. Each surviving statement runs `Eval` against the in-memory
    frontmatter; output rows are routed to the per-statement `Table` via
-   `Output.Append`. A mutation statement that succeeds marks the file dirty
-   and (unless `Verbose`) its row is not appended; the first evaluation error
-   halts further statements for that file and skips the write-back.
-3. **Write-back** if the file was mutated, no statement halted, and `DryRun`
-   is false.
-4. **FROM-less selects** — after the file loop, any non-mutation statement
-   whose glob list is empty is evaluated once against `FrontMatter{}` and its
-   row is appended (no `filename` column). Enables expression evaluation
+   `Output.Append(s.Label(key), ...)`. A mutation statement that succeeds marks
+   the item dirty and (unless `Verbose`) its row is not appended; the first
+   evaluation error halts further statements for that item and skips write-back.
+4. **Write-back** if the item was mutated, no statement halted, and `DryRun`
+   is false: `s.Write(key, fm)`.
+5. **FROM-less selects** — after the item loop, any non-mutation statement
+   whose pattern list is empty is evaluated once against `FrontMatter{}` and
+   its row is appended (no `filename` column). Enables expression evaluation
    without a file corpus, e.g. `fm 'select 1+1'`.
-5. **`Output.Finalize`** sorts each Select table by `SortBy` (null sorts last;
+6. **`Output.Finalize`** sorts each Select table by `SortBy` (null sorts last;
    numeric kinds compare numerically; date kinds compare temporally; everything
    else falls back to `FormatValue` string compare) and truncates by `Limit`.
-6. **`Output.Print`** writes each non-empty table to `okOut` in source order,
+7. **`Output.Print`** writes each non-empty table to `okOut` in source order,
    separated by blank lines. Empty mutation tables (verbose=off) are silently
    skipped. Per-file errors go to `errOut` as `ERROR: <path>: <msg>`.
 
 `Output.Done(i)` returns true once a non-mutation, no-sort statement has
-collected `Limit` rows — this lets the file loop skip those statements (and
+collected `Limit` rows — this lets the item loop skip those statements (and
 break out entirely when every table is `Done`).
 
 ### Result accumulator (`internal/result.go`)
@@ -527,7 +648,9 @@ golangci-lint v2 with `errcheck`, `govet`, `ineffassign`, `misspell`,
 
 - **Unit tests** in `internal/`: `parse_test.go`, `parse_fuzz_test.go`,
   `eval_test.go`, `eval_cast_test.go`, `eval_expr_test.go`,
-  `eval_query_test.go`, `eval_types_test.go`, `file_test.go`.
+  `eval_query_test.go`, `eval_types_test.go`.
+- **Unit tests** in `store/`: `store_test.go` (FileStore.Enumerate).
+- **Unit tests** in `store/markdown/`: `markdown_test.go` (Read, Write, round-trip).
 - **End-to-end tests** in `test/e2e/`: `integration_test.go` builds `fm` once,
   copies each `cases/<name>/input/` into a `t.TempDir()`, runs `sh -ec` on
   `cmd`, and diffs `expected` / `expected_stderr` / `expected_exit` /
@@ -560,31 +683,31 @@ the binary, the man page, and shell completions via
 ### Select
 
 ```
-Program.Run → expandPlan → for each file in union:
-    ReadDocument → for each select stmt whose globs include this file:
-        Eval (where + project Select|Star → TableRow) → Output.Append
+Program.Run → store.Enumerate (expandPlan) → for each key in union:
+    store.Read → for each select stmt whose key list includes this item:
+        Eval (where + project Select|Star → TableRow) → Output.Append(store.Label(key), ...)
 collect rows → Output.Finalize (sort + limit) → Output.Print
 ```
 
 ### Update
 
 ```
-Program.Run → expandPlan → for each file in union:
-    ReadDocument → for each update stmt:
+Program.Run → store.Enumerate (expandPlan) → for each key in union:
+    store.Read → for each update stmt:
         Eval (where + apply Set in order)
-        → mark file dirty, Append projected row
-    write doc back (unless DryRun or any stmt errored on this file)
+        → mark item dirty, Append projected row
+    store.Write(key, fm) (unless DryRun or any stmt errored on this item)
 ```
 
 ### Alter
 
 ```
-Program.Run → expandPlan → for each file in union:
-    ReadDocument → for each alter stmt:
+Program.Run → store.Enumerate (expandPlan) → for each key in union:
+    store.Read → for each alter stmt:
         Eval (drop or rename)
-        → mark file dirty, Append projected row
+        → mark item dirty, Append projected row
             (drop projects pre-deletion values; rename projects post-rename names)
-    write doc back (unless DryRun or any stmt errored on this file)
+    store.Write(key, fm) (unless DryRun or any stmt errored on this item)
 ```
 
 ---
@@ -594,23 +717,30 @@ Program.Run → expandPlan → for each file in union:
 - **Library + thin CLI split, with a public Go API.** The engine lives in
   `internal/` and is re-exported through the root `frontmatter` package, so
   third-party Go consumers get a stable surface without inheriting the CLI.
-- **Single-pass multi-statement execution.** `Program.Run` reads each file once
+- **Pluggable store API.** `store.Store` decouples the SQL evaluator from file
+  I/O. Third-party stores (image EXIF, Jira, SQLite, …) implement two interfaces
+  without touching `internal/`. The markdown store is the compiled-in default.
+- **Single-pass multi-statement execution.** `Program.Run` reads each item once
   and runs every matching statement against the same in-memory frontmatter,
-  with a single write-back per file. This makes scripts behave consistently
+  with a single write-back per item. This makes scripts behave consistently
   and eliminates the previous "no `--dry-run` for multi-statement scripts"
   caveat at the CLI layer.
-- **Halted statements skip the write.** Any per-file evaluation error aborts
-  further statements for that file *and* cancels its write-back, so partially
+- **Halted statements skip the write.** Any per-item evaluation error aborts
+  further statements for that item *and* cancels its write-back, so partially
   mutated frontmatter never reaches disk.
 - **Short-circuit limit.** `Output.Done` lets a `select … limit N` (without
-  `sort by`) stop consuming files as soon as it has enough rows; when every
-  statement is done, the outer file loop exits early.
+  `sort by`) stop consuming items as soon as it has enough rows; when every
+  statement is done, the outer item loop exits early.
 - **`select *` with a column cap.** Star selects materialize the union of
   field names across all matched files; `--max-columns` (default 20) caps the
   rendered width with a trailing "(N more column(s) hidden)" note.
-- **Hidden files opt-in.** `filterHidden` drops dot-prefixed basenames from
-  glob expansion by default; explicit bare-path tokens (`fm select … from .hidden.md`)
-  bypass the filter. `-H/--hidden` re-enables them globally.
+- **Hidden files opt-in.** `store.FileStore.Enumerate` drops dot-prefixed
+  basenames from glob expansion by default; explicit bare-path tokens bypass
+  the filter. `-H/--hidden` re-enables them globally. API stores ignore this
+  option.
+- **Body sidecar for round-trip safety.** `store/markdown.Format` stores the
+  non-frontmatter body in a `sync.Map` during `Read` and retrieves it during
+  `Write`. No body bytes are exposed through the `map[string]any` field API.
 - **Single `any`-typed frontmatter map.** Every field is `any` in memory;
   types are enforced at query/mutation time via `Cast`.
 - **Null as a first-class value.** Missing fields and failed casts collapse
