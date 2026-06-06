@@ -1095,7 +1095,7 @@ func parseComparison(c *cursor) (Expr, error) {
 	var n int
 	switch {
 	case len(b) >= 3 && b[0] == '<' && b[1] == '=' && b[2] == '>':
-		op, n = BinOverlap, 3
+		op, n = BinIntersect, 3
 	case len(b) >= 2 && b[0] == '!' && b[1] == '=':
 		op, n = BinNe, 2
 	case len(b) >= 2 && b[0] == '<' && b[1] == '=':

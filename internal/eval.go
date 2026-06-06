@@ -333,6 +333,9 @@ func (e ListExpr) Eval(fm FrontMatter) Value {
 	return Value{Kind: TypeList, Data: els}
 }
 
+// Eval dispatches to evalFunc in eval_func.go.
+func (e FuncExpr) Eval(fm FrontMatter) Value { return evalFunc(e, fm) }
+
 func (e FieldExpr) Eval(fm FrontMatter) Value {
 	if fm == nil {
 		return Value{Null: true}
@@ -433,7 +436,7 @@ func (e BinExpr) Eval(fm FrontMatter) Value {
 		return Value{Kind: TypeBool, Data: truthy(e.Left.Eval(fm)) || truthy(e.Right.Eval(fm))}
 	case BinAdd, BinSub, BinMul, BinDiv:
 		return arith(e.Op, e.Left.Eval(fm), e.Right.Eval(fm))
-	case BinEq, BinNe, BinLt, BinLe, BinGt, BinGe, BinOverlap:
+	case BinEq, BinNe, BinLt, BinLe, BinGt, BinGe, BinIntersect:
 		return compare(e.Op, e.Left.Eval(fm), e.Right.Eval(fm))
 	}
 	return Value{Null: true}
@@ -459,7 +462,7 @@ func compare(op BinOp, l, r Value) Value {
 		return Value{Kind: TypeBool, Data: scalarEq(l, r)}
 	case BinNe:
 		return Value{Kind: TypeBool, Data: !scalarEq(l, r)}
-	case BinOverlap:
+	case BinIntersect:
 		return Value{Kind: TypeBool, Data: scalarEq(l, r)}
 	}
 	lf, errL := Cast(l, TypeNumber)
@@ -511,16 +514,16 @@ func compareList(op BinOp, l, r Value) Value {
 			return Value{Kind: TypeBool, Data: listSetEq(la, rb)}
 		case BinNe:
 			return Value{Kind: TypeBool, Data: !listSetEq(la, rb)}
-		case BinOverlap:
+		case BinIntersect:
 			return Value{Kind: TypeBool, Data: listOverlap(la, rb)}
 		}
 	case l.Kind == TypeList && op == BinGe:
 		return Value{Kind: TypeBool, Data: listContains(l.Data.([]Value), r)}
 	case r.Kind == TypeList && op == BinLe:
 		return Value{Kind: TypeBool, Data: listContains(r.Data.([]Value), l)}
-	case l.Kind == TypeList && op == BinOverlap:
+	case l.Kind == TypeList && op == BinIntersect:
 		return Value{Kind: TypeBool, Data: listContains(l.Data.([]Value), r)}
-	case r.Kind == TypeList && op == BinOverlap:
+	case r.Kind == TypeList && op == BinIntersect:
 		return Value{Kind: TypeBool, Data: listContains(r.Data.([]Value), l)}
 	}
 	return Value{Kind: TypeBool, Data: false}

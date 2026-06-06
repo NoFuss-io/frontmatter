@@ -219,9 +219,9 @@ func TestCompare_Overlap(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := compare(BinOverlap, tc.l, tc.r)
+			got := compare(BinIntersect, tc.l, tc.r)
 			if !valEq(got, vBool(tc.want)) {
-				t.Errorf("compare(BinOverlap, %+v, %+v) = %+v, want %v", tc.l, tc.r, got, tc.want)
+				t.Errorf("compare(BinIntersect, %+v, %+v) = %+v, want %v", tc.l, tc.r, got, tc.want)
 			}
 		})
 	}

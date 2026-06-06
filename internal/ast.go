@@ -170,6 +170,15 @@ type ListExpr struct {
 
 func (ListExpr) expr() {}
 
+// FuncExpr is a built-in function call: name(arg, ...).
+// Name is always lower-cased at parse time.
+type FuncExpr struct {
+	Name string
+	Args []Expr
+}
+
+func (FuncExpr) expr() {}
+
 func (LitExpr) expr() {}
 
 // --- Operators ---
@@ -183,13 +192,22 @@ const (
 	BinAnd              // and
 
 	// Comparison operators.
-	BinEq      // =
-	BinNe      // !=
-	BinLt      // <
-	BinLe      // <=
-	BinGt      // >
-	BinGe      // >=
-	BinOverlap // <=>  set overlap (lists share ≥1 element)
+	BinEq        // =
+	BinNe        // !=
+	BinLt        // <
+	BinLe        // <=
+	BinGt        // >
+	BinGe        // >=
+	BinIntersect // <=>  set intersection (returns list)
+	BinUnion     // >=<  set union (returns list, distinct, order-preserving)
+
+	// String-matching operators (return bool).
+	BinLike      // LIKE
+	BinNotLike   // NOT LIKE
+	BinILike     // ILIKE
+	BinNotILike  // NOT ILIKE
+	BinRegexp    // REGEXP
+	BinNotRegexp // NOT REGEXP
 
 	// Arithmetic operators.
 	BinAdd // +
