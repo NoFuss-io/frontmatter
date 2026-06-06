@@ -35,6 +35,24 @@ func TestFormat_Read_ValidFrontmatter(t *testing.T) {
 	}
 }
 
+func TestFormat_Read_CRLFLineEndings(t *testing.T) {
+	dir := t.TempDir()
+	path := writeFile(t, dir, "crlf.md", "---\r\ntitle: Hello\r\ntags:\r\n  - a\r\n  - b\r\n---\r\nBody.\r\n")
+
+	s := markdown.New()
+	fields, err := s.Read(path)
+	if err != nil {
+		t.Fatalf("Read error: %v", err)
+	}
+	if fields["title"] != "Hello" {
+		t.Errorf("expected title=Hello, got %v", fields["title"])
+	}
+	tags, ok := fields["tags"].([]any)
+	if !ok || len(tags) != 2 {
+		t.Errorf("expected tags slice of length 2, got %v", fields["tags"])
+	}
+}
+
 func TestFormat_Read_NoFrontmatter(t *testing.T) {
 	dir := t.TempDir()
 	path := writeFile(t, dir, "plain.md", "Just a body.\n")

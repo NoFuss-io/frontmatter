@@ -46,7 +46,7 @@ func (f *Format) Read(path string) (map[string]any, error) {
 		return nil, err
 	}
 	fm := make(map[string]any)
-	s := string(raw)
+	s := strings.ReplaceAll(string(raw), "\r\n", "\n")
 
 	if !strings.HasPrefix(s, "---\n") {
 		f.bodies.Store(path, s)
