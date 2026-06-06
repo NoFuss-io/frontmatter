@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	fm "github.com/nofuss-io/frontmatter"
+	"github.com/nofuss-io/frontmatter/internal/table"
 )
 
 var (
@@ -47,6 +48,7 @@ type options struct {
 	verbose            bool
 	includeHiddenFiles bool
 	maxColumns         int
+	format             string
 }
 
 var usage = `fm - Markdown frontmatter batch editor
@@ -70,6 +72,7 @@ Flags:
   -v, --verbose           Print affected fields after update or alter.
   -H, --include-hidden    Include hidden files (ignored by default).
       --max-columns N     Column cap for 'select *' output (default 20).
+      --format FORMAT     Output format: simple (default), csv, markdown, full.
 
 Subcommands:
   fm completion {bash|zsh|fish}   Print shell-completion script to stdout.
@@ -117,7 +120,12 @@ func main() {
 		os.Exit(2)
 	}
 
-	if ok := prog.Run(fm.ExecOptions{DryRun: opts.dryRun, Silent: opts.silent, Verbose: opts.verbose, MaxColumns: opts.maxColumns, IncludeHidden: opts.includeHiddenFiles}, okOut, errOut); !ok {
+	renderer, err := resolveRenderer(opts.format)
+	if err != nil {
+		_, _ = fmt.Fprintln(errOut, err)
+		os.Exit(2)
+	}
+	if ok := prog.Run(fm.ExecOptions{DryRun: opts.dryRun, Silent: opts.silent, Verbose: opts.verbose, MaxColumns: opts.maxColumns, IncludeHidden: opts.includeHiddenFiles, Renderer: renderer}, okOut, errOut); !ok {
 		os.Exit(1)
 	}
 }
@@ -134,6 +142,7 @@ func parseFlags(args []string) (options, []string, error) {
 	fs.BoolVar(&opts.verbose, "verbose", false, "")
 	fs.BoolVar(&opts.verbose, "v", false, "")
 	fs.IntVar(&opts.maxColumns, "max-columns", 0, "")
+	fs.StringVar(&opts.format, "format", "simple", "")
 	fs.BoolVar(&opts.includeHiddenFiles, "include-hidden", false, "")
 	fs.BoolVar(&opts.includeHiddenFiles, "hidden", false, "")
 	fs.BoolVar(&opts.includeHiddenFiles, "H", false, "")
@@ -177,6 +186,21 @@ func parseProgram(args []string, in io.Reader) (*fm.Program, error) {
 		return nil, fmt.Errorf("empty query")
 	}
 	return &prog, nil
+}
+
+func resolveRenderer(format string) (table.Renderer, error) {
+	switch format {
+	case "", "simple":
+		return table.Simple{}, nil
+	case "csv":
+		return table.CSV{}, nil
+	case "markdown", "md":
+		return table.Markdown{}, nil
+	case "full":
+		return table.Full{}, nil
+	default:
+		return nil, fmt.Errorf("unknown format %q: must be simple, csv, markdown, or full", format)
+	}
 }
 
 func readProgramString(args []string, in io.Reader) (string, error) {
