@@ -3,11 +3,11 @@ package internal
 import (
 	"fmt"
 	"io"
-	"path/filepath"
 	"slices"
-	"strings"
 
 	tablepkg "github.com/nofuss-io/frontmatter/internal/table"
+	"github.com/nofuss-io/frontmatter/store"
+	markdownstore "github.com/nofuss-io/frontmatter/store/markdown"
 )
 
 // ExecOptions controls how a Program is executed.
@@ -28,6 +28,9 @@ type ExecOptions struct {
 	IncludeHidden bool
 	// Renderer controls how result tables are formatted. Nil defaults to Simple.
 	Renderer tablepkg.Renderer
+	// Store selects the data-source backend. Nil defaults to
+	// store/markdown.New() — preserving the current behaviour.
+	Store store.Store
 }
 
 // DefaultMaxColumns is the column cap applied to `select *` output when
@@ -60,37 +63,42 @@ func (p Program) Run(opts ExecOptions, okOut, errOut io.Writer) (ok bool) {
 	}
 	out := NewOutput(&p, errOut, maxColumns, renderer)
 
-	stmtPaths, allPaths, err := expandPlan(p, opts.IncludeHidden)
+	s := opts.Store
+	if s == nil {
+		s = markdownstore.New()
+	}
+
+	stmtPaths, allPaths, err := expandPlan(p, s, opts.IncludeHidden)
 	if err != nil {
 		_, _ = fmt.Fprintln(errOut, err)
 		return false
 	}
 
-	for _, path := range allPaths {
+	for _, key := range allPaths {
 		if out.AllDone() {
 			break
 		}
 
-		doc, err := ReadDocument(path)
+		fm, err := s.Read(key)
 		if err != nil {
 			ok = false
-			out.Error(path, fmt.Errorf("could not read: %w", err))
+			out.Error(s.Label(key), fmt.Errorf("could not read: %w", err))
 			continue
 		}
 
 		mutated := false
 		halted := false
 		for i, stmt := range p.Stmts {
-			if !slices.Contains(stmtPaths[i], path) {
+			if !slices.Contains(stmtPaths[i], key) {
 				continue
 			}
 			if out.Done(i) {
 				continue
 			}
-			row, evalErr := stmt.Eval(doc.FrontMatter)
+			row, evalErr := stmt.Eval(FrontMatter(fm))
 			if evalErr != nil {
 				ok = false
-				out.Error(path, evalErr)
+				out.Error(s.Label(key), evalErr)
 				halted = true
 				break
 			}
@@ -103,13 +111,13 @@ func (p Program) Run(opts ExecOptions, okOut, errOut io.Writer) (ok bool) {
 					continue
 				}
 			}
-			out.Append(path, i, row)
+			out.Append(s.Label(key), i, row)
 		}
 
 		if mutated && !halted && !opts.DryRun {
-			if err := Write(path, doc); err != nil {
+			if err := s.Write(key, fm); err != nil {
 				ok = false
-				out.Error(path, fmt.Errorf("could not write: %w", err))
+				out.Error(s.Label(key), fmt.Errorf("could not write: %w", err))
 			}
 		}
 	}
@@ -134,55 +142,25 @@ func (p Program) Run(opts ExecOptions, okOut, errOut io.Writer) (ok bool) {
 	return ok
 }
 
-// expandPlan resolves each statement's globs once and returns the per-statement
-// path lists plus the deduplicated union iterated by the outer file loop. When
-// includeHidden is false, files whose basename starts with '.' are dropped from
-// glob-expanded results (bare paths are kept regardless).
-func expandPlan(p Program, includeHidden bool) ([][]string, []string, error) {
+// expandPlan resolves each statement's patterns once via the store and returns
+// the per-statement key lists plus the deduplicated union iterated by the outer
+// file loop.
+func expandPlan(p Program, s store.Store, includeHidden bool) ([][]string, []string, error) {
 	stmtPaths := make([][]string, len(p.Stmts))
 	var all []string
 	seen := make(map[string]bool)
 	for i, stmt := range p.Stmts {
-		paths, err := ExpandGlobs(stmt.Globs())
+		keys, err := s.Enumerate(stmt.Globs(), store.EnumOptions{IncludeHidden: includeHidden})
 		if err != nil {
 			return nil, nil, fmt.Errorf("statement %d: %w", i+1, err)
 		}
-		if !includeHidden {
-			paths = filterHidden(paths, stmt.Globs())
-		}
-		stmtPaths[i] = paths
-		for _, p := range paths {
-			if !seen[p] {
-				seen[p] = true
-				all = append(all, p)
+		stmtPaths[i] = keys
+		for _, k := range keys {
+			if !seen[k] {
+				seen[k] = true
+				all = append(all, k)
 			}
 		}
 	}
 	return stmtPaths, all, nil
 }
-
-// filterHidden drops paths whose basename begins with '.', except those that
-// match a bare-path (non-glob) token, which the user named explicitly.
-func filterHidden(paths []string, globs []string) []string {
-	bare := make(map[string]bool, len(globs))
-	for _, g := range globs {
-		if !containsGlobMeta(g) {
-			bare[g] = true
-		}
-	}
-	out := paths[:0]
-	for _, p := range paths {
-		if bare[p] {
-			out = append(out, p)
-			continue
-		}
-		base := filepath.Base(p)
-		if strings.HasPrefix(base, ".") {
-			continue
-		}
-		out = append(out, p)
-	}
-	return out
-}
-
-func containsGlobMeta(s string) bool { return strings.ContainsAny(s, "*?[") }
