@@ -14,12 +14,21 @@ func TestFullRender(t *testing.T) {
 		{
 			name: "zero rows",
 			tbl:  Table{Headers: []string{"name", "age"}, Rows: nil},
-			want: "┌──────┬─────┐\n│ name │ age │\n├──────┼─────┤\n└──────┴─────┘\n",
+			want: `┌──────┬─────┐
+│ name │ age │
+├──────┼─────┤
+└──────┴─────┘
+`,
 		},
 		{
 			name: "one row",
 			tbl:  Table{Headers: []string{"name", "age"}, Rows: [][]string{{"alice", "30"}}},
-			want: "┌───────┬─────┐\n│ name  │ age │\n├───────┼─────┤\n│ alice │ 30  │\n└───────┴─────┘\n",
+			want: `┌───────┬─────┐
+│ name  │ age │
+├───────┼─────┤
+│ alice │ 30  │
+└───────┴─────┘
+`,
 		},
 		{
 			name: "two rows",
@@ -27,7 +36,13 @@ func TestFullRender(t *testing.T) {
 				Headers: []string{"name", "age"},
 				Rows:    [][]string{{"alice", "30"}, {"bob", "25"}},
 			},
-			want: "┌───────┬─────┐\n│ name  │ age │\n├───────┼─────┤\n│ alice │ 30  │\n│ bob   │ 25  │\n└───────┴─────┘\n",
+			want: `┌───────┬─────┐
+│ name  │ age │
+├───────┼─────┤
+│ alice │ 30  │
+│ bob   │ 25  │
+└───────┴─────┘
+`,
 		},
 	}
 

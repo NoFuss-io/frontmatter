@@ -14,12 +14,15 @@ func TestCSVRender(t *testing.T) {
 		{
 			name: "zero rows",
 			tbl:  Table{Headers: []string{"name", "age"}, Rows: nil},
-			want: "name,age\n",
+			want: `name,age
+`,
 		},
 		{
 			name: "one row",
 			tbl:  Table{Headers: []string{"name", "age"}, Rows: [][]string{{"alice", "30"}}},
-			want: "name,age\nalice,30\n",
+			want: `name,age
+alice,30
+`,
 		},
 		{
 			name: "two rows",
@@ -27,7 +30,10 @@ func TestCSVRender(t *testing.T) {
 				Headers: []string{"name", "age"},
 				Rows:    [][]string{{"alice", "30"}, {"bob", "25"}},
 			},
-			want: "name,age\nalice,30\nbob,25\n",
+			want: `name,age
+alice,30
+bob,25
+`,
 		},
 		{
 			name: "escapes commas and quotes",
@@ -35,7 +41,10 @@ func TestCSVRender(t *testing.T) {
 				Headers: []string{"note"},
 				Rows:    [][]string{{"say \"hi\""}, {"a,b"}},
 			},
-			want: "note\n\"say \"\"hi\"\"\"\n\"a,b\"\n",
+			want: `note
+"say ""hi"""
+"a,b"
+`,
 		},
 	}
 

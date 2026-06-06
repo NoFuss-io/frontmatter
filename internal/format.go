@@ -90,7 +90,7 @@ func (t *Table) buildTable() tablepkg.Table {
 	for i, row := range t.rows {
 		if !t.noFile {
 			cells := make([]string, len(row.print)+1)
-			cells[0] = string(row.path)
+			cells[0] = row.path
 			for j, v := range row.print {
 				cells[j+1] = FormatValue(v)
 			}
@@ -136,7 +136,7 @@ func (t *Table) buildStarTable() (tablepkg.Table, int) {
 	for i, row := range t.rows {
 		if !t.noFile {
 			cells := make([]string, len(colNames)+1)
-			cells[0] = string(row.path)
+			cells[0] = row.path
 			for j, name := range colNames {
 				if v, ok := row.star[name]; ok {
 					cells[j+1] = FormatValue(v)
@@ -171,7 +171,7 @@ func PrintTable(w io.Writer, headers []string, rows []TableRow, noFile bool) {
 	for i, row := range rows {
 		if !noFile {
 			cells := make([]string, len(row.print)+1)
-			cells[0] = string(row.path)
+			cells[0] = row.path
 			for j, v := range row.print {
 				cells[j+1] = FormatValue(v)
 			}
