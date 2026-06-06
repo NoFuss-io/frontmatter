@@ -2,6 +2,13 @@
 // Third-party store authors import only this package — never internal/.
 package store
 
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
 // Store is the pluggable data-source backend. The executor calls it to
 // enumerate items, read their fields, write mutations back, and label them
 // in output tables.
@@ -47,8 +54,14 @@ type FileStore struct {
 }
 
 func (fs FileStore) Enumerate(patterns []string, opts EnumOptions) ([]string, error) {
-	// Implementation filled in Phase B.
-	panic("FileStore.Enumerate: not yet implemented")
+	paths, err := expandGlobs(patterns)
+	if err != nil {
+		return nil, err
+	}
+	if !opts.IncludeHidden {
+		paths = filterHidden(paths, patterns)
+	}
+	return paths, nil
 }
 
 func (fs FileStore) Read(key string) (map[string]any, error) {
@@ -61,4 +74,55 @@ func (fs FileStore) Write(key string, fields map[string]any) error {
 
 func (fs FileStore) Label(key string) string {
 	return key
+}
+
+// expandGlobs expands pattern tokens to file paths. Bare paths that exist are
+// passed through; tokens containing glob metacharacters are expanded via
+// filepath.Glob. A bare-path token that does not exist is an error.
+func expandGlobs(patterns []string) ([]string, error) {
+	var paths []string
+	for _, p := range patterns {
+		if strings.ContainsAny(p, "*?[") {
+			matched, err := filepath.Glob(p)
+			if err != nil {
+				return nil, fmt.Errorf("glob %q: %w", p, err)
+			}
+			for _, m := range matched {
+				fi, err := os.Stat(m)
+				if err == nil && fi.Mode().IsRegular() {
+					paths = append(paths, m)
+				}
+			}
+			continue
+		}
+		if _, err := os.Stat(p); err != nil {
+			return nil, fmt.Errorf("no such file or pattern: %s", p)
+		}
+		paths = append(paths, p)
+	}
+	return paths, nil
+}
+
+// filterHidden drops paths whose basename begins with '.', except those that
+// match a bare-path (non-glob) token, which the user named explicitly.
+func filterHidden(paths []string, patterns []string) []string {
+	bare := make(map[string]bool, len(patterns))
+	for _, g := range patterns {
+		if !strings.ContainsAny(g, "*?[") {
+			bare[g] = true
+		}
+	}
+	out := paths[:0]
+	for _, p := range paths {
+		if bare[p] {
+			out = append(out, p)
+			continue
+		}
+		base := filepath.Base(p)
+		if strings.HasPrefix(base, ".") {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
 }
