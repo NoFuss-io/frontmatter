@@ -7,7 +7,6 @@ import "github.com/nofuss-io/frontmatter/internal"
 
 type (
 	FrontMatter = internal.FrontMatter
-	Document    = internal.Document
 	FilePath    = internal.FilePath
 
 	Program     = internal.Program
@@ -25,9 +24,6 @@ type (
 var (
 	ParseProgram = internal.ParseProgram
 	ParseQuery   = internal.ParseQuery
-	ReadDocument = internal.ReadDocument
-	Write        = internal.Write
-	ExpandGlobs  = internal.ExpandGlobs
 	NewOutput    = internal.NewOutput
 	PrintTable   = internal.PrintTable
 )
