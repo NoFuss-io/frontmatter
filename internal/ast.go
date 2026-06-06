@@ -7,7 +7,7 @@ type Program struct {
 type Query interface {
 	Eval(fm FrontMatter) (*TableRow, error)
 	IsMutation() bool
-	Globs() []string
+	Patterns() []string
 	q() query
 }
 
