@@ -3,6 +3,9 @@
 # Binary
 /fm
 
+# Release notes draft (ephemeral, written by release skill)
+/release-notes.md
+
 # Generated release artifacts
 /dist/
 /completions/
