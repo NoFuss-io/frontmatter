@@ -1,1 +1,4 @@
-fm 'select * from *.md' --max-columns 2
+fm \
+    --format simple \
+    --max-columns 2 \
+    'select * from *.md'

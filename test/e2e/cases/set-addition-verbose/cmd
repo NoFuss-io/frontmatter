@@ -1,1 +1,4 @@
-fm -v 'select tags from * where tags <=> ["a", "b"]; update * set tags += "t"'
+fm \
+    --format simple \
+    --verbose \
+    'select tags from * where tags <=> ["a", "b"]; update * set tags += "t"'
