@@ -1,3 +1,8 @@
-fm 'select tags from *'
+fm \
+    --format simple \
+    'select tags from *'
 echo ---
-fm 'select tags from *' --hidden
+fm \
+    --format simple \
+    --hidden \
+    'select tags from *'

@@ -1090,12 +1090,24 @@ func parseComparison(c *cursor) (Expr, error) {
 		return nil, err
 	}
 	skipWS(c)
+
+	// Keyword operators: NOT LIKE / NOT ILIKE / NOT REGEXP, then LIKE / ILIKE / REGEXP.
+	if op, ok := peekMatchOp(c); ok {
+		right, err := parseArith(c)
+		if err != nil {
+			return nil, err
+		}
+		return BinExpr{Op: op, Left: left, Right: right}, nil
+	}
+
 	b := c.peekN(3)
 	var op BinOp
 	var n int
 	switch {
 	case len(b) >= 3 && b[0] == '<' && b[1] == '=' && b[2] == '>':
-		op, n = BinOverlap, 3
+		op, n = BinIntersect, 3
+	case len(b) >= 3 && b[0] == '>' && b[1] == '=' && b[2] == '<':
+		op, n = BinUnion, 3
 	case len(b) >= 2 && b[0] == '!' && b[1] == '=':
 		op, n = BinNe, 2
 	case len(b) >= 2 && b[0] == '<' && b[1] == '=':
@@ -1117,6 +1129,49 @@ func parseComparison(c *cursor) (Expr, error) {
 		return nil, err
 	}
 	return BinExpr{Op: op, Left: left, Right: right}, nil
+}
+
+// peekMatchOp checks for LIKE / ILIKE / REGEXP and their NOT variants.
+// On match it consumes the token(s) and returns the operator.
+func peekMatchOp(c *cursor) (BinOp, bool) {
+	saved := c.pos
+	kw := strings.ToLower(peekKeyword(c))
+	if kw == "not" {
+		consumeBytes(c, len(kw))
+		skipWS(c)
+		kw2 := strings.ToLower(peekKeyword(c))
+		switch kw2 {
+		case "like":
+			consumeBytes(c, len(kw2))
+			skipWS(c)
+			return BinNotLike, true
+		case "ilike":
+			consumeBytes(c, len(kw2))
+			skipWS(c)
+			return BinNotILike, true
+		case "regexp":
+			consumeBytes(c, len(kw2))
+			skipWS(c)
+			return BinNotRegexp, true
+		}
+		c.pos = saved
+		return 0, false
+	}
+	switch kw {
+	case "like":
+		consumeBytes(c, len(kw))
+		skipWS(c)
+		return BinLike, true
+	case "ilike":
+		consumeBytes(c, len(kw))
+		skipWS(c)
+		return BinILike, true
+	case "regexp":
+		consumeBytes(c, len(kw))
+		skipWS(c)
+		return BinRegexp, true
+	}
+	return 0, false
 }
 
 func parseArith(c *cursor) (Expr, error) {
@@ -1237,6 +1292,20 @@ func parsePrimary(c *cursor) (Expr, error) {
 		case "and", "or", "not":
 			return nil, fmt.Errorf("unexpected keyword %q", word)
 		}
+		// Peek ahead past the identifier to check for '(' — function call.
+		savedPos := c.pos
+		consumeBytes(c, len(word))
+		skipWS(c)
+		if next := c.peekN(1); len(next) > 0 && next[0] == '(' {
+			consumeBytes(c, 1) // consume '('
+			args, err := parseFuncArgs(c)
+			if err != nil {
+				return nil, fmt.Errorf("function %s: %w", word, err)
+			}
+			return FuncExpr{Name: strings.ToLower(word), Args: args}, nil
+		}
+		// Not a function call — restore and parse as field reference.
+		c.pos = savedPos
 		var f Field
 		if err := f.parse(c); err != nil {
 			return nil, err
@@ -1277,6 +1346,42 @@ func parseListLiteral(c *cursor) (Expr, error) {
 			return ListExpr{Elems: elems}, nil
 		default:
 			return nil, fmt.Errorf("expected ',' or ']' in list literal, got %q", b[0])
+		}
+	}
+}
+
+// parseFuncArgs reads a comma-separated argument list up to the closing ')'.
+// The opening '(' must already have been consumed.
+func parseFuncArgs(c *cursor) ([]Expr, error) {
+	var args []Expr
+	for {
+		skipWS(c)
+		b := c.peekN(1)
+		if len(b) == 0 {
+			return nil, fmt.Errorf("unterminated function call")
+		}
+		if b[0] == ')' {
+			consumeBytes(c, 1)
+			return args, nil
+		}
+		e, err := parseOrExpr(c)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, e)
+		skipWS(c)
+		b = c.peekN(1)
+		if len(b) == 0 {
+			return nil, fmt.Errorf("unterminated function call")
+		}
+		switch b[0] {
+		case ',':
+			consumeBytes(c, 1)
+		case ')':
+			consumeBytes(c, 1)
+			return args, nil
+		default:
+			return nil, fmt.Errorf("expected ',' or ')' in function call, got %q", b[0])
 		}
 	}
 }

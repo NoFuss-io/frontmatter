@@ -2,6 +2,30 @@
 `fm` implements a subset of SQL with syntax tailored for Markdown front matter in YAML, such as that of [Obsidian documents' properties](https://obsidian.md/help/properties). Think of files as rows and fields as columns.
 
 
+## Contents
+
+- [Usage](#usage)
+  - [Query using command line arguments](#query-using-command-line-arguments)
+  - [Query using stdin](#query-using-stdin)
+  - [Output](#output)
+    - [File mutations](#file-mutations)
+- [Syntax](#syntax)
+  - [Select query](#select-query)
+  - [Update query](#update-query)
+  - [Alter query](#alter-query)
+  - [Fields](#fields)
+    - [Identifiers](#identifiers)
+    - [Types](#types)
+    - [Evaluation & type casting](#evaluation--type-casting)
+  - [Expressions](#expressions)
+    - [Atoms](#atoms)
+    - [Literals](#literals)
+    - [Functions](functions.md)
+    - [Boolean expressions](#boolean-expressions)
+  - [Assignment](#assignment)
+  - [Globs](#globs)
+
+
 ## Usage
 
 ```sh
@@ -225,50 +249,59 @@ Scalar may be cast to a single-element list and vice versa. When casting to `lis
 
 ### Expressions
 
-An expression is recursively composed of [fields](#fields), [literals](#literals), operators, and grouping parentheses.
+An expression is recursively composed of [fields](#fields), [literals](#literals),
+operators, [function calls](./functions.md), and grouping parentheses.
 
 ```ebnf
-expression = or_expr
-or_expr    = and_expr { "or" and_expr }
+expression = and_expr { "or"  and_expr }
 and_expr   = not_expr { "and" not_expr }
-not_expr   = [ "not" ] comparison
-comparison = arith { comp_op arith }
-arith      = term { ( "+" | "-" ) term }
+not_expr   = "not" not_expr | comparison
+comparison = arith [ comp_op arith ]
+comp_op    = "=" | "!=" | "<" | "<=" | ">" | ">="
+arith      = term   { ( "+" | "-" ) term }
 term       = factor { ( "*" | "/" ) factor }
-factor     = [ "-" ] primary
-primary    = "(" expression ")" | field | literal
+factor     = "-" factor | primary
+primary    = "(" expression ")" | func_call | field | literal
+func_call  = identifier "(" [ expression { "," expression } ] ")"
+field      = identifier [ ":" type ]
 ```
+
+Lexical terminals (`identifier`, `literal`, `type`) are defined in [Fields](#fields), [Literals](#literals), and [Types](#types).
+
+`func_call` and `field` both start with `identifier`; they are disambiguated by the following token (`(` → function call, `:` or nothing → field).
 
 Parentheses override precedence: `a or (b and c)` evaluates `b and c` first.
 
 Operator precedence (highest to lowest), following BigQuery ([docs](https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/operators#operator_precedence)):
 
-| Precedence | Operator |
-|-----------:|:---------|
-| 1 | Unary `-` |
-| 2 | `*`, `/` |
-| 3 | `+`, `-` |
-| 4 | Comparison operators |
-| 5 | `not` |
-| 6 | `and` |
-| 7 | `or` |
+- 1. Unary `-`
+- 2. `*`, `/`
+- 3. `+`, `-`
+- 4. Comparison operators
+- 5. `not`
+- 6. `and`
+- 7. `or`
 
 
 #### Atoms
 
-Atoms are the leaf nodes of an expression — either a field reference or a literal.
+Atoms are *primary expressions* — the highest-precedence forms in the grammar. They are not necessarily indivisible (a function call contains sub-expressions, a parenthesized expression wraps one), but each acts as a single value-producing unit that no outside operator can bind into.
 
 **Field** (`identifier[:type]`): reads the value from the current file's frontmatter and optionally casts it (see [Fields](#fields)). Evaluates to **null** if the field does not exist or casting fails.
 
 **Literal**: a constant value embedded directly in the query (see [Literals](#literals)). Literals always exist; they never produce null.
 
+**Function call** (`name(arg, ...)`): invokes a built-in function and returns its result. Functions return **null** on invalid or missing arguments. See [functions.md](functions.md) for the full reference.
+
 ```
-title                -- field, any type
-price:number         -- field cast to number
-`created-at`:date    -- quoted-identifier field cast to date
-42                   -- integer literal
-"hello world"        -- string literal
-true                 -- boolean literal
+title                   -- field, any type
+price:number            -- field cast to number
+`created-at`:date       -- quoted-identifier field cast to date
+42                      -- integer literal
+"hello world"           -- string literal
+true                    -- boolean literal
+lower(title)            -- function call
+concat(title, " (", year(created:date), ")")  -- nested calls
 ```
 
 Null propagates through arithmetic — any operation with a null operand produces null. In a boolean context (comparisons, `where`) null is falsey.

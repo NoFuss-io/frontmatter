@@ -1034,3 +1034,82 @@ select y from b;
 		})
 	}
 }
+
+// ── FuncExpr parse ────────────────────────────────────────────────────────────
+
+func TestFuncExpr_Parse(t *testing.T) {
+	tests := []struct {
+		in      string
+		name    string
+		nArgs   int
+		wantErr bool
+	}{
+		{in: `LOWER("hello")`, name: "lower", nArgs: 1},
+		{in: `lower("hello")`, name: "lower", nArgs: 1},
+		{in: `TODAY()`, name: "today", nArgs: 0},
+		{in: `CONCAT("a", "b", "c")`, name: "concat", nArgs: 3},
+		{in: `SUBSTR(title, 1, 5)`, name: "substr", nArgs: 3},
+		{in: `ARRAY_LENGTH(tags)`, name: "array_length", nArgs: 1},
+		{in: `COALESCE(a, b, null)`, name: "coalesce", nArgs: 3},
+		{in: `UPPER(LOWER("X"))`, name: "upper", nArgs: 1},
+		{in: `f(`, wantErr: true},
+		{in: `f(1,`, wantErr: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.in, func(t *testing.T) {
+			e, err := ParseExpr(r(tc.in))
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("ParseExpr(%q): expected error, got nil", tc.in)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ParseExpr(%q): unexpected error: %v", tc.in, err)
+			}
+			fn, ok := e.(FuncExpr)
+			if !ok {
+				t.Fatalf("ParseExpr(%q): got %T, want FuncExpr", tc.in, e)
+			}
+			if fn.Name != tc.name {
+				t.Errorf("Name = %q, want %q", fn.Name, tc.name)
+			}
+			if len(fn.Args) != tc.nArgs {
+				t.Errorf("len(Args) = %d, want %d", len(fn.Args), tc.nArgs)
+			}
+		})
+	}
+}
+
+// ── New operator parse ────────────────────────────────────────────────────────
+
+func TestNewOperators_Parse(t *testing.T) {
+	tests := []struct {
+		in string
+		op BinOp
+	}{
+		{in: `a <=> b`, op: BinIntersect},
+		{in: `a >=< b`, op: BinUnion},
+		{in: `title LIKE "%foo%"`, op: BinLike},
+		{in: `title NOT LIKE "%foo%"`, op: BinNotLike},
+		{in: `title ILIKE "%foo%"`, op: BinILike},
+		{in: `title NOT ILIKE "%foo%"`, op: BinNotILike},
+		{in: `title REGEXP r"^\d+"`, op: BinRegexp},
+		{in: `title NOT REGEXP r"^\d+"`, op: BinNotRegexp},
+	}
+	for _, tc := range tests {
+		t.Run(tc.in, func(t *testing.T) {
+			e, err := ParseExpr(r(tc.in))
+			if err != nil {
+				t.Fatalf("ParseExpr(%q): unexpected error: %v", tc.in, err)
+			}
+			bin, ok := e.(BinExpr)
+			if !ok {
+				t.Fatalf("ParseExpr(%q): got %T, want BinExpr", tc.in, e)
+			}
+			if bin.Op != tc.op {
+				t.Errorf("Op = %v, want %v", bin.Op, tc.op)
+			}
+		})
+	}
+}

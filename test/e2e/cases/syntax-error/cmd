@@ -1,1 +1,2 @@
-fm 'select tags from * where tags === "x"'
+fm \
+    'select tags from * where tags === "x"'

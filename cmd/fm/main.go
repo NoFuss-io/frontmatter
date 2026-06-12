@@ -72,7 +72,7 @@ Flags:
   -v, --verbose           Print affected fields after update or alter.
   -H, --include-hidden    Include hidden files (ignored by default).
       --max-columns N     Column cap for 'select *' output (default 20).
-      --format FORMAT     Output format: simple (default), csv, markdown, full.
+      --format FORMAT     Output format: full (default), simple, csv, markdown.
 
 Subcommands:
   fm completion {bash|zsh|fish}   Print shell-completion script to stdout.
@@ -142,7 +142,7 @@ func parseFlags(args []string) (options, []string, error) {
 	fs.BoolVar(&opts.verbose, "verbose", false, "")
 	fs.BoolVar(&opts.verbose, "v", false, "")
 	fs.IntVar(&opts.maxColumns, "max-columns", 0, "")
-	fs.StringVar(&opts.format, "format", "simple", "")
+	fs.StringVar(&opts.format, "format", "full", "")
 	fs.BoolVar(&opts.includeHiddenFiles, "include-hidden", false, "")
 	fs.BoolVar(&opts.includeHiddenFiles, "hidden", false, "")
 	fs.BoolVar(&opts.includeHiddenFiles, "H", false, "")
