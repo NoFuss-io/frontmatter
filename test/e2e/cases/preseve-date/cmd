@@ -1,0 +1,1 @@
+fm 'update * set tags += "y"'

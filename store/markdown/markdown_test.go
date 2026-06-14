@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/nofuss-io/frontmatter/store/markdown"
 )
@@ -105,6 +106,45 @@ func TestFormat_ReadWriteRead_RoundTrip(t *testing.T) {
 	content := string(raw)
 	if !containsStr(content, "The body text.") {
 		t.Errorf("body not preserved after Write; file content:\n%s", content)
+	}
+}
+
+func TestWrite_FieldTypes(t *testing.T) {
+	tests := []struct {
+		name   string
+		fields map[string]any
+		want   string
+	}{
+		{
+			name:   "date preserved as date",
+			fields: map[string]any{"birthday": time.Date(2001, 2, 3, 0, 0, 0, 0, time.UTC)},
+			want:   "---\nbirthday: 2001-02-03\n---\n",
+		},
+		{
+			name:   "plain string unquoted",
+			fields: map[string]any{"a": "x", "b": "\"y\"", "c": "z \"z\" z"},
+			want:   "---\na: x\nb: '\"y\"'\nc: z \"z\" z\n---\n",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := writeFile(t, dir, "note.md", "---\n_: _\n---\n")
+			s := markdown.New()
+			if _, err := s.Read(path); err != nil {
+				t.Fatalf("Read: %v", err)
+			}
+			if err := s.Write(path, tc.fields); err != nil {
+				t.Fatalf("Write: %v", err)
+			}
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("ReadFile: %v", err)
+			}
+			if got := string(raw); got != tc.want {
+				t.Errorf("file content:\ngot:  %q\nwant: %q", got, tc.want)
+			}
+		})
 	}
 }
 

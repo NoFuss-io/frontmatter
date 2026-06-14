@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -90,10 +91,44 @@ func (f *Format) Write(path string, fields map[string]any) error {
 	buf.WriteString("---\n")
 	enc := yaml.NewEncoder(&buf)
 	enc.SetIndent(2)
-	if err := enc.Encode(fields); err != nil {
+	if err := enc.Encode(marshalFields(fields)); err != nil {
 		return err
 	}
 	buf.WriteString("---\n")
 	buf.WriteString(body)
 	return os.WriteFile(path, buf.Bytes(), 0644)
+}
+
+func marshalFields(fields map[string]any) map[string]any {
+	out := make(map[string]any, len(fields))
+	for k, v := range fields {
+		out[k] = marshalValue(v)
+	}
+	return out
+}
+
+// marshalValue converts Go values to yaml.Node where needed so the encoder
+// writes them in their original YAML form:
+//   - time.Time uses !!timestamp so dates stay as 2006-01-02, not RFC3339.
+//   - string uses !!str so yaml.v3's isOldBool guard (which quotes "y", "n",
+//     "on", "off", etc. for YAML 1.1 compatibility) is bypassed; the encoder
+//     still quotes strings that resolve to non-string types (true, null, 1…).
+func marshalValue(v any) any {
+	switch val := v.(type) {
+	case time.Time:
+		s := val.Format(time.RFC3339)
+		if val.Hour() == 0 && val.Minute() == 0 && val.Second() == 0 && val.Nanosecond() == 0 {
+			s = val.Format("2006-01-02")
+		}
+		return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!timestamp", Value: s}
+	case string:
+		return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: val}
+	case []any:
+		out := make([]any, len(val))
+		for i, e := range val {
+			out[i] = marshalValue(e)
+		}
+		return out
+	}
+	return v
 }
