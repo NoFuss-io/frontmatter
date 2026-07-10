@@ -684,19 +684,8 @@ func TestSelectQuery_Parse(t *testing.T) {
 				}
 			},
 		},
-		// FROM-less select
-		{
-			in: "select title",
-			check: func(t *testing.T, q SelectQuery) {
-				if len(q.Select) != 1 {
-					t.Fatalf("len(Select) = %d, want 1", len(q.Select))
-				}
-				if len(q.From) != 0 {
-					t.Errorf("From = %v, want empty", q.From)
-				}
-			},
-		},
 		// Errors
+		{in: "select title", wantErr: true},                     // missing from clause
 		{in: "select title from", wantErr: true},                // missing glob
 		{in: "select title from *.md limit -1", wantErr: true},  // negative limit
 		{in: "select title from *.md limit foo", wantErr: true}, // non-integer limit
