@@ -1,0 +1,2 @@
+fm \
+    'select bad_func(tags) from *'

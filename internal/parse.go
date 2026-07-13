@@ -1311,10 +1311,16 @@ func parsePrimary(c *cursor) (Expr, error) {
 		consumeBytes(c, len(word))
 		skipWS(c)
 		if next := c.peekN(1); len(next) > 0 && next[0] == '(' {
+			if !isKnownFunc(word) {
+				return nil, fmt.Errorf("unknown function %q", word)
+			}
 			consumeBytes(c, 1) // consume '('
 			args, err := parseFuncArgs(c)
 			if err != nil {
 				return nil, fmt.Errorf("function %s: %w", word, err)
+			}
+			if err := checkFuncArity(word, len(args)); err != nil {
+				return nil, err
 			}
 			return FuncExpr{Name: strings.ToLower(word), Args: args}, nil
 		}

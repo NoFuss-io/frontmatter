@@ -157,24 +157,48 @@ func evalFunc(e FuncExpr, fm FrontMatter) (Value, error) {
 	return Value{Null: true}, fmt.Errorf("unknown function %q", e.Name)
 }
 
-// builtinFuncs is the set of recognized built-in function names (lowercase).
-// Kept in sync with the switch in evalFunc.
-var builtinFuncs = map[string]bool{
-	"lower": true, "upper": true, "length": true, "substr": true,
-	"starts_with": true, "ends_with": true, "contains_substr": true,
-	"trim": true, "ltrim": true, "rtrim": true, "replace": true,
-	"split": true, "concat": true, "regexp_contains": true,
-	"regexp_extract": true, "to_string": true,
-	"abs": true, "ceil": true, "floor": true, "round": true, "mod": true,
-	"sqrt": true, "pow": true, "greatest": true, "least": true, "coalesce": true,
-	"array_length": true, "array_contains": true, "array_concat": true,
-	"distinct": true, "array_to_string": true,
-	"today": true, "year": true, "month": true, "day": true, "date_diff": true,
+// funcArity is the accepted argument-count range for a built-in function.
+// max == -1 means unbounded (variadic).
+type funcArity struct{ min, max int }
+
+// builtinFuncs maps recognized built-in function names (lowercase) to their
+// accepted argument-count range. Kept in sync with the switch in evalFunc.
+var builtinFuncs = map[string]funcArity{
+	"lower": {1, 1}, "upper": {1, 1}, "length": {1, 1}, "substr": {2, 3},
+	"starts_with": {2, 2}, "ends_with": {2, 2}, "contains_substr": {2, 2},
+	"trim": {1, 2}, "ltrim": {1, 2}, "rtrim": {1, 2}, "replace": {3, 3},
+	"split": {2, 2}, "concat": {2, -1}, "regexp_contains": {2, 2},
+	"regexp_extract": {2, 2}, "to_string": {1, 1},
+	"abs": {1, 1}, "ceil": {1, 1}, "floor": {1, 1}, "round": {1, 2}, "mod": {2, 2},
+	"sqrt": {1, 1}, "pow": {2, 2}, "greatest": {1, -1}, "least": {1, -1}, "coalesce": {1, -1},
+	"array_length": {1, 1}, "array_contains": {2, 2}, "array_concat": {1, -1},
+	"distinct": {1, 1}, "array_to_string": {2, 2},
+	"today": {0, 0}, "year": {1, 1}, "month": {1, 1}, "day": {1, 1}, "date_diff": {2, 2},
 }
 
 // isKnownFunc reports whether name (case-insensitive) is a built-in function.
 func isKnownFunc(name string) bool {
-	return builtinFuncs[strings.ToLower(name)]
+	_, ok := builtinFuncs[strings.ToLower(name)]
+	return ok
+}
+
+// checkFuncArity validates that n arguments is acceptable for the named
+// built-in function. The name must already be known.
+func checkFuncArity(name string, n int) error {
+	a := builtinFuncs[strings.ToLower(name)]
+	if n < a.min || (a.max >= 0 && n > a.max) {
+		var want string
+		switch {
+		case a.max < 0:
+			want = fmt.Sprintf("at least %d", a.min)
+		case a.min == a.max:
+			want = fmt.Sprintf("exactly %d", a.min)
+		default:
+			want = fmt.Sprintf("between %d and %d", a.min, a.max)
+		}
+		return fmt.Errorf("function %q expects %s argument(s), got %d", strings.ToLower(name), want, n)
+	}
+	return nil
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
