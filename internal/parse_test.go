@@ -40,6 +40,13 @@ func TestField_Parse(t *testing.T) {
 		{in: "`from`", want: Field{Name: "from", Type: TypeAny}}, // reserved keyword
 		{in: "`from`:date", want: Field{Name: "from", Type: TypeDate}},
 
+		// Functions
+		{in: `length("abc")`},
+		{in: `length("abc", 123)`}, // wrong argument count
+		{in: `coalesce("abc")`},
+		{in: `coalesce("abc", 123, true)`},     // variadic
+		{in: `bad_func("abc")`, wantErr: true}, // unknown function
+
 		// Errors
 		{in: "", wantErr: true},                 // empty
 		{in: "1foo", wantErr: true},             // starts with digit

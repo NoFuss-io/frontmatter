@@ -182,6 +182,19 @@ func (f *Field) parse(c *cursor) error {
 	f.Type = TypeAny
 
 	ch, ok := c.peekRune()
+	if ok && ch == '(' {
+		// Not a plain field but a function call. Validate the name and
+		// consume the call, leaving the Field zero-valued.
+		if !isKnownFunc(name) {
+			return fmt.Errorf("unknown function %q", name)
+		}
+		f.Name = ""
+		c.readRune() // consume '('
+		if _, err := parseFuncArgs(c); err != nil {
+			return fmt.Errorf("function %s: %w", name, err)
+		}
+		return nil
+	}
 	if !ok || ch != ':' {
 		return nil
 	}

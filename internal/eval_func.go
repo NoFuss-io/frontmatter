@@ -157,6 +157,26 @@ func evalFunc(e FuncExpr, fm FrontMatter) (Value, error) {
 	return Value{Null: true}, fmt.Errorf("unknown function %q", e.Name)
 }
 
+// builtinFuncs is the set of recognized built-in function names (lowercase).
+// Kept in sync with the switch in evalFunc.
+var builtinFuncs = map[string]bool{
+	"lower": true, "upper": true, "length": true, "substr": true,
+	"starts_with": true, "ends_with": true, "contains_substr": true,
+	"trim": true, "ltrim": true, "rtrim": true, "replace": true,
+	"split": true, "concat": true, "regexp_contains": true,
+	"regexp_extract": true, "to_string": true,
+	"abs": true, "ceil": true, "floor": true, "round": true, "mod": true,
+	"sqrt": true, "pow": true, "greatest": true, "least": true, "coalesce": true,
+	"array_length": true, "array_contains": true, "array_concat": true,
+	"distinct": true, "array_to_string": true,
+	"today": true, "year": true, "month": true, "day": true, "date_diff": true,
+}
+
+// isKnownFunc reports whether name (case-insensitive) is a built-in function.
+func isKnownFunc(name string) bool {
+	return builtinFuncs[strings.ToLower(name)]
+}
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 func fnStr(s string) Value { return Value{Kind: TypeString, Data: s} }
