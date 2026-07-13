@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"math"
 	"regexp"
 	"strings"
@@ -8,7 +9,7 @@ import (
 	"unicode/utf8"
 )
 
-func evalFunc(e FuncExpr, fm FrontMatter) Value {
+func evalFunc(e FuncExpr, fm FrontMatter) (Value, error) {
 	switch e.Name {
 	// ── String ────────────────────────────────────────────────────────────────
 	case "lower":
@@ -143,7 +144,7 @@ func evalFunc(e FuncExpr, fm FrontMatter) Value {
 
 	// ── Date ──────────────────────────────────────────────────────────────────
 	case "today":
-		return Value{Kind: TypeDate, Data: time.Now().Truncate(24 * time.Hour)}
+		return Value{Kind: TypeDate, Data: time.Now().Truncate(24 * time.Hour)}, nil
 	case "year":
 		return fnDatePart(e.Args, fm, func(t time.Time) int64 { return int64(t.Year()) })
 	case "month":
@@ -153,7 +154,7 @@ func evalFunc(e FuncExpr, fm FrontMatter) Value {
 	case "date_diff":
 		return fnDateDiff(e.Args, fm)
 	}
-	return Value{Null: true}
+	return Value{Null: true}, fmt.Errorf("unknown function %q", e.Name)
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -162,118 +163,154 @@ func fnStr(s string) Value { return Value{Kind: TypeString, Data: s} }
 func fnBool(b bool) Value  { return Value{Kind: TypeBool, Data: b} }
 func fnInt(n int64) Value  { return Value{Kind: TypeInt, Data: n} }
 
-func argStr(args []Expr, i int, fm FrontMatter) (string, bool) {
+// argStr evaluates args[i] and casts it to string. The bool reports whether a
+// usable value was produced (present, non-null, castable); an eval error is
+// returned separately so it can propagate and fail the file.
+func argStr(args []Expr, i int, fm FrontMatter) (string, bool, error) {
 	if i >= len(args) {
-		return "", false
+		return "", false, nil
 	}
-	v := args[i].Eval(fm)
-	s, err := Cast(v, TypeString)
-	if err != nil || s.Null {
-		return "", false
+	v, err := args[i].Eval(fm)
+	if err != nil {
+		return "", false, fmt.Errorf("could not evaluate argument %d: %w", i+1, err)
 	}
-	return s.Data.(string), true
+	s, cerr := Cast(v, TypeString)
+	if cerr != nil || s.Null {
+		return "", false, nil
+	}
+	return s.Data.(string), true, nil
 }
 
-func argInt(args []Expr, i int, fm FrontMatter) (int64, bool) {
+func argInt(args []Expr, i int, fm FrontMatter) (int64, bool, error) {
 	if i >= len(args) {
-		return 0, false
+		return 0, false, nil
 	}
-	v := args[i].Eval(fm)
-	n, err := Cast(v, TypeInt)
-	if err != nil || n.Null {
-		return 0, false
+	v, err := args[i].Eval(fm)
+	if err != nil {
+		return 0, false, fmt.Errorf("could not evaluate argument %d: %w", i+1, err)
 	}
-	return n.Data.(int64), true
+	n, cerr := Cast(v, TypeInt)
+	if cerr != nil || n.Null {
+		return 0, false, nil
+	}
+	return n.Data.(int64), true, nil
 }
 
-func argNum(args []Expr, i int, fm FrontMatter) (float64, bool) {
+func argNum(args []Expr, i int, fm FrontMatter) (float64, bool, error) {
 	if i >= len(args) {
-		return 0, false
+		return 0, false, nil
 	}
-	v := args[i].Eval(fm)
-	n, err := Cast(v, TypeNumber)
-	if err != nil || n.Null {
-		return 0, false
+	v, err := args[i].Eval(fm)
+	if err != nil {
+		return 0, false, fmt.Errorf("could not evaluate argument %d: %w", i+1, err)
 	}
-	return n.Data.(float64), true
+	n, cerr := Cast(v, TypeNumber)
+	if cerr != nil || n.Null {
+		return 0, false, nil
+	}
+	return n.Data.(float64), true, nil
 }
 
-func fnUnaryStr(args []Expr, fm FrontMatter, f func(string) Value) Value {
+func fnUnaryStr(args []Expr, fm FrontMatter, f func(string) Value) (Value, error) {
 	if len(args) != 1 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	s, ok := argStr(args, 0, fm)
+	s, ok, err := argStr(args, 0, fm)
+	if err != nil {
+		return Value{}, err
+	}
 	if !ok {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	return f(s)
+	return f(s), nil
 }
 
-func fnBinaryStr(args []Expr, fm FrontMatter, f func(string, string) Value) Value {
+func fnBinaryStr(args []Expr, fm FrontMatter, f func(string, string) Value) (Value, error) {
 	if len(args) != 2 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	s, ok1 := argStr(args, 0, fm)
-	t, ok2 := argStr(args, 1, fm)
+	s, ok1, err := argStr(args, 0, fm)
+	if err != nil {
+		return Value{}, err
+	}
+	t, ok2, err := argStr(args, 1, fm)
+	if err != nil {
+		return Value{}, err
+	}
 	if !ok1 || !ok2 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	return f(s, t)
+	return f(s, t), nil
 }
 
-func fnUnaryNum(args []Expr, fm FrontMatter, f func(Value) Value) Value {
+func fnUnaryNum(args []Expr, fm FrontMatter, f func(Value) Value) (Value, error) {
 	if len(args) != 1 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	v := args[0].Eval(fm)
+	v, err := args[0].Eval(fm)
+	if err != nil {
+		return Value{}, fmt.Errorf("could not evaluate argument 1: %w", err)
+	}
 	if v.Null {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
 	if v.Kind != TypeInt && v.Kind != TypeNumber {
-		c, err := Cast(v, TypeNumber)
-		if err != nil {
-			return Value{Null: true}
+		c, cerr := Cast(v, TypeNumber)
+		if cerr != nil {
+			return Value{Null: true}, nil
 		}
 		v = c
 	}
-	return f(v)
+	return f(v), nil
 }
 
 func fnTrim(
 	args []Expr, fm FrontMatter,
 	trimFunc func(string, func(rune) bool) string,
 	trimStr func(string, string) string,
-) Value {
+) (Value, error) {
 	if len(args) < 1 || len(args) > 2 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	s, ok := argStr(args, 0, fm)
+	s, ok, err := argStr(args, 0, fm)
+	if err != nil {
+		return Value{}, err
+	}
 	if !ok {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
 	if len(args) == 1 {
 		return fnStr(trimFunc(s, func(r rune) bool {
 			return r == ' ' || r == '\t' || r == '\n' || r == '\r'
-		}))
+		})), nil
 	}
-	chars, ok := argStr(args, 1, fm)
+	chars, ok, err := argStr(args, 1, fm)
+	if err != nil {
+		return Value{}, err
+	}
 	if !ok {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	return fnStr(trimStr(s, chars))
+	return fnStr(trimStr(s, chars)), nil
 }
 
-func fnSubstr(args []Expr, fm FrontMatter) Value {
+func fnSubstr(args []Expr, fm FrontMatter) (Value, error) {
 	if len(args) < 2 || len(args) > 3 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	s, ok := argStr(args, 0, fm)
-	if !ok {
-		return Value{Null: true}
+	s, ok, err := argStr(args, 0, fm)
+	if err != nil {
+		return Value{}, err
 	}
-	pos, ok := argInt(args, 1, fm)
 	if !ok {
-		return Value{Null: true}
+		return Value{Null: true}, nil
+	}
+	pos, ok, err := argInt(args, 1, fm)
+	if err != nil {
+		return Value{}, err
+	}
+	if !ok {
+		return Value{Null: true}, nil
 	}
 	runes := []rune(s)
 	n := int64(len(runes))
@@ -286,119 +323,158 @@ func fnSubstr(args []Expr, fm FrontMatter) Value {
 	}
 	start := pos - 1
 	if start >= n {
-		return fnStr("")
+		return fnStr(""), nil
 	}
 	if len(args) == 2 {
-		return fnStr(string(runes[start:]))
+		return fnStr(string(runes[start:])), nil
 	}
-	length, ok := argInt(args, 2, fm)
+	length, ok, err := argInt(args, 2, fm)
+	if err != nil {
+		return Value{}, err
+	}
 	if !ok {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
 	end := start + length
 	if end > n {
 		end = n
 	}
 	if end < start {
-		return fnStr("")
+		return fnStr(""), nil
 	}
-	return fnStr(string(runes[start:end]))
+	return fnStr(string(runes[start:end])), nil
 }
 
-func fnReplace(args []Expr, fm FrontMatter) Value {
+func fnReplace(args []Expr, fm FrontMatter) (Value, error) {
 	if len(args) != 3 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	s, ok1 := argStr(args, 0, fm)
-	from, ok2 := argStr(args, 1, fm)
-	to, ok3 := argStr(args, 2, fm)
+	s, ok1, err := argStr(args, 0, fm)
+	if err != nil {
+		return Value{}, err
+	}
+	from, ok2, err := argStr(args, 1, fm)
+	if err != nil {
+		return Value{}, err
+	}
+	to, ok3, err := argStr(args, 2, fm)
+	if err != nil {
+		return Value{}, err
+	}
 	if !ok1 || !ok2 || !ok3 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	return fnStr(strings.ReplaceAll(s, from, to))
+	return fnStr(strings.ReplaceAll(s, from, to)), nil
 }
 
-func fnConcat(args []Expr, fm FrontMatter) Value {
+func fnConcat(args []Expr, fm FrontMatter) (Value, error) {
 	if len(args) < 2 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
 	var sb strings.Builder
 	for i := range args {
-		s, ok := argStr(args, i, fm)
+		s, ok, err := argStr(args, i, fm)
+		if err != nil {
+			return Value{}, err
+		}
 		if !ok {
-			return Value{Null: true}
+			return Value{Null: true}, nil
 		}
 		sb.WriteString(s)
 	}
-	return fnStr(sb.String())
+	return fnStr(sb.String()), nil
 }
 
-func fnToString(args []Expr, fm FrontMatter) Value {
+func fnToString(args []Expr, fm FrontMatter) (Value, error) {
 	if len(args) != 1 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	v := args[0].Eval(fm)
-	if v.Null {
-		return Value{Null: true}
-	}
-	s, err := Cast(v, TypeString)
+	v, err := args[0].Eval(fm)
 	if err != nil {
-		return Value{Null: true}
+		return Value{}, fmt.Errorf("could not evaluate argument 1: %w", err)
 	}
-	return s
+	if v.Null {
+		return Value{Null: true}, nil
+	}
+	s, cerr := Cast(v, TypeString)
+	if cerr != nil {
+		return Value{Null: true}, nil
+	}
+	return s, nil
 }
 
-func fnRound(args []Expr, fm FrontMatter) Value {
+func fnRound(args []Expr, fm FrontMatter) (Value, error) {
 	if len(args) < 1 || len(args) > 2 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	f, ok := argNum(args, 0, fm)
+	f, ok, err := argNum(args, 0, fm)
+	if err != nil {
+		return Value{}, err
+	}
 	if !ok {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
 	digits := int64(0)
 	if len(args) == 2 {
-		d, ok := argInt(args, 1, fm)
+		d, ok, err := argInt(args, 1, fm)
+		if err != nil {
+			return Value{}, err
+		}
 		if !ok {
-			return Value{Null: true}
+			return Value{Null: true}, nil
 		}
 		digits = d
 	}
 	factor := math.Pow(10, float64(digits))
-	return Value{Kind: TypeNumber, Data: math.Round(f*factor) / factor}
+	return Value{Kind: TypeNumber, Data: math.Round(f*factor) / factor}, nil
 }
 
-func fnMod(args []Expr, fm FrontMatter) Value {
+func fnMod(args []Expr, fm FrontMatter) (Value, error) {
 	if len(args) != 2 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	x, ok1 := argInt(args, 0, fm)
-	y, ok2 := argInt(args, 1, fm)
+	x, ok1, err := argInt(args, 0, fm)
+	if err != nil {
+		return Value{}, err
+	}
+	y, ok2, err := argInt(args, 1, fm)
+	if err != nil {
+		return Value{}, err
+	}
 	if !ok1 || !ok2 || y == 0 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	return fnInt(x % y)
+	return fnInt(x % y), nil
 }
 
-func fnPow(args []Expr, fm FrontMatter) Value {
+func fnPow(args []Expr, fm FrontMatter) (Value, error) {
 	if len(args) != 2 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	x, ok1 := argNum(args, 0, fm)
-	y, ok2 := argNum(args, 1, fm)
+	x, ok1, err := argNum(args, 0, fm)
+	if err != nil {
+		return Value{}, err
+	}
+	y, ok2, err := argNum(args, 1, fm)
+	if err != nil {
+		return Value{}, err
+	}
 	if !ok1 || !ok2 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	return Value{Kind: TypeNumber, Data: math.Pow(x, y)}
+	return Value{Kind: TypeNumber, Data: math.Pow(x, y)}, nil
 }
 
-func fnMinMax(args []Expr, fm FrontMatter, wantMin bool) Value {
+func fnMinMax(args []Expr, fm FrontMatter, wantMin bool) (Value, error) {
 	if len(args) == 0 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
 	best := Value{Null: true}
-	for _, a := range args {
-		v := a.Eval(fm)
+	for i, a := range args {
+		v, err := a.Eval(fm)
+		if err != nil {
+			return Value{}, fmt.Errorf("could not evaluate argument %d: %w", i+1, err)
+		}
 		if v.Null {
 			continue
 		}
@@ -418,57 +494,72 @@ func fnMinMax(args []Expr, fm FrontMatter, wantMin bool) Value {
 			}
 		}
 	}
-	return best
+	return best, nil
 }
 
-func fnCoalesce(args []Expr, fm FrontMatter) Value {
-	for _, a := range args {
-		v := a.Eval(fm)
+func fnCoalesce(args []Expr, fm FrontMatter) (Value, error) {
+	for i, a := range args {
+		v, err := a.Eval(fm)
+		if err != nil {
+			return Value{}, fmt.Errorf("could not evaluate argument %d: %w", i+1, err)
+		}
 		if !v.Null {
-			return v
+			return v, nil
 		}
 	}
-	return Value{Null: true}
+	return Value{Null: true}, nil
 }
 
-func fnArrayLength(args []Expr, fm FrontMatter) Value {
+func fnArrayLength(args []Expr, fm FrontMatter) (Value, error) {
 	if len(args) != 1 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	v := args[0].Eval(fm)
+	v, err := args[0].Eval(fm)
+	if err != nil {
+		return Value{}, fmt.Errorf("could not evaluate argument 1: %w", err)
+	}
 	if v.Null {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
 	if v.Kind != TypeList {
-		return fnInt(1)
+		return fnInt(1), nil
 	}
-	return fnInt(int64(len(v.Data.([]Value))))
+	return fnInt(int64(len(v.Data.([]Value)))), nil
 }
 
-func fnArrayContains(args []Expr, fm FrontMatter) Value {
+func fnArrayContains(args []Expr, fm FrontMatter) (Value, error) {
 	if len(args) != 2 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	list := args[0].Eval(fm)
-	elem := args[1].Eval(fm)
+	list, err := args[0].Eval(fm)
+	if err != nil {
+		return Value{}, fmt.Errorf("could not evaluate argument 1: %w", err)
+	}
+	elem, err := args[1].Eval(fm)
+	if err != nil {
+		return Value{}, fmt.Errorf("could not evaluate argument 2: %w", err)
+	}
 	if list.Null || elem.Null {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
 	if list.Kind != TypeList {
-		return fnBool(scalarEq(list, elem))
+		return fnBool(scalarEq(list, elem)), nil
 	}
-	return fnBool(listContains(list.Data.([]Value), elem))
+	return fnBool(listContains(list.Data.([]Value), elem)), nil
 }
 
-func fnArrayConcat(args []Expr, fm FrontMatter) Value {
+func fnArrayConcat(args []Expr, fm FrontMatter) (Value, error) {
 	if len(args) == 0 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
 	var out []Value
-	for _, a := range args {
-		v := a.Eval(fm)
+	for i, a := range args {
+		v, err := a.Eval(fm)
+		if err != nil {
+			return Value{}, fmt.Errorf("could not evaluate argument %d: %w", i+1, err)
+		}
 		if v.Null {
-			return Value{Null: true}
+			return Value{Null: true}, nil
 		}
 		if v.Kind == TypeList {
 			out = append(out, v.Data.([]Value)...)
@@ -479,19 +570,22 @@ func fnArrayConcat(args []Expr, fm FrontMatter) Value {
 	if out == nil {
 		out = []Value{}
 	}
-	return Value{Kind: TypeList, Data: out}
+	return Value{Kind: TypeList, Data: out}, nil
 }
 
-func fnDistinct(args []Expr, fm FrontMatter) Value {
+func fnDistinct(args []Expr, fm FrontMatter) (Value, error) {
 	if len(args) != 1 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	v := args[0].Eval(fm)
+	v, err := args[0].Eval(fm)
+	if err != nil {
+		return Value{}, fmt.Errorf("could not evaluate argument 1: %w", err)
+	}
 	if v.Null {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
 	if v.Kind != TypeList {
-		return Value{Kind: TypeList, Data: []Value{v}}
+		return Value{Kind: TypeList, Data: []Value{v}}, nil
 	}
 	src := v.Data.([]Value)
 	out := make([]Value, 0, len(src))
@@ -500,17 +594,23 @@ func fnDistinct(args []Expr, fm FrontMatter) Value {
 			out = append(out, x)
 		}
 	}
-	return Value{Kind: TypeList, Data: out}
+	return Value{Kind: TypeList, Data: out}, nil
 }
 
-func fnArrayToString(args []Expr, fm FrontMatter) Value {
+func fnArrayToString(args []Expr, fm FrontMatter) (Value, error) {
 	if len(args) != 2 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	v := args[0].Eval(fm)
-	sep, ok := argStr(args, 1, fm)
+	v, err := args[0].Eval(fm)
+	if err != nil {
+		return Value{}, fmt.Errorf("could not evaluate argument 1: %w", err)
+	}
+	sep, ok, err := argStr(args, 1, fm)
+	if err != nil {
+		return Value{}, err
+	}
 	if !ok || v.Null {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
 	var elems []Value
 	if v.Kind == TypeList {
@@ -520,60 +620,72 @@ func fnArrayToString(args []Expr, fm FrontMatter) Value {
 	}
 	parts := make([]string, 0, len(elems))
 	for _, e := range elems {
-		s, err := Cast(e, TypeString)
-		if err != nil || s.Null {
-			return Value{Null: true}
+		s, cerr := Cast(e, TypeString)
+		if cerr != nil || s.Null {
+			return Value{Null: true}, nil
 		}
 		parts = append(parts, s.Data.(string))
 	}
-	return fnStr(strings.Join(parts, sep))
+	return fnStr(strings.Join(parts, sep)), nil
 }
 
-func fnDatePart(args []Expr, fm FrontMatter, f func(time.Time) int64) Value {
+func fnDatePart(args []Expr, fm FrontMatter, f func(time.Time) int64) (Value, error) {
 	if len(args) != 1 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	v := args[0].Eval(fm)
+	v, err := args[0].Eval(fm)
+	if err != nil {
+		return Value{}, fmt.Errorf("could not evaluate argument 1: %w", err)
+	}
 	if v.Null {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
 	if v.Kind != TypeDate && v.Kind != TypeDatetime {
-		c, err := Cast(v, TypeDate)
-		if err != nil {
-			c2, err2 := Cast(v, TypeDatetime)
-			if err2 != nil {
-				return Value{Null: true}
+		c, cerr := Cast(v, TypeDate)
+		if cerr != nil {
+			c2, cerr2 := Cast(v, TypeDatetime)
+			if cerr2 != nil {
+				return Value{Null: true}, nil
 			}
 			c = c2
 		}
 		v = c
 	}
-	return fnInt(f(v.Data.(time.Time)))
+	return fnInt(f(v.Data.(time.Time))), nil
 }
 
-func fnDateDiff(args []Expr, fm FrontMatter) Value {
+func fnDateDiff(args []Expr, fm FrontMatter) (Value, error) {
 	if len(args) != 2 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	coerce := func(i int) (time.Time, bool) {
-		v := args[i].Eval(fm)
+	coerce := func(i int) (time.Time, bool, error) {
+		v, err := args[i].Eval(fm)
+		if err != nil {
+			return time.Time{}, false, fmt.Errorf("could not evaluate argument %d: %w", i+1, err)
+		}
 		if v.Null {
-			return time.Time{}, false
+			return time.Time{}, false, nil
 		}
 		if v.Kind != TypeDate && v.Kind != TypeDatetime {
-			c, err := Cast(v, TypeDate)
-			if err != nil {
-				return time.Time{}, false
+			c, cerr := Cast(v, TypeDate)
+			if cerr != nil {
+				return time.Time{}, false, nil
 			}
 			v = c
 		}
-		return v.Data.(time.Time), true
+		return v.Data.(time.Time), true, nil
 	}
-	a, ok1 := coerce(0)
-	b, ok2 := coerce(1)
+	a, ok1, err := coerce(0)
+	if err != nil {
+		return Value{}, err
+	}
+	b, ok2, err := coerce(1)
+	if err != nil {
+		return Value{}, err
+	}
 	if !ok1 || !ok2 {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
 	days := int64(a.Sub(b).Hours() / 24)
-	return fnInt(days)
+	return fnInt(days), nil
 }

@@ -12,7 +12,7 @@ func lit(s string) LitExpr                  { return LitExpr{Kind: LitString, Va
 func ilit(s string) LitExpr                 { return LitExpr{Kind: LitInt, Value: s} }
 func flit(s string) LitExpr                 { return LitExpr{Kind: LitNumeric, Value: s} }
 
-func evalF(fn FuncExpr) Value { return fn.Eval(nil) }
+func evalF(fn FuncExpr) Value { v, _ := fn.Eval(nil); return v }
 
 // ── String functions ──────────────────────────────────────────────────────────
 
@@ -344,7 +344,7 @@ func TestFn_YearMonthDay(t *testing.T) {
 		{"day", 15},
 	}
 	for _, tc := range tests {
-		got := FuncExpr{Name: tc.fn, Args: []Expr{dateExpr}}.Eval(fm)
+		got, _ := FuncExpr{Name: tc.fn, Args: []Expr{dateExpr}}.Eval(fm)
 		_ = fieldExpr
 		if !valEq(got, vInt(tc.want)) {
 			t.Errorf("%s(2024-03-15) = %v, want %d", tc.fn, got, tc.want)
@@ -354,7 +354,7 @@ func TestFn_YearMonthDay(t *testing.T) {
 
 func TestFn_DateDiff(t *testing.T) {
 	// DATE_DIFF("2024-01-10", "2024-01-01") → 9
-	got := FuncExpr{Name: "date_diff", Args: []Expr{
+	got, _ := FuncExpr{Name: "date_diff", Args: []Expr{
 		LitExpr{Kind: LitString, Value: "2024-01-10"},
 		LitExpr{Kind: LitString, Value: "2024-01-01"},
 	}}.Eval(nil)

@@ -25,7 +25,7 @@ func TestLitExpr_Eval(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.lit.Eval(nil)
+			got, _ := tc.lit.Eval(nil)
 			if !valEq(got, tc.want) {
 				t.Errorf("Eval() = %+v, want %+v", got, tc.want)
 			}
@@ -59,7 +59,7 @@ func TestFieldExpr_Eval(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			e := FieldExpr{Field: tc.f}
-			got := e.Eval(fm)
+			got, _ := e.Eval(fm)
 			if !valEq(got, tc.want) {
 				t.Errorf("Eval(%+v) = %+v, want %+v", tc.f, got, tc.want)
 			}
@@ -88,7 +88,7 @@ func TestUnaryExpr_Eval(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.e.Eval(fm)
+			got, _ := tc.e.Eval(fm)
 			if !valEq(got, tc.want) {
 				t.Errorf("Eval() = %+v, want %+v", got, tc.want)
 			}
@@ -120,7 +120,7 @@ func TestBinExpr_BoolOps(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.e.Eval(fm)
+			got, _ := tc.e.Eval(fm)
 			if !valEq(got, tc.want) {
 				t.Errorf("Eval() = %+v, want %+v", got, tc.want)
 			}
@@ -152,7 +152,7 @@ func TestBinExpr_Arith(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.e.Eval(fm)
+			got, _ := tc.e.Eval(fm)
 			if !valEq(got, tc.want) {
 				t.Errorf("Eval() = %+v, want %+v", got, tc.want)
 			}
@@ -189,7 +189,7 @@ func TestBinExpr_Compare(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.e.Eval(fm)
+			got, _ := tc.e.Eval(fm)
 			if !valEq(got, tc.want) {
 				t.Errorf("Eval() = %+v, want %+v", got, tc.want)
 			}
@@ -297,7 +297,7 @@ func TestSortTerm_Eval(t *testing.T) {
 		Expr: FieldExpr{Field: Field{Name: "title"}},
 		Desc: false,
 	}
-	if got := s.Eval(fm); !valEq(got, vStr("abc")) {
+	if got, _ := s.Eval(fm); !valEq(got, vStr("abc")) {
 		t.Errorf("Eval() = %+v, want %+v", got, vStr("abc"))
 	}
 }

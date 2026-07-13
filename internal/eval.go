@@ -303,57 +303,61 @@ func castToMdLink(v Value) (Value, error) {
 
 // ── Expressions ───────────────────────────────────────────────────────────────
 
-func (e LitExpr) Eval(_ FrontMatter) Value {
+func (e LitExpr) Eval(_ FrontMatter) (Value, error) {
 	switch e.Kind {
 	case LitInt:
 		n, err := strconv.ParseInt(e.Value, 0, 64)
 		if err != nil {
-			return Value{Null: true}
+			return Value{Null: true}, fmt.Errorf("could not parse %v as int: %w", e.Value, err)
 		}
-		return Value{Kind: TypeInt, Data: n}
+		return Value{Kind: TypeInt, Data: n}, nil
 	case LitNumeric:
 		f, err := strconv.ParseFloat(e.Value, 64)
 		if err != nil {
-			return Value{Null: true}
+			return Value{Null: true}, fmt.Errorf("could not parse %v as float: %w", e.Value, err)
 		}
-		return Value{Kind: TypeNumber, Data: f}
+		return Value{Kind: TypeNumber, Data: f}, nil
 	case LitString:
-		return Value{Kind: TypeString, Data: e.Value}
+		return Value{Kind: TypeString, Data: e.Value}, nil
 	case LitBool:
-		return Value{Kind: TypeBool, Data: strings.ToLower(e.Value) == "true"}
+		return Value{Kind: TypeBool, Data: strings.ToLower(e.Value) == "true"}, nil
 	case LitNull:
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	return Value{Null: true}
+	return Value{Null: true}, nil
 }
-func (e ListExpr) Eval(fm FrontMatter) Value {
+func (e ListExpr) Eval(fm FrontMatter) (Value, error) {
 	els := make([]Value, len(e.Elems))
 	for i, ex := range e.Elems {
-		els[i] = ex.Eval(fm)
+		v, err := ex.Eval(fm)
+		if err != nil {
+			return Value{}, fmt.Errorf("could not evaluate list element #%d %v: %w", i, ex, err)
+		}
+		els[i] = v
 	}
-	return Value{Kind: TypeList, Data: els}
+	return Value{Kind: TypeList, Data: els}, nil
 }
 
 // Eval dispatches to evalFunc in eval_func.go.
-func (e FuncExpr) Eval(fm FrontMatter) Value { return evalFunc(e, fm) }
+func (e FuncExpr) Eval(fm FrontMatter) (Value, error) { return evalFunc(e, fm) }
 
-func (e FieldExpr) Eval(fm FrontMatter) Value {
+func (e FieldExpr) Eval(fm FrontMatter) (Value, error) {
 	if fm == nil {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
 	raw, ok := (fm)[e.Field.Name]
 	if !ok {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
 	v := valueFromAny(raw)
 	if e.Field.Type == TypeAny {
-		return v
+		return v, nil
 	}
 	c, err := Cast(v, e.Field.Type)
 	if err != nil {
-		return Value{Null: true}
+		return Value{Null: true}, nil
 	}
-	return c
+	return c, nil
 }
 
 // valueFromAny converts a raw Go value (from YAML-decoded frontmatter) into a
@@ -389,23 +393,26 @@ func valueFromAny(x any) Value {
 	}
 	return Value{Kind: TypeAny, Data: x}
 }
-func (e UnaryExpr) Eval(fm FrontMatter) Value {
-	v := e.Operand.Eval(fm)
+func (e UnaryExpr) Eval(fm FrontMatter) (Value, error) {
+	v, err := e.Operand.Eval(fm)
+	if err != nil {
+		return Value{}, fmt.Errorf("could not evaluate operand: %w", err)
+	}
 	switch e.Op {
 	case UnaryNot:
-		return Value{Kind: TypeBool, Data: !truthy(v)}
+		return Value{Kind: TypeBool, Data: !truthy(v)}, nil
 	case UnaryNeg:
 		if v.Null {
-			return Value{Null: true}
+			return Value{Null: true}, nil
 		}
 		switch v.Kind {
 		case TypeInt:
-			return Value{Kind: TypeInt, Data: -v.Data.(int64)}
+			return Value{Kind: TypeInt, Data: -v.Data.(int64)}, nil
 		case TypeNumber:
-			return Value{Kind: TypeNumber, Data: -v.Data.(float64)}
+			return Value{Kind: TypeNumber, Data: -v.Data.(float64)}, nil
 		}
 	}
-	return Value{Null: true}
+	return Value{Null: true}, nil
 }
 
 // truthy returns the boolean view of v. Null is falsey; non-null uses type-native
@@ -431,22 +438,57 @@ func truthy(v Value) bool {
 		return true
 	}
 }
-func (e BinExpr) Eval(fm FrontMatter) Value {
+func (e BinExpr) Eval(fm FrontMatter) (Value, error) {
+	// Boolean connectives short-circuit: the right operand is only evaluated
+	// when the left does not already decide the result.
 	switch e.Op {
 	case BinAnd:
-		return Value{Kind: TypeBool, Data: truthy(e.Left.Eval(fm)) && truthy(e.Right.Eval(fm))}
+		l, err := e.Left.Eval(fm)
+		if err != nil {
+			return Value{}, fmt.Errorf("could not evaluate left operand: %w", err)
+		}
+		if !truthy(l) {
+			return Value{Kind: TypeBool, Data: false}, nil
+		}
+		r, err := e.Right.Eval(fm)
+		if err != nil {
+			return Value{}, fmt.Errorf("could not evaluate right operand: %w", err)
+		}
+		return Value{Kind: TypeBool, Data: truthy(r)}, nil
 	case BinOr:
-		return Value{Kind: TypeBool, Data: truthy(e.Left.Eval(fm)) || truthy(e.Right.Eval(fm))}
-	case BinAdd, BinSub, BinMul, BinDiv:
-		return arith(e.Op, e.Left.Eval(fm), e.Right.Eval(fm))
-	case BinEq, BinNe, BinLt, BinLe, BinGt, BinGe:
-		return compare(e.Op, e.Left.Eval(fm), e.Right.Eval(fm))
-	case BinIntersect, BinUnion:
-		return setOp(e.Op, e.Left.Eval(fm), e.Right.Eval(fm))
-	case BinLike, BinNotLike, BinILike, BinNotILike, BinRegexp, BinNotRegexp:
-		return matchOp(e.Op, e.Left.Eval(fm), e.Right.Eval(fm))
+		l, err := e.Left.Eval(fm)
+		if err != nil {
+			return Value{}, fmt.Errorf("could not evaluate left operand: %w", err)
+		}
+		if truthy(l) {
+			return Value{Kind: TypeBool, Data: true}, nil
+		}
+		r, err := e.Right.Eval(fm)
+		if err != nil {
+			return Value{}, fmt.Errorf("could not evaluate right operand: %w", err)
+		}
+		return Value{Kind: TypeBool, Data: truthy(r)}, nil
 	}
-	return Value{Null: true}
+
+	l, err := e.Left.Eval(fm)
+	if err != nil {
+		return Value{}, fmt.Errorf("could not evaluate left operand: %w", err)
+	}
+	r, err := e.Right.Eval(fm)
+	if err != nil {
+		return Value{}, fmt.Errorf("could not evaluate right operand: %w", err)
+	}
+	switch e.Op {
+	case BinAdd, BinSub, BinMul, BinDiv:
+		return arith(e.Op, l, r), nil
+	case BinEq, BinNe, BinLt, BinLe, BinGt, BinGe:
+		return compare(e.Op, l, r), nil
+	case BinIntersect, BinUnion:
+		return setOp(e.Op, l, r), nil
+	case BinLike, BinNotLike, BinILike, BinNotILike, BinRegexp, BinNotRegexp:
+		return matchOp(e.Op, l, r), nil
+	}
+	return Value{Null: true}, nil
 }
 
 // compare implements =, !=, <, <=, >, >=.
@@ -707,7 +749,7 @@ func arith(op BinOp, l, r Value) Value {
 }
 
 // Eval is a thin wrapper around the underlying expression.
-func (s SortTerm) Eval(fm FrontMatter) Value { return s.Expr.Eval(fm) }
+func (s SortTerm) Eval(fm FrontMatter) (Value, error) { return s.Expr.Eval(fm) }
 
 // ── Assignment ────────────────────────────────────────────────────────────────
 
@@ -739,7 +781,10 @@ func (a Assign) Apply(fm FrontMatter) error {
 		return nil
 	}
 
-	v := a.Value.Eval(fm)
+	v, err := a.Value.Eval(fm)
+	if err != nil {
+		return fmt.Errorf("could not evaluate value for field %q: %w", name, err)
+	}
 	if a.Field.Type != TypeAny {
 		c, err := Cast(v, a.Field.Type)
 		if err != nil {

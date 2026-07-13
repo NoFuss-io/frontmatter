@@ -25,7 +25,7 @@ func TestFieldExpr_Eval_Date(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			e := FieldExpr{Field: tc.f}
-			got := e.Eval(fm)
+			got, _ := e.Eval(fm)
 			if !valEq(got, tc.want) {
 				t.Errorf("Eval(%+v) = %+v, want %+v", tc.f, got, tc.want)
 			}
@@ -53,7 +53,7 @@ func TestFieldExpr_Eval_Link(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			e := FieldExpr{Field: tc.f}
-			got := e.Eval(fm)
+			got, _ := e.Eval(fm)
 			if !valEq(got, tc.want) {
 				t.Errorf("Eval(%+v) = %+v, want %+v", tc.f, got, tc.want)
 			}
@@ -93,7 +93,7 @@ func TestCastToList_StringElements(t *testing.T) {
 func TestFieldExpr_Eval_List(t *testing.T) {
 	fm := FrontMatter{"nums": []any{int64(3), int64(4), int64(5)}}
 	e := FieldExpr{Field: Field{Name: "nums", Type: TypeList}}
-	got := e.Eval(fm)
+	got, _ := e.Eval(fm)
 	want := vList(vStr("3"), vStr("4"), vStr("5"))
 	if !valEq(got, want) {
 		t.Errorf("Eval() = %+v, want %+v", got, want)
