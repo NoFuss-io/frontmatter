@@ -51,10 +51,15 @@ type Format interface {
 // Read/Write to the supplied Format. Label returns the path unchanged.
 type FileStore struct {
 	Fmt Format
+	// DefaultExt (e.g. ".md") restricts glob matches to files with this
+	// extension when the pattern's final segment names no extension itself,
+	// so `*` means `*.md` while `*.*` or `*.txt` match literally. Bare paths
+	// are never filtered. Empty disables the filter.
+	DefaultExt string
 }
 
 func (fs FileStore) Enumerate(patterns []string, opts EnumOptions) ([]string, error) {
-	paths, err := expandGlobs(patterns)
+	paths, err := expandGlobs(patterns, fs.DefaultExt)
 	if err != nil {
 		return nil, err
 	}
@@ -78,8 +83,10 @@ func (fs FileStore) Label(key string) string {
 
 // expandGlobs expands pattern tokens to file paths. Bare paths that exist are
 // passed through; tokens containing glob metacharacters are expanded via
-// filepath.Glob. A bare-path token that does not exist is an error.
-func expandGlobs(patterns []string) ([]string, error) {
+// filepath.Glob. A bare-path token that does not exist is an error. If
+// defaultExt is set, matches of a glob whose final segment contains no '.' are
+// limited to files with that extension.
+func expandGlobs(patterns []string, defaultExt string) ([]string, error) {
 	var paths []string
 	for _, p := range patterns {
 		if strings.ContainsAny(p, "*?[") {
@@ -87,7 +94,11 @@ func expandGlobs(patterns []string) ([]string, error) {
 			if err != nil {
 				return nil, fmt.Errorf("glob %q: %w", p, err)
 			}
+			restrict := defaultExt != "" && !strings.Contains(filepath.Base(p), ".")
 			for _, m := range matched {
+				if restrict && filepath.Ext(m) != defaultExt {
+					continue
+				}
 				fi, err := os.Stat(m)
 				if err == nil && fi.Mode().IsRegular() {
 					paths = append(paths, m)

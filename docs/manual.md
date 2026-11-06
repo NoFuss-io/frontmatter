@@ -489,3 +489,13 @@ to provide the same functionality when called programatically or run on Windows.
 ```sh
 fm 'select url from page/*.md'  # Ok, even though shell won't expand it
 ```
+
+A glob whose last path segment contains no `.` only matches `.md` files,
+so `*` behaves like `*.md`. To match other files, name an extension
+(`*.*`, `*.txt`) or list them explicitly. Files that are not text
+(e.g. images) are reported as errors and left untouched.
+
+```sh
+fm 'update page/* set draft = false'    # only page/*.md
+fm 'update page/*.* set draft = false'  # every file with an extension
+```

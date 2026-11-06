@@ -1,0 +1,10 @@
+# Run each command against its own copy of the input files.
+mkdir star dotstar
+cp doc.md doc_no_extension blank image.png star/
+mv doc.md doc_no_extension blank image.png dotstar/
+
+echo '# from *'
+(cd star && fm 'update * set field = "value"') || echo "exit $?"
+
+echo '# from *.*'
+(cd dotstar && fm 'update *.* set field = "value"') || echo "exit $?"

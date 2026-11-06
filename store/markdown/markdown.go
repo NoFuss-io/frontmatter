@@ -3,11 +3,13 @@ package markdown
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 
@@ -18,7 +20,7 @@ import (
 // A fresh Format (and its body sidecar) is created on each call, so the
 // sidecar lifetime is tied to the single Run invocation.
 func New() store.Store {
-	return store.FileStore{Fmt: &Format{}}
+	return store.FileStore{Fmt: &Format{}, DefaultExt: ".md"}
 }
 
 // Format implements store.Format for Markdown files with YAML frontmatter.
@@ -45,6 +47,9 @@ func (f *Format) Read(path string) (map[string]any, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
+	}
+	if bytes.IndexByte(raw, 0) >= 0 || !utf8.Valid(raw) {
+		return nil, errors.New("not a text file")
 	}
 	fm := make(map[string]any)
 	s := strings.ReplaceAll(string(raw), "\r\n", "\n")
