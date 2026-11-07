@@ -1,12 +1,11 @@
-// Package markdown implements store.Format for Markdown files with YAML frontmatter.
+// Package markdown implements store.Format for Markdown files with YAML
+// frontmatter, and for source files that carry the same block in a comment.
 package markdown
 
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"os"
-	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -20,12 +19,14 @@ import (
 // A fresh Format (and its body sidecar) is created on each call, so the
 // sidecar lifetime is tied to the single Run invocation.
 func New() store.Store {
-	return store.FileStore{Fmt: &Format{}, DefaultExt: ".md"}
+	return store.FileStore{Fmt: &Format{}, DefaultExts: Extensions()}
 }
 
-// Format implements store.Format for Markdown files with YAML frontmatter.
-// The bodies sync.Map caches the non-frontmatter body text keyed by path so
-// that Write can reconstruct the full file without data loss.
+// Format implements store.Format for files with YAML frontmatter: Markdown
+// files, and source files with the block inside a comment (see languages).
+// The docs sync.Map caches the parsed Document keyed by path so that Write can
+// reconstruct the full file, in its original comment style and line endings,
+// without data loss.
 //
 // Body preservation is a general problem for any file-based format: an image
 // store must preserve pixel data, an audio store must preserve audio frames,
@@ -36,13 +37,12 @@ func New() store.Store {
 // map. That would make every Format implementation stateless. It is left as a
 // future refactor to keep this first implementation simple.
 type Format struct {
-	bodies sync.Map // key: string path → value: string body
+	docs sync.Map // key: string path → value: Document
 }
 
-// Read parses the YAML frontmatter from the file at path, stashes the body
-// in the sidecar for a later Write call, and returns the frontmatter field map.
-// A file without a leading "---\n" block is treated as body-only; an empty map
-// is returned and the full file content is stashed as the body.
+// Read parses the file at path, stashes the Document in the sidecar for a
+// later Write call, and returns its frontmatter field map. A file without a
+// block yields an empty map.
 func (f *Format) Read(path string) (map[string]any, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -51,57 +51,28 @@ func (f *Format) Read(path string) (map[string]any, error) {
 	if bytes.IndexByte(raw, 0) >= 0 || !utf8.Valid(raw) {
 		return nil, errors.New("not a text file")
 	}
-	fm := make(map[string]any)
-	s := strings.ReplaceAll(string(raw), "\r\n", "\n")
-
-	if !strings.HasPrefix(s, "---\n") {
-		f.bodies.Store(path, s)
-		return fm, nil
+	doc, err := Parse(path, raw)
+	if err != nil {
+		return nil, err
 	}
-
-	rest := s[4:]
-	end := strings.Index(rest, "\n---\n")
-	if end < 0 {
-		// Handle trailing "---" with no trailing newline.
-		if after, found := strings.CutSuffix(rest, "\n---"); found {
-			if err := yaml.Unmarshal([]byte(after), &fm); err != nil {
-				return nil, fmt.Errorf("%s: %w", path, err)
-			}
-			f.bodies.Store(path, "")
-			return fm, nil
-		}
-		// No valid closing fence — treat entire file as body.
-		f.bodies.Store(path, s)
-		return fm, nil
-	}
-
-	if err := yaml.Unmarshal([]byte(rest[:end]), &fm); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	body := rest[end+5:]
-	f.bodies.Store(path, body)
-	return fm, nil
+	f.docs.Store(path, doc)
+	return doc.FrontMatter, nil
 }
 
-// Write serializes fields as YAML frontmatter, prepends "---\n…---\n", appends
-// the body that was stashed during the preceding Read, and writes the result to
-// disk, replacing the original file.
+// Write renders fields into the Document stashed by the preceding Read and
+// writes the result to disk, replacing the original file. Only the
+// frontmatter block changes; everything around it is written back verbatim.
 func (f *Format) Write(path string, fields map[string]any) error {
-	body := ""
-	if v, ok := f.bodies.Load(path); ok {
-		body = v.(string)
+	doc := Document{Body: string(LF), LineEndings: LF}
+	if v, ok := f.docs.Load(path); ok {
+		doc = v.(Document)
 	}
-
-	var buf bytes.Buffer
-	buf.WriteString("---\n")
-	enc := yaml.NewEncoder(&buf)
-	enc.SetIndent(2)
-	if err := enc.Encode(marshalFields(fields)); err != nil {
+	doc.FrontMatter = fields
+	out, err := Render(doc)
+	if err != nil {
 		return err
 	}
-	buf.WriteString("---\n")
-	buf.WriteString(body)
-	return os.WriteFile(path, buf.Bytes(), 0644)
+	return os.WriteFile(path, out, 0644)
 }
 
 func marshalFields(fields map[string]any) map[string]any {

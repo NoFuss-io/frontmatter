@@ -359,3 +359,122 @@ func TestFormat_Write_Fixtures(t *testing.T) {
 		})
 	}
 }
+
+// TestFormat_EdgeCases covers the locating and insertion rules beyond the
+// fixtures: what counts as a block, and where a new one goes. Each case reads
+// input, checks the fields, sets x=1 and checks the written file.
+func TestFormat_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name   string
+		file   string
+		input  string
+		fields map[string]any
+		want   string
+	}{
+		{
+			name:   "separator comment skipped",
+			file:   "a.py",
+			input:  "# ---\n# Helpers\n# ---\n\n# ---\n# a: 1\n# ---\n",
+			fields: map[string]any{"a": 1},
+			want:   "# ---\n# Helpers\n# ---\n\n# ---\n# a: 1\n# x: 1\n# ---\n",
+		},
+		{
+			name:   "only first block read and written",
+			file:   "a.sh",
+			input:  "# ---\n# a: 1\n# ---\n# ---\n# b: 2\n# ---\n",
+			fields: map[string]any{"a": 1},
+			want:   "# ---\n# a: 1\n# x: 1\n# ---\n# ---\n# b: 2\n# ---\n",
+		},
+		{
+			name:   "block mid-file",
+			file:   "a.go",
+			input:  "package a\n\n// ---\n// a: 1\n// ---\nfunc f() {}\n",
+			fields: map[string]any{"a": 1},
+			want:   "package a\n\n// ---\n// a: 1\n// x: 1\n// ---\nfunc f() {}\n",
+		},
+		{
+			name:   "prefix without space and bare marker lines",
+			file:   "a.py",
+			input:  "#---\n#a: 1\n#\n#b: 2\n#---\n",
+			fields: map[string]any{"a": 1, "b": 2},
+			want:   "#---\n#a: 1\n#b: 2\n#x: 1\n#---\n",
+		},
+		{
+			name:   "unterminated comment block ignored",
+			file:   "a.js",
+			input:  "/*---\na: 1\n*/\n---\n",
+			fields: map[string]any{},
+			want:   "// ---\n// x: 1\n// ---\n/*---\na: 1\n*/\n---\n",
+		},
+		{
+			name:   "dash marker needs space before fence",
+			file:   "a.sql",
+			input:  "-----\n-- a: 1\n-----\n",
+			fields: map[string]any{},
+			want:   "-- ---\n-- x: 1\n-- ---\n-----\n-- a: 1\n-----\n",
+		},
+		{
+			name:   "insert after shebang and coding line",
+			file:   "a.py",
+			input:  "#!/usr/bin/env python3\n# -*- coding: utf-8 -*-\nprint(1)\n",
+			fields: map[string]any{},
+			want:   "#!/usr/bin/env python3\n# -*- coding: utf-8 -*-\n# ---\n# x: 1\n# ---\nprint(1)\n",
+		},
+		{
+			name:   "insert block comment when no line comment",
+			file:   "a.css",
+			input:  "body {}\r\n",
+			fields: map[string]any{},
+			want:   "/*---\r\nx: 1\r\n---*/\r\nbody {}\r\n",
+		},
+		{
+			name:   "extensionless script uses shebang",
+			file:   "deploy",
+			input:  "#!/usr/bin/env -S node --flag\n// ---\n// a: 1\n// ---\n",
+			fields: map[string]any{"a": 1},
+			want:   "#!/usr/bin/env -S node --flag\n// ---\n// a: 1\n// x: 1\n// ---\n",
+		},
+		{
+			name:   "markdown block must be on first line",
+			file:   "a.md",
+			input:  "Text\n\n---\na: 1\n---\n",
+			fields: map[string]any{},
+			want:   "---\nx: 1\n---\nText\n\n---\na: 1\n---\n",
+		},
+		{
+			name:   "unknown extension behaves as markdown",
+			file:   "a.txt",
+			input:  "---\na: 1\n---\nText\n",
+			fields: map[string]any{"a": 1},
+			want:   "---\na: 1\nx: 1\n---\nText\n",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeFile(t, t.TempDir(), tc.file, tc.input)
+			s := markdown.New()
+			fields, err := s.Read(path)
+			if err != nil {
+				t.Fatalf("Read: %v", err)
+			}
+			if !reflect.DeepEqual(fields, tc.fields) {
+				t.Errorf("fields: got %#v, want %#v", fields, tc.fields)
+			}
+			fields["x"] = 1
+			if err := s.Write(path, fields); err != nil {
+				t.Fatalf("Write: %v", err)
+			}
+			got, _ := os.ReadFile(path)
+			if string(got) != tc.want {
+				t.Errorf("file content:\ngot:  %q\nwant: %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestFormat_Read_MarkdownInvalidYAML(t *testing.T) {
+	path := writeFile(t, t.TempDir(), "a.md", "---\na: [\n---\n")
+	if _, err := markdown.New().Read(path); err == nil {
+		t.Error("expected YAML error for invalid Markdown frontmatter")
+	}
+}

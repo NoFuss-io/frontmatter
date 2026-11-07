@@ -3,6 +3,7 @@ package store_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/nofuss-io/frontmatter/store"
@@ -103,5 +104,34 @@ func TestFileStore_Enumerate_NonexistentError(t *testing.T) {
 	_, err := fs.Enumerate([]string{"/nonexistent/path/to/file.md"}, store.EnumOptions{})
 	if err == nil {
 		t.Fatal("expected error for nonexistent path, got nil")
+	}
+}
+
+func TestFileStore_Enumerate_DefaultExts(t *testing.T) {
+	dir := createTempDir(t, "a.md", "b.py", "c.R", "d.txt", "e")
+	fs := store.FileStore{Fmt: stubFormat{}, DefaultExts: []string{".md", ".py", ".r"}}
+
+	tests := []struct {
+		glob string
+		want []string
+	}{
+		{"*", []string{"a.md", "b.py", "c.R"}},
+		{"*.*", []string{"a.md", "b.py", "c.R", "d.txt"}},
+		{"*.txt", []string{"d.txt"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.glob, func(t *testing.T) {
+			paths, err := fs.Enumerate([]string{filepath.Join(dir, tc.glob)}, store.EnumOptions{})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			var got []string
+			for _, p := range paths {
+				got = append(got, filepath.Base(p))
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("got %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

@@ -155,5 +155,22 @@ comments (`# -*- coding: … -*-`, `# frozen_string_literal: …`,
 - More than one block per file (see "Locating the block", rule 4).
 - CLI flags to override the syntax (`--syntax`). The table is the only source
   in this iteration.
-- Changing which files `FROM 'dir/*'` matches. `*` still means `*.md`; scripts
-  are selected with an explicit extension (`FROM 'scripts/*.py'`).
+- Shebang detection in globs. `FROM 'dir/*'` matches every extension in the
+  language table, but extensionless scripts must be named explicitly.
+
+---
+
+## Implementation notes
+
+- The split lives in `store/markdown.Document` (`Head`, `LinePrefix`, `Body`,
+  `LineEndings`). It cannot live in `internal/` because `internal/exec.go`
+  imports `store/markdown`.
+- `Head` and `Body` are kept byte-for-byte; `LineEndings` (taken from the
+  opening fence line) only applies to the rendered block, so files with mixed
+  line endings survive a write.
+- Invalid YAML in a Markdown block is still an error. In other files an
+  invalid candidate is skipped.
+- Line markers ending in `-` (`--`) require a space before the fence, so a
+  `-----` separator is never a fence.
+- An empty field map renders as two fences with nothing between them, instead
+  of `{}`.
