@@ -1,0 +1,5 @@
+#!/bin/sh
+# ---
+# title: Deploy
+# ---
+echo deploy

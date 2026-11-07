@@ -20,6 +20,10 @@ Harmonize, refactor, and batch edit YAML frontmatter using SQL expressions.
 `fm` is designed for Markdown in general and [Obsidian](https://obsidian.md) in particular.
 Vaults are modelled as big jagged tables where documents are rows and [fields](https://obsidian.md/help/properties) are columns.
 
+It also handles frontmatter kept in comments of source files (`# ---` in Python or shell,
+`// ---` or `/*---` in JavaScript or Go, …), so scripts can carry queryable metadata too —
+see [frontmatter in source files](./docs/manual.md#frontmatter-in-source-files).
+
 SQL is the de facto standard data manipulation language for tabular data.
 [jq](https://jqlang.github.io/jq/), [yq](https://github.com/mikefarah/yq) and
 [dasel](https://github.com/tomwright/dasel) are great for deeply nested complex data,

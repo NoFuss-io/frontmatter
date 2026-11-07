@@ -1,0 +1,4 @@
+# --lang applies to every file: extensionless scripts are matched by '*',
+# and note.md is parsed as shell, so its '---' block is not seen.
+fm 'select title from *' -L shell --format simple
+fm 'update deploy build set field = "value"' -L shell

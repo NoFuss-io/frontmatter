@@ -1,1 +1,3 @@
+ERROR: noblock.js: could not write: no frontmatter block; name the file explicitly or pass --lang to insert one
 ERROR: image.png: could not read: not a text file
+ERROR: noblock.js: could not write: no frontmatter block; name the file explicitly or pass --lang to insert one

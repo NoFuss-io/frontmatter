@@ -24,6 +24,7 @@
     - [Boolean expressions](#boolean-expressions)
   - [Assignment](#assignment)
   - [Globs](#globs)
+  - [Frontmatter in source files](#frontmatter-in-source-files)
 
 
 ## Usage
@@ -42,6 +43,8 @@ Flags:
 - `-v`, `--verbose`: Runs a `select` query on affected files and fields after `update` or `alter`.
 - `-H`, `--include-hidden`: Include hidden files, see [glob expansion](#Globs).
 - `--max-columns N`: Cap number of columns in `select *` output (default 20).
+- `-L`, `--lang LANG`: Treat every file as language `LANG`, see [frontmatter in source files](#frontmatter-in-source-files).
+- `--line-comment STR`, `--block-open STR`, `--block-close STR`: Custom comment syntax for every file, see [frontmatter in source files](#frontmatter-in-source-files).
 
 Query is read from `stdin` if omitted.
 Query results and logs are written to `stdout`.
@@ -490,12 +493,65 @@ to provide the same functionality when called programatically or run on Windows.
 fm 'select url from page/*.md'  # Ok, even though shell won't expand it
 ```
 
-A glob whose last path segment contains no `.` only matches `.md` files,
-so `*` behaves like `*.md`. To match other files, name an extension
-(`*.*`, `*.txt`) or list them explicitly. Files that are not text
+A glob whose last path segment contains no `.` only matches files of a
+supported type: Markdown, plus source files that can carry frontmatter in a
+comment (`.py`, `.sh`, `.js`, `.go`, `.sql`, …). Files without an extension
+are skipped, even scripts with a shebang. To match other files, name an
+extension (`*.*`, `*.txt`) or list them explicitly. Files that are not text
 (e.g. images) are reported as errors and left untouched.
 
 ```sh
-fm 'update page/* set draft = false'    # only page/*.md
+fm 'update page/* set draft = false'    # page/*.md, page/*.py, …
 fm 'update page/*.* set draft = false'  # every file with an extension
 ```
+
+
+### Frontmatter in source files
+
+Besides Markdown, `fm` reads and writes frontmatter kept in a comment at the
+top of a source file. The comment style is chosen per file from its extension
+(or, for files without one, its shebang), and the block may follow a shebang
+or encoding line:
+
+```python
+#!/usr/bin/env python3
+# ---
+# author: jane.doe
+# description: exports sessions to Excel
+# ---
+print("hi")
+```
+
+```js
+/*---
+author: jane.doe
+---*/
+```
+
+The first block in the file is used; later ones are ignored. In source files
+a comment that does not hold a YAML mapping (such as a `# ---` separator) is
+skipped. In Markdown files the block must start on the first line. Writes
+keep the comment style, line endings and everything around the block intact.
+A file without a block gets one inserted after its shebang and encoding lines,
+but only if it is a Markdown file, was named explicitly (not matched by a
+glob), or a syntax flag below is given. Otherwise the file is reported as an
+error and left untouched, so `update *` does not add blocks to every script
+and stylesheet in a folder.
+
+To use one syntax for every file instead, pass one of:
+
+- `-L`, `--lang LANG`: a language name (`python`, `shell`, `c`, `sql`, …) or
+  an extension (`py`, `js`, …).
+- `--line-comment STR`: line comments starting with `STR`.
+- `--block-open STR` and `--block-close STR`: a block comment. The closer
+  defaults to the opener.
+
+`--line-comment` and `--block-open` may be combined; `--lang` may not be
+combined with either. With any of these flags, the extension no longer
+selects the syntax, so `*` matches files of every type:
+
+```sh
+fm 'update bin/* set owner = "ops"' -L shell
+fm 'select * from templates/*.tmpl' --block-open '{{/*' --block-close '*/}}'
+```
+
