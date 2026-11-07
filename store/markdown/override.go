@@ -77,5 +77,6 @@ func NewWithOverride(o Override) (store.Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return store.FileStore{Fmt: &Format{override: &l}}, nil
+	f := &Format{override: &l}
+	return fileStore{store.FileStore{Fmt: f}, f}, nil
 }

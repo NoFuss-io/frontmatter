@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"errors"
 	"os"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -19,7 +20,36 @@ import (
 // A fresh Format (and its body sidecar) is created on each call, so the
 // sidecar lifetime is tied to the single Run invocation.
 func New() store.Store {
-	return store.FileStore{Fmt: &Format{}, DefaultExts: Extensions()}
+	f := &Format{}
+	return fileStore{store.FileStore{Fmt: f, DefaultExts: Extensions()}, f}
+}
+
+// fileStore is store.FileStore plus a record of which paths the user named
+// explicitly (rather than matched by a glob), which Format.Write consults.
+type fileStore struct {
+	store.FileStore
+	f *Format
+}
+
+func (s fileStore) Enumerate(patterns []string, opts store.EnumOptions) ([]string, error) {
+	for _, p := range patterns {
+		if !strings.ContainsAny(p, "*?[") {
+			s.f.explicit.Store(p, true)
+		}
+	}
+	return s.FileStore.Enumerate(patterns, opts)
+}
+
+// ErrNoBlock is returned by Write for a source file without a frontmatter
+// block that was only matched by a glob. Inserting a block there would edit
+// files the user may not have meant to touch (scripts, stylesheets, …).
+var ErrNoBlock = errors.New("no frontmatter block; name the file explicitly or pass --lang to insert one")
+
+// parsed is the sidecar entry for one file.
+type parsed struct {
+	doc      Document
+	found    bool // the file had a block
+	markdown bool // parsed with Markdown rules
 }
 
 // Format implements store.Format for files with YAML frontmatter: Markdown
@@ -37,7 +67,9 @@ func New() store.Store {
 // map. That would make every Format implementation stateless. It is left as a
 // future refactor to keep this first implementation simple.
 type Format struct {
-	docs sync.Map // key: string path → value: Document
+	docs sync.Map // key: string path → value: parsed
+	// explicit holds paths named without glob characters (see fileStore).
+	explicit sync.Map // key: string path → value: true
 	// override, when set, is used for every file instead of languageFor.
 	override *language
 }
@@ -57,21 +89,31 @@ func (f *Format) Read(path string) (map[string]any, error) {
 	if f.override != nil {
 		lang = *f.override
 	}
-	doc, err := parseAs(path, raw, lang)
+	doc, found, err := parseAs(path, raw, lang)
 	if err != nil {
 		return nil, err
 	}
-	f.docs.Store(path, doc)
+	f.docs.Store(path, parsed{doc: doc, found: found, markdown: lang.markdown})
 	return doc.FrontMatter, nil
 }
 
 // Write renders fields into the Document stashed by the preceding Read and
 // writes the result to disk, replacing the original file. Only the
 // frontmatter block changes; everything around it is written back verbatim.
+//
+// A new block is inserted into a Markdown file freely, but into a source file
+// only if the user named it explicitly or set an override; otherwise Write
+// returns ErrNoBlock and leaves the file untouched.
 func (f *Format) Write(path string, fields map[string]any) error {
 	doc := Document{Body: string(LF), LineEndings: LF}
 	if v, ok := f.docs.Load(path); ok {
-		doc = v.(Document)
+		p := v.(parsed)
+		if !p.found && !p.markdown && f.override == nil {
+			if _, named := f.explicit.Load(path); !named {
+				return ErrNoBlock
+			}
+		}
+		doc = p.doc
 	}
 	doc.FrontMatter = fields
 	out, err := Render(doc)

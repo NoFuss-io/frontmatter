@@ -532,7 +532,11 @@ The first block in the file is used; later ones are ignored. In source files
 a comment that does not hold a YAML mapping (such as a `# ---` separator) is
 skipped. In Markdown files the block must start on the first line. Writes
 keep the comment style, line endings and everything around the block intact.
-A file without a block gets one inserted after its shebang and encoding lines.
+A file without a block gets one inserted after its shebang and encoding lines,
+but only if it is a Markdown file, was named explicitly (not matched by a
+glob), or a syntax flag below is given. Otherwise the file is reported as an
+error and left untouched, so `update *` does not add blocks to every script
+and stylesheet in a folder.
 
 To use one syntax for every file instead, pass one of:
 

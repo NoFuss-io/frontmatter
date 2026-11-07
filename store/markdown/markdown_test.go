@@ -1,12 +1,14 @@
 package markdown_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/nofuss-io/frontmatter/store"
 	"github.com/nofuss-io/frontmatter/store/markdown"
 )
 
@@ -453,6 +455,10 @@ func TestFormat_EdgeCases(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeFile(t, t.TempDir(), tc.file, tc.input)
 			s := markdown.New()
+			// Name the file explicitly, as `fm 'update a.py …'` would.
+			if _, err := s.Enumerate([]string{path}, store.EnumOptions{}); err != nil {
+				t.Fatalf("Enumerate: %v", err)
+			}
 			fields, err := s.Read(path)
 			if err != nil {
 				t.Fatalf("Read: %v", err)
@@ -476,5 +482,49 @@ func TestFormat_Read_MarkdownInvalidYAML(t *testing.T) {
 	path := writeFile(t, t.TempDir(), "a.md", "---\na: [\n---\n")
 	if _, err := markdown.New().Read(path); err == nil {
 		t.Error("expected YAML error for invalid Markdown frontmatter")
+	}
+}
+
+// TestFormat_Write_GlobNoInsert checks that a source file without a block,
+// matched only by a glob, is not given one, while Markdown files are, and
+// source files that already have a block are updated.
+func TestFormat_Write_GlobNoInsert(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"style.css": "body {}\n",
+		"note.md":   "Text.\n",
+		"tool.py":   "# ---\n# a: 1\n# ---\n",
+	}
+	for name, content := range files {
+		writeFile(t, dir, name, content)
+	}
+	s := markdown.New()
+	paths, err := s.Enumerate([]string{filepath.Join(dir, "*")}, store.EnumOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 3 {
+		t.Fatalf("expected 3 paths, got %v", paths)
+	}
+	for _, path := range paths {
+		fields, err := s.Read(path)
+		if err != nil {
+			t.Fatalf("Read %s: %v", path, err)
+		}
+		fields["x"] = 1
+		err = s.Write(path, fields)
+		switch filepath.Base(path) {
+		case "style.css":
+			if !errors.Is(err, markdown.ErrNoBlock) {
+				t.Errorf("style.css: got %v, want ErrNoBlock", err)
+			}
+			if raw, _ := os.ReadFile(path); string(raw) != files["style.css"] {
+				t.Errorf("style.css modified: %q", raw)
+			}
+		default:
+			if err != nil {
+				t.Errorf("%s: unexpected error %v", filepath.Base(path), err)
+			}
+		}
 	}
 }

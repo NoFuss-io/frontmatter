@@ -15,7 +15,10 @@ fm - Markdown frontmatter batch editor
 **fm** queries and mutates YAML frontmatter in Markdown files using an
 SQL-style DSL. It is aimed at knowledge-management workflows such as
 Obsidian vaults, where structured metadata sits in the `---` YAML block at
-the top of `.md` files.
+the top of `.md` files. The same block may also sit in a comment in a
+source file (`# ---` in Python or shell, `// ---` or `/*---` in JavaScript,
+...); the comment syntax is chosen per file by extension or shebang, or
+fixed with **\--lang**, **\--line-comment** or **\--block-open**.
 
 Three top-level statements are supported:
 

@@ -1,7 +1,7 @@
 # Run each command against its own copy of the input files.
 mkdir star dotstar
-cp doc.md doc_no_extension blank image.png script.py star/
-mv doc.md doc_no_extension blank image.png script.py dotstar/
+cp doc.md doc_no_extension blank image.png script.py noblock.js star/
+mv doc.md doc_no_extension blank image.png script.py noblock.js dotstar/
 
 echo '# from *'
 (cd star && fm 'update * set field = "value"') || echo "exit $?"

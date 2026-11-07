@@ -47,10 +47,13 @@ func endingOf(s string, l line) LineEnding {
 // comment) is skipped. A file without a block yields an empty FrontMatter and
 // a Document that renders a new block at the insertion point.
 func Parse(path string, raw []byte) (Document, error) {
-	return parseAs(path, raw, languageFor(path, string(raw)))
+	doc, _, err := parseAs(path, raw, languageFor(path, string(raw)))
+	return doc, err
 }
 
-func parseAs(path string, raw []byte, lang language) (Document, error) {
+// parseAs is Parse with a given language. found reports whether the file had
+// a block, as opposed to a Document positioned for inserting one.
+func parseAs(path string, raw []byte, lang language) (doc Document, found bool, err error) {
 	s := string(raw)
 	lines := splitLines(s)
 
@@ -58,13 +61,13 @@ func parseAs(path string, raw []byte, lang language) (Document, error) {
 		if len(lines) > 0 && isFence(lines[0].text) {
 			doc, ok, err := collect(s, lines, 0, 1, "", nil, "")
 			if err != nil {
-				return Document{}, fmt.Errorf("%s: %w", path, err)
+				return Document{}, false, fmt.Errorf("%s: %w", path, err)
 			}
 			if ok {
-				return doc, nil
+				return doc, true, nil
 			}
 		}
-		return emptyDocument(s, lines, lang), nil
+		return emptyDocument(s, lines, lang), false, nil
 	}
 
 	for i, l := range lines {
@@ -72,7 +75,7 @@ func parseAs(path string, raw []byte, lang language) (Document, error) {
 			for _, p := range linePrefixes(m) {
 				if rest, ok := strings.CutPrefix(l.text, p); ok && isFence(rest) {
 					if doc, ok, _ := collect(s, lines, i, i+1, p, &m, ""); ok {
-						return doc, nil
+						return doc, true, nil
 					}
 				}
 			}
@@ -84,17 +87,17 @@ func parseAs(path string, raw []byte, lang language) (Document, error) {
 				// "/*---": Head ends with the opener, fence shares its line.
 				if doc, ok, _ := collect(s, lines, i, i+1, "", nil, b.close); ok {
 					doc.Head = s[:l.start+len(b.open)]
-					return doc, nil
+					return doc, true, nil
 				}
 			case t == b.open && i+1 < len(lines) && isFence(lines[i+1].text):
 				// "/*" alone, "---" on the next line.
 				if doc, ok, _ := collect(s, lines, i+1, i+2, "", nil, b.close); ok {
-					return doc, nil
+					return doc, true, nil
 				}
 			}
 		}
 	}
-	return emptyDocument(s, lines, lang), nil
+	return emptyDocument(s, lines, lang), false, nil
 }
 
 // linePrefixes returns the accepted prefixes for a line-comment marker, most
