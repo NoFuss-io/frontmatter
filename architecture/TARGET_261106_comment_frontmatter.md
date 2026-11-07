@@ -153,8 +153,6 @@ comments (`# -*- coding: … -*-`, `# frozen_string_literal: …`,
 ## Out of scope
 
 - More than one block per file (see "Locating the block", rule 4).
-- CLI flags to override the syntax (`--syntax`). The table is the only source
-  in this iteration.
 - Shebang detection in globs. `FROM 'dir/*'` matches every extension in the
   language table, but extensionless scripts must be named explicitly.
 
@@ -174,3 +172,7 @@ comments (`# -*- coding: … -*-`, `# frozen_string_literal: …`,
   `-----` separator is never a fence.
 - An empty field map renders as two fences with nothing between them, instead
   of `{}`.
+- Overrides: `-L/--lang` (name or extension), or `--line-comment` and/or
+  `--block-open`/`--block-close` (closer defaults to opener). Without them
+  the syntax is chosen per file; with any of them it applies to every file
+  and `*` matches every file. `--lang` cannot be combined with the others.

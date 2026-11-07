@@ -47,9 +47,12 @@ func endingOf(s string, l line) LineEnding {
 // comment) is skipped. A file without a block yields an empty FrontMatter and
 // a Document that renders a new block at the insertion point.
 func Parse(path string, raw []byte) (Document, error) {
+	return parseAs(path, raw, languageFor(path, string(raw)))
+}
+
+func parseAs(path string, raw []byte, lang language) (Document, error) {
 	s := string(raw)
 	lines := splitLines(s)
-	lang := languageFor(path, s)
 
 	if lang.markdown {
 		if len(lines) > 0 && isFence(lines[0].text) {

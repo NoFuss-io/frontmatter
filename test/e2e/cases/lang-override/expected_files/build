@@ -1,0 +1,5 @@
+#!/bin/sh
+# ---
+# field: value
+# ---
+echo build

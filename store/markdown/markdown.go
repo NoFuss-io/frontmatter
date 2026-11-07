@@ -38,6 +38,8 @@ func New() store.Store {
 // future refactor to keep this first implementation simple.
 type Format struct {
 	docs sync.Map // key: string path → value: Document
+	// override, when set, is used for every file instead of languageFor.
+	override *language
 }
 
 // Read parses the file at path, stashes the Document in the sidecar for a
@@ -51,7 +53,11 @@ func (f *Format) Read(path string) (map[string]any, error) {
 	if bytes.IndexByte(raw, 0) >= 0 || !utf8.Valid(raw) {
 		return nil, errors.New("not a text file")
 	}
-	doc, err := Parse(path, raw)
+	lang := languageFor(path, string(raw))
+	if f.override != nil {
+		lang = *f.override
+	}
+	doc, err := parseAs(path, raw, lang)
 	if err != nil {
 		return nil, err
 	}
