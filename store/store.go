@@ -51,15 +51,16 @@ type Format interface {
 // Read/Write to the supplied Format. Label returns the path unchanged.
 type FileStore struct {
 	Fmt Format
-	// DefaultExt (e.g. ".md") restricts glob matches to files with this
-	// extension when the pattern's final segment names no extension itself,
-	// so `*` means `*.md` while `*.*` or `*.txt` match literally. Bare paths
-	// are never filtered. Empty disables the filter.
-	DefaultExt string
+	// DefaultExts (e.g. ".md", ".py") restricts glob matches to files with
+	// one of these extensions when the pattern's final segment names no
+	// extension itself, so `*` means "every supported file" while `*.*` or
+	// `*.txt` match literally. Matching ignores case. Bare paths are never
+	// filtered. Empty disables the filter.
+	DefaultExts []string
 }
 
 func (fs FileStore) Enumerate(patterns []string, opts EnumOptions) ([]string, error) {
-	paths, err := expandGlobs(patterns, fs.DefaultExt)
+	paths, err := expandGlobs(patterns, fs.DefaultExts)
 	if err != nil {
 		return nil, err
 	}
@@ -84,9 +85,13 @@ func (fs FileStore) Label(key string) string {
 // expandGlobs expands pattern tokens to file paths. Bare paths that exist are
 // passed through; tokens containing glob metacharacters are expanded via
 // filepath.Glob. A bare-path token that does not exist is an error. If
-// defaultExt is set, matches of a glob whose final segment contains no '.' are
-// limited to files with that extension.
-func expandGlobs(patterns []string, defaultExt string) ([]string, error) {
+// defaultExts is set, matches of a glob whose final segment contains no '.'
+// are limited to files with one of those extensions.
+func expandGlobs(patterns []string, defaultExts []string) ([]string, error) {
+	allowed := make(map[string]bool, len(defaultExts))
+	for _, e := range defaultExts {
+		allowed[strings.ToLower(e)] = true
+	}
 	var paths []string
 	for _, p := range patterns {
 		if strings.ContainsAny(p, "*?[") {
@@ -94,9 +99,9 @@ func expandGlobs(patterns []string, defaultExt string) ([]string, error) {
 			if err != nil {
 				return nil, fmt.Errorf("glob %q: %w", p, err)
 			}
-			restrict := defaultExt != "" && !strings.Contains(filepath.Base(p), ".")
+			restrict := len(allowed) > 0 && !strings.Contains(filepath.Base(p), ".")
 			for _, m := range matched {
-				if restrict && filepath.Ext(m) != defaultExt {
+				if restrict && !allowed[strings.ToLower(filepath.Ext(m))] {
 					continue
 				}
 				fi, err := os.Stat(m)

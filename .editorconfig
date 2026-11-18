@@ -15,3 +15,9 @@ indent_size = 2
 
 [Makefile]
 indent_style = tab
+
+# Test fixtures must keep their exact bytes, including CRLF line endings.
+[store/markdown/testdata/**]
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset

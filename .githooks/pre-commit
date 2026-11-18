@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-staged_go=$(git diff --cached --name-only --diff-filter=ACM -- '*.go')
+# testdata holds byte-exact fixtures (e.g. CRLF line endings) that must never
+# be reformatted.
+staged_go=$(git diff --cached --name-only --diff-filter=ACM -- '*.go' ':(exclude)**/testdata/**')
 
 if [ -n "$staged_go" ]; then
     echo "$staged_go" | xargs gofmt -w

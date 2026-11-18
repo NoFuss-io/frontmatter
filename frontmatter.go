@@ -29,6 +29,9 @@ type (
 	Format      = store.Format
 	FileStore   = store.FileStore
 	EnumOptions = store.EnumOptions
+
+	// MarkdownOverride fixes the comment syntax for NewMarkdownStoreWithOverride.
+	MarkdownOverride = markdown.Override
 )
 
 var (
@@ -40,4 +43,7 @@ var (
 	// NewMarkdownStore constructs the default markdown store. Library consumers
 	// can pass the result as ExecOptions.Store or use it directly.
 	NewMarkdownStore = markdown.New
+	// NewMarkdownStoreWithOverride constructs a markdown store that parses
+	// every file with one fixed comment syntax instead of choosing it per file.
+	NewMarkdownStoreWithOverride = markdown.NewWithOverride
 )

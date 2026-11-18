@@ -1,0 +1,2 @@
+# Test fixtures must keep their exact bytes, including CRLF line endings.
+store/markdown/testdata/** -text

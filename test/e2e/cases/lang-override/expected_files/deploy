@@ -1,0 +1,6 @@
+#!/bin/sh
+# ---
+# field: value
+# title: Deploy
+# ---
+echo deploy

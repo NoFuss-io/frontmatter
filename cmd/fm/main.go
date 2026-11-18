@@ -49,6 +49,7 @@ type options struct {
 	includeHiddenFiles bool
 	maxColumns         int
 	format             string
+	syntax             fm.MarkdownOverride
 }
 
 var usage = `fm - Markdown frontmatter batch editor
@@ -73,6 +74,14 @@ Flags:
   -H, --include-hidden    Include hidden files (ignored by default).
       --max-columns N     Column cap for 'select *' output (default 20).
       --format FORMAT     Output format: full (default), simple, csv, markdown.
+
+Frontmatter syntax (default: chosen per file by extension or shebang;
+when given, applies to every file and '*' matches files of any type):
+  -L, --lang LANG         Treat files as LANG: a language name (python, shell,
+                          c, sql, …) or an extension (py, js, …).
+      --line-comment STR  Frontmatter in line comments starting with STR.
+      --block-open STR    Frontmatter in a block comment opened by STR.
+      --block-close STR   Closer of that block comment (default: --block-open).
 
 Subcommands:
   fm completion {bash|zsh|fish}   Print shell-completion script to stdout.
@@ -125,7 +134,12 @@ func main() {
 		_, _ = fmt.Fprintln(errOut, err)
 		os.Exit(2)
 	}
-	if ok := prog.Run(fm.ExecOptions{DryRun: opts.dryRun, Silent: opts.silent, Verbose: opts.verbose, MaxColumns: opts.maxColumns, IncludeHidden: opts.includeHiddenFiles, Renderer: renderer}, okOut, errOut); !ok {
+	store, err := fm.NewMarkdownStoreWithOverride(opts.syntax)
+	if err != nil {
+		_, _ = fmt.Fprintln(errOut, err)
+		os.Exit(2)
+	}
+	if ok := prog.Run(fm.ExecOptions{DryRun: opts.dryRun, Silent: opts.silent, Verbose: opts.verbose, MaxColumns: opts.maxColumns, IncludeHidden: opts.includeHiddenFiles, Renderer: renderer, Store: store}, okOut, errOut); !ok {
 		os.Exit(1)
 	}
 }
@@ -146,6 +160,11 @@ func parseFlags(args []string) (options, []string, error) {
 	fs.BoolVar(&opts.includeHiddenFiles, "include-hidden", false, "")
 	fs.BoolVar(&opts.includeHiddenFiles, "hidden", false, "")
 	fs.BoolVar(&opts.includeHiddenFiles, "H", false, "")
+	fs.StringVar(&opts.syntax.Lang, "lang", "", "")
+	fs.StringVar(&opts.syntax.Lang, "L", "", "")
+	fs.StringVar(&opts.syntax.LineComment, "line-comment", "", "")
+	fs.StringVar(&opts.syntax.BlockOpen, "block-open", "", "")
+	fs.StringVar(&opts.syntax.BlockClose, "block-close", "", "")
 	help := fs.Bool("help", false, "")
 	helpShort := fs.Bool("h", false, "")
 	version := fs.Bool("version", false, "")

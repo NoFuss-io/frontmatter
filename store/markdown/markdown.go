@@ -1,10 +1,10 @@
-// Package markdown implements store.Format for Markdown files with YAML frontmatter.
+// Package markdown implements store.Format for Markdown files with YAML
+// frontmatter, and for source files that carry the same block in a comment.
 package markdown
 
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -20,12 +20,43 @@ import (
 // A fresh Format (and its body sidecar) is created on each call, so the
 // sidecar lifetime is tied to the single Run invocation.
 func New() store.Store {
-	return store.FileStore{Fmt: &Format{}, DefaultExt: ".md"}
+	f := &Format{}
+	return fileStore{store.FileStore{Fmt: f, DefaultExts: Extensions()}, f}
 }
 
-// Format implements store.Format for Markdown files with YAML frontmatter.
-// The bodies sync.Map caches the non-frontmatter body text keyed by path so
-// that Write can reconstruct the full file without data loss.
+// fileStore is store.FileStore plus a record of which paths the user named
+// explicitly (rather than matched by a glob), which Format.Write consults.
+type fileStore struct {
+	store.FileStore
+	f *Format
+}
+
+func (s fileStore) Enumerate(patterns []string, opts store.EnumOptions) ([]string, error) {
+	for _, p := range patterns {
+		if !strings.ContainsAny(p, "*?[") {
+			s.f.explicit.Store(p, true)
+		}
+	}
+	return s.FileStore.Enumerate(patterns, opts)
+}
+
+// ErrNoBlock is returned by Write for a source file without a frontmatter
+// block that was only matched by a glob. Inserting a block there would edit
+// files the user may not have meant to touch (scripts, stylesheets, …).
+var ErrNoBlock = errors.New("no frontmatter block; name the file explicitly or pass --lang to insert one")
+
+// parsed is the sidecar entry for one file.
+type parsed struct {
+	doc      Document
+	found    bool // the file had a block
+	markdown bool // parsed with Markdown rules
+}
+
+// Format implements store.Format for files with YAML frontmatter: Markdown
+// files, and source files with the block inside a comment (see languages).
+// The docs sync.Map caches the parsed Document keyed by path so that Write can
+// reconstruct the full file, in its original comment style and line endings,
+// without data loss.
 //
 // Body preservation is a general problem for any file-based format: an image
 // store must preserve pixel data, an audio store must preserve audio frames,
@@ -36,13 +67,16 @@ func New() store.Store {
 // map. That would make every Format implementation stateless. It is left as a
 // future refactor to keep this first implementation simple.
 type Format struct {
-	bodies sync.Map // key: string path → value: string body
+	docs sync.Map // key: string path → value: parsed
+	// explicit holds paths named without glob characters (see fileStore).
+	explicit sync.Map // key: string path → value: true
+	// override, when set, is used for every file instead of languageFor.
+	override *language
 }
 
-// Read parses the YAML frontmatter from the file at path, stashes the body
-// in the sidecar for a later Write call, and returns the frontmatter field map.
-// A file without a leading "---\n" block is treated as body-only; an empty map
-// is returned and the full file content is stashed as the body.
+// Read parses the file at path, stashes the Document in the sidecar for a
+// later Write call, and returns its frontmatter field map. A file without a
+// block yields an empty map.
 func (f *Format) Read(path string) (map[string]any, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -51,57 +85,42 @@ func (f *Format) Read(path string) (map[string]any, error) {
 	if bytes.IndexByte(raw, 0) >= 0 || !utf8.Valid(raw) {
 		return nil, errors.New("not a text file")
 	}
-	fm := make(map[string]any)
-	s := strings.ReplaceAll(string(raw), "\r\n", "\n")
-
-	if !strings.HasPrefix(s, "---\n") {
-		f.bodies.Store(path, s)
-		return fm, nil
+	lang := languageFor(path, string(raw))
+	if f.override != nil {
+		lang = *f.override
 	}
-
-	rest := s[4:]
-	end := strings.Index(rest, "\n---\n")
-	if end < 0 {
-		// Handle trailing "---" with no trailing newline.
-		if after, found := strings.CutSuffix(rest, "\n---"); found {
-			if err := yaml.Unmarshal([]byte(after), &fm); err != nil {
-				return nil, fmt.Errorf("%s: %w", path, err)
-			}
-			f.bodies.Store(path, "")
-			return fm, nil
-		}
-		// No valid closing fence — treat entire file as body.
-		f.bodies.Store(path, s)
-		return fm, nil
+	doc, found, err := parseAs(path, raw, lang)
+	if err != nil {
+		return nil, err
 	}
-
-	if err := yaml.Unmarshal([]byte(rest[:end]), &fm); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	body := rest[end+5:]
-	f.bodies.Store(path, body)
-	return fm, nil
+	f.docs.Store(path, parsed{doc: doc, found: found, markdown: lang.markdown})
+	return doc.FrontMatter, nil
 }
 
-// Write serializes fields as YAML frontmatter, prepends "---\n…---\n", appends
-// the body that was stashed during the preceding Read, and writes the result to
-// disk, replacing the original file.
+// Write renders fields into the Document stashed by the preceding Read and
+// writes the result to disk, replacing the original file. Only the
+// frontmatter block changes; everything around it is written back verbatim.
+//
+// A new block is inserted into a Markdown file freely, but into a source file
+// only if the user named it explicitly or set an override; otherwise Write
+// returns ErrNoBlock and leaves the file untouched.
 func (f *Format) Write(path string, fields map[string]any) error {
-	body := ""
-	if v, ok := f.bodies.Load(path); ok {
-		body = v.(string)
+	doc := Document{Body: string(LF), LineEndings: LF}
+	if v, ok := f.docs.Load(path); ok {
+		p := v.(parsed)
+		if !p.found && !p.markdown && f.override == nil {
+			if _, named := f.explicit.Load(path); !named {
+				return ErrNoBlock
+			}
+		}
+		doc = p.doc
 	}
-
-	var buf bytes.Buffer
-	buf.WriteString("---\n")
-	enc := yaml.NewEncoder(&buf)
-	enc.SetIndent(2)
-	if err := enc.Encode(marshalFields(fields)); err != nil {
+	doc.FrontMatter = fields
+	out, err := Render(doc)
+	if err != nil {
 		return err
 	}
-	buf.WriteString("---\n")
-	buf.WriteString(body)
-	return os.WriteFile(path, buf.Bytes(), 0644)
+	return os.WriteFile(path, out, 0644)
 }
 
 func marshalFields(fields map[string]any) map[string]any {

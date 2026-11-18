@@ -1,12 +1,12 @@
 ---
 name: fm
-description: Batch editing of Markdown frontmatter in YAML using natural language
+description: Batch editing of YAML frontmatter in Markdown and source files (scripts, code) using natural language
 ---
 
 # fm — frontmatter refactoring
 
-Use the `fm` CLI to query and mutate YAML frontmatter in Markdown files based on the
-user's natural language request.
+Use the `fm` CLI to query and mutate YAML frontmatter in Markdown files, and in comment
+blocks at the top of source files, based on the user's natural language request.
 
 ## Workflow
 
@@ -91,6 +91,39 @@ fm 'alter notes/*.md drop draft where published=true'
 fm 'update notes/*.md set category=cooking where from=cooking'
 fm 'alter  notes/*.md drop from where from=cooking'
 ```
+
+---
+
+## Source files
+
+Frontmatter can also live in a comment in a source file. The comment style is chosen per
+file by extension (or shebang), and the block may follow a shebang or encoding line:
+
+```python
+#!/usr/bin/env python3
+# ---
+# author: jane.doe
+# description: exports sessions to Excel
+# ---
+```
+
+Other styles: `// ---` (JS, Go, …), `/*---` … `---*/`, `"""---` … `---"""`, `-- ---` (SQL).
+
+```sh
+# Find scripts by metadata
+fm 'select author, description from scripts/*.py where author="jane.doe"'
+
+# `*` matches every supported type (.md, .py, .sh, .js, …)
+fm 'select description from scripts/*'
+
+# Extensionless scripts or unknown extensions: force the syntax for all files
+fm 'select description from bin/*' -L shell
+fm 'select * from templates/*.tmpl' --block-open '{{/*' --block-close '*/}}'
+```
+
+`update` only adds a new block to a source file without one if the file is named
+explicitly or a syntax flag is given; glob-matched files without a block are reported as
+errors and left untouched.
 
 ---
 
