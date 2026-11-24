@@ -1,0 +1,18 @@
+{
+  "name": "frontmatter",
+  "description": "Query and batch-edit YAML frontmatter in Markdown files (e.g. Obsidian vaults) and source-file comments with the fm CLI",
+  "version": "0.4.1",
+  "author": {
+    "name": "NoFuss.io",
+    "url": "https://github.com/NoFuss-io"
+  },
+  "homepage": "https://github.com/NoFuss-io/frontmatter",
+  "repository": "https://github.com/NoFuss-io/frontmatter",
+  "license": "MIT",
+  "keywords": [
+    "frontmatter",
+    "markdown",
+    "yaml",
+    "obsidian"
+  ]
+}

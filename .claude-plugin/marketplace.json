@@ -1,0 +1,17 @@
+{
+  "name": "frontmatter",
+  "owner": {
+    "name": "NoFuss.io",
+    "url": "https://github.com/NoFuss-io"
+  },
+  "metadata": {
+    "description": "Plugin for the fm frontmatter CLI"
+  },
+  "plugins": [
+    {
+      "name": "frontmatter",
+      "source": "./",
+      "description": "Query and batch-edit YAML frontmatter in Markdown files (e.g. Obsidian vaults) and source-file comments with the fm CLI"
+    }
+  ]
+}

@@ -52,7 +52,9 @@ type options struct {
 	syntax             fm.MarkdownOverride
 }
 
-var usage = `fm - Markdown frontmatter batch editor
+// usageText is built on call so Version reflects init() and topics come from helpTopics.
+func usageText() string {
+	return `fm - Markdown frontmatter batch editor
 ` + Version + `
 
 Usage:
@@ -85,8 +87,9 @@ when given, applies to every file and '*' matches files of any type):
 
 Subcommands:
   fm completion {bash|zsh|fish}   Print shell-completion script to stdout.
-  fm install-skill {claude|codex|copilot|gemini}   Install AI coding-agent skill.
-`
+  fm help [topic]                 Show this message, or a reference topic (Markdown):
+` + helpTopicList()
+}
 
 func main() {
 	if len(os.Args) >= 2 && os.Args[1] == "completion" {
@@ -102,11 +105,12 @@ func main() {
 	}
 
 	if len(os.Args) >= 2 && os.Args[1] == "install-skill" {
-		if len(os.Args) != 3 {
-			fmt.Fprintln(os.Stderr, "usage: fm install-skill {claude}")
-			os.Exit(2)
-		}
-		if err := installSkill(os.Args[2]); err != nil {
+		fmt.Fprint(os.Stderr, installSkillRemoved)
+		os.Exit(2)
+	}
+
+	if len(os.Args) >= 2 && os.Args[1] == "help" {
+		if err := writeHelp(os.Args[2:], os.Stdout); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(2)
 		}
@@ -116,7 +120,7 @@ func main() {
 	opts, args, err := parseFlags(os.Args[1:])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		fmt.Fprint(os.Stderr, usage)
+		fmt.Fprint(os.Stderr, usageText())
 		os.Exit(2)
 	}
 
@@ -182,7 +186,7 @@ func parseFlags(args []string) (options, []string, error) {
 		return opts, nil, err
 	}
 	if *help || *helpShort {
-		fmt.Print(usage)
+		fmt.Print(usageText())
 		os.Exit(0)
 	}
 	if *version || *versionShort {

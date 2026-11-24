@@ -26,6 +26,9 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v4
 
+      - name: Check plugin version matches tag
+        run: just check-version "${GITHUB_REF_NAME#v}"
+
       - name: Install pandoc
         run: sudo apt-get update && sudo apt-get install -y pandoc
 

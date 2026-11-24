@@ -38,9 +38,9 @@ The engine is also published as a reusable Go library: the root package
 ```
 fm/
 ├── cmd/fm/                  # Application entrypoint (package main)
-│   ├── main.go              # Flag parsing, completion/install-skill dispatch, Program.Run
+│   ├── main.go              # Flag parsing, completion/help dispatch, Program.Run
 │   ├── completion.go        # Static bash/zsh/fish completion scripts
-│   └── install_skill.go     # `fm install-skill {claude|codex|copilot|gemini}` subcommand
+│   └── help.go              # `fm help [topic]`: usage or embedded reference pages
 ├── internal/                # Core engine (package internal)
 │   ├── ast.go               # Program / Query interface / SelectQuery / UpdateQuery / AlterQuery / Expr nodes / operators / FieldType / LiteralKind
 │   ├── parse.go             # Recursive-descent cursor-based parser for the DSL
@@ -65,9 +65,13 @@ fm/
 ├── store/markdown/          # Markdown store implementation (package markdown)
 │   ├── markdown.go          # Format: YAML frontmatter parse + emit; body sidecar via sync.Map
 │   └── markdown_test.go     # Unit tests: Read, Read without block, Read→Write→Read round-trip
+├── plugin.json              # Agent Plugins 1.0 manifest (Codex, Copilot CLI)
+├── gemini-extension.json    # Gemini CLI extension manifest
+├── .claude-plugin/          # Claude Code plugin.json + marketplace.json (also read by Copilot CLI)
+├── .agents/plugins/         # Codex marketplace.json
+├── skills/fm/SKILL.md       # Agent skill `fm`, auto-discovered by all plugin hosts
 ├── docs/                    # Documentation + embedded assets (package docs)
-│   ├── embed.go             # go:embed exposes SkillMD and SkillManualMD byte slices
-│   ├── SKILL.md             # Claude Code skill (embedded, installed via `fm install-skill`)
+│   ├── embed.go             # go:embed exposes ManualMD + FunctionsMD (printed by `fm help syntax|functions`)
 │   ├── manual.md            # Full DSL reference
 │   ├── fm.1.md              # Pandoc source for the top-level man page
 │   ├── man/                 # Generated roff man pages (fm.1, …)
@@ -102,7 +106,7 @@ fm/
 ├── .editorconfig
 ├── vendor/                  # Vendored Go dependencies (yaml.v3)
 ├── go.mod / go.sum
-├── justfile                 # build, install, lint[-fix], test, vendor, dev, man, completions, check-links, release-check, release-snapshot, new-e2e-test, setup
+├── justfile                 # build, install, lint[-fix], test, vendor, dev, man, completions, check-links, release-check, release-snapshot, set-version, check-version, new-e2e-test, setup
 ├── CONTRIBUTING.md
 ├── CODEOWNERS
 ├── SECURITY.md
@@ -120,13 +124,13 @@ Seven Go packages:
 
 | Package           | Path                  | Role |
 |:------------------|:----------------------|:-----|
-| `main`            | `cmd/fm/`             | CLI: flag parsing, `completion`/`install-skill` subcommands, `Version`/`Commit` ldflags init, calls `Program.Run` |
+| `main`            | `cmd/fm/`             | CLI: flag parsing, `completion`/`help` subcommands, `Version`/`Commit` ldflags init, calls `Program.Run` |
 | `frontmatter`     | `./` (root)           | Public library API: re-exports from `internal` and `store` |
 | `internal`        | `internal/`           | Engine: AST, parser, evaluator, executor, result accumulator, table formatting |
 | `table`           | `internal/table/`     | Pluggable table rendering: `Simple`, `CSV`, `Markdown`, `Full` renderers |
 | `store`           | `store/`              | Pluggable data-source API: `Store` / `Format` interfaces, `FileStore`, `EnumOptions` |
 | `markdown`        | `store/markdown/`     | Markdown store: `---` YAML frontmatter parse + emit; implements `store.Format` |
-| `docs`            | `docs/`               | Embedded assets: `SkillMD` and `SkillManualMD` byte slices via `go:embed` |
+| `docs`            | `docs/`               | Embedded assets: `ManualMD` and `FunctionsMD` byte slices via `go:embed` |
 | `integration`     | `test/e2e/`           | Black-box golden tests (package only used by `go test`) |
 
 `cmd/fm` imports `frontmatter` (not `internal` directly) so the CLI exercises
@@ -262,9 +266,9 @@ so query positional args can precede flags.
 ### Subcommands
 
 - `fm completion {bash|zsh|fish}` — writes a static completion script to stdout (`completion.go`).
-- `fm install-skill {claude|codex|copilot|gemini}` — copies `docs/SKILL.md` and `docs/manual.md`
-  (embedded in the binary via `go:embed`) into `~/<agent-dir>/skills/fm/`. Replaces the former
-  `just install-skill` target.
+- `fm help [syntax|functions]` (`help.go`) — prints usage, or the embedded `docs/manual.md` /
+  `docs/functions.md` to stdout. The skill points agents here, so the
+  manual always matches the installed binary.
 
 ### Query input
 
@@ -631,6 +635,8 @@ library `flag` package so positional query tokens can precede flags.
 | `check-links`       | `lychee` link-check over docs, README, architecture (requires `cargo install lychee`) |
 | `release-check`     | `goreleaser check` |
 | `release-snapshot`  | `goreleaser release --snapshot --clean` |
+| `set-version V`     | Write version `V` into all plugin manifests (`jq`) |
+| `check-version V`   | Fail unless all plugin manifests have version `V` (run by the release workflow) |
 | `setup`             | Wire `core.hooksPath = .githooks`; install golangci-lint and lychee |
 
 ### Pre-commit hook (`.githooks/pre-commit`)
@@ -760,10 +766,13 @@ Program.Run → store.Enumerate (expandPlan) → for each key in union:
 - **FROM-less SELECT (virtual document).** A `select` with no `FROM` clause
   evaluates once against an empty `FrontMatter{}`, enabling expression
   evaluation (e.g. `fm 'select 1+2'`) without touching any files.
-- **Embedded skill assets.** `docs/embed.go` uses `go:embed` to bake
-  `docs/SKILL.md` and `docs/manual.md` into the binary. `fm install-skill`
-  writes them out to `~/<agent-dir>/skills/fm/`, so the binary is the single
-  source of truth for skill installation across all supported AI agents.
+- **Multi-agent plugin.** The repo root is a plugin with one skill,
+  `skills/fm/SKILL.md`, which every host auto-discovers. Each host has its own
+  manifest: `.claude-plugin/` (Claude Code, Copilot CLI), root `plugin.json`
+  (Agent Plugins 1.0: Codex, Copilot CLI), `.agents/plugins/marketplace.json`
+  (Codex), and `gemini-extension.json` (Gemini CLI). The skill is not embedded
+  in the binary; `docs/embed.go` embeds `docs/manual.md` and `docs/functions.md`,
+  which `fm help syntax` / `fm help functions` print, so agents always read a version-matched reference.
 - **Obsidian alignment.** Wikilink (`[[ref|title]]`) and Markdown-link
   (`[title](ref)`) are first-class field types with bidirectional casts;
   `.obsidian/` is git-ignored.

@@ -1,0 +1,20 @@
+{
+  "name": "frontmatter",
+  "interface": {
+    "displayName": "frontmatter"
+  },
+  "plugins": [
+    {
+      "name": "frontmatter",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/NoFuss-io/frontmatter.git"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

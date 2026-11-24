@@ -1,0 +1,19 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "frontmatter",
+  "version": "0.4.1",
+  "description": "Query and batch-edit YAML frontmatter in Markdown files (e.g. Obsidian vaults) and source-file comments with the fm CLI",
+  "author": {
+    "name": "NoFuss.io",
+    "url": "https://github.com/NoFuss-io"
+  },
+  "homepage": "https://github.com/NoFuss-io/frontmatter",
+  "repository": "https://github.com/NoFuss-io/frontmatter",
+  "license": "MIT",
+  "keywords": [
+    "frontmatter",
+    "markdown",
+    "yaml",
+    "obsidian"
+  ]
+}
