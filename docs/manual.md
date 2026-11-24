@@ -48,7 +48,7 @@ Flags:
 
 Query is read from `stdin` if omitted.
 Query results and logs are written to `stdout`.
-Errors are written to `stderr` and return exit code 1.
+Errors are written to `stderr`; see [Output](#output) for exit codes.
 
 
 ### Query using command line arguments
@@ -96,10 +96,15 @@ then send EOF with <kbd>Ctrl</kbd> <kbd>D</kbd>.
 
 `fm` prints normal output to `stdout`.
 
-Execution errors, e.g. failed casting, are written to `stderr` and exits with code 2.
+Errors are written to `stderr`. Exit codes:
 
-Query parsing errors (e.g. recognized type, malformed expression, static type error)
-halt the program before touching any file and exists with code 1.
+| Code | Meaning |
+| ---- | ------- |
+| 0    | Success: every file was processed. |
+| 1    | Execution error in at least one file, e.g. a failed cast in `set`. That file is skipped and left unchanged; other files are still processed. |
+| 2    | Error before execution: invalid flags or arguments, or a query parse error (unknown type, malformed expression, static type error). No file is read or written. |
+
+Errors in a `where` clause are not execution errors: the condition evaluates as falsey and the exit code is unaffected.
 
 
 #### File mutations
