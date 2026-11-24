@@ -68,6 +68,27 @@ release-snapshot:
 # Requires `lychee` (https://github.com/lycheeverse/lychee).
 check-links:
     lychee --no-progress \
-        README.md SECURITY.md CONTRIBUTING.md SKILL.md \
+        README.md SECURITY.md CONTRIBUTING.md skills/ \
         docs/ architecture/ .github/ frontmatter.go \
         --exclude-path docs/tutorial/
+
+plugin_manifests := "plugin.json .claude-plugin/plugin.json gemini-extension.json"
+
+# Set the plugin version (X.Y.Z, no `v`) in all plugin manifests.
+set-version VERSION:
+    for f in {{ plugin_manifests }}; do \
+        jq --arg v "{{ VERSION }}" '.version = $v' "$f" > "$f.tmp" && mv "$f.tmp" "$f"; \
+    done
+
+# Fail unless every plugin manifest has version VERSION (X.Y.Z, no `v`).
+check-version VERSION:
+    #!/usr/bin/env sh
+    status=0
+    for f in {{ plugin_manifests }}; do
+        v=$(jq -r .version "$f")
+        if [ "$v" != "{{ VERSION }}" ]; then
+            echo "$f: version $v, expected {{ VERSION }}" >&2
+            status=1
+        fi
+    done
+    exit $status

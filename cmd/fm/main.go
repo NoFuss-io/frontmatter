@@ -85,7 +85,9 @@ when given, applies to every file and '*' matches files of any type):
 
 Subcommands:
   fm completion {bash|zsh|fish}   Print shell-completion script to stdout.
-  fm install-skill {claude|codex|copilot|gemini}   Install AI coding-agent skill.
+  fm help [topic]                 Show this message, or a reference topic (Markdown):
+                                    syntax     Query language reference
+                                    functions  Built-in functions
 `
 
 func main() {
@@ -101,12 +103,8 @@ func main() {
 		return
 	}
 
-	if len(os.Args) >= 2 && os.Args[1] == "install-skill" {
-		if len(os.Args) != 3 {
-			fmt.Fprintln(os.Stderr, "usage: fm install-skill {claude}")
-			os.Exit(2)
-		}
-		if err := installSkill(os.Args[2]); err != nil {
+	if len(os.Args) >= 2 && os.Args[1] == "help" {
+		if err := writeHelp(os.Args[2:], os.Stdout); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(2)
 		}

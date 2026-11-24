@@ -10,6 +10,8 @@ fm - Markdown frontmatter batch editor
 
 **fm** **completion** {bash|zsh|fish}
 
+**fm** **help** [_TOPIC_]
+
 # DESCRIPTION
 
 **fm** queries and mutates YAML frontmatter in Markdown files using an
@@ -67,6 +69,11 @@ as a single positional argument.
 **fm completion** _SHELL_
 :   Print a shell-completion script for _SHELL_ (one of `bash`, `zsh`,
     `fish`) to stdout.
+
+**fm help** [_TOPIC_]
+:   Without _TOPIC_, print usage. With _TOPIC_, print that reference page
+    (Markdown) to stdout: `syntax` (query language) or `functions`
+    (built-in functions).
 
 # EXAMPLES
 

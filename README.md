@@ -62,7 +62,44 @@ Requirements: Git, [Go](https://go.dev/), and [Just](https://just.systems/):
 git clone https://github.com/NoFuss-io/frontmatter.git
 cd frontmatter
 just install
-fm install-skill claude
+```
+
+### AI agent plugin
+
+The repo is a plugin (skill `fm`) for common coding agents. The skill expects `fm` on `PATH`.
+
+Claude Code:
+
+```sh
+/plugin marketplace add NoFuss-io/frontmatter
+/plugin install frontmatter@frontmatter
+```
+
+GitHub Copilot CLI:
+
+```sh
+copilot plugin marketplace add NoFuss-io/frontmatter
+copilot plugin install frontmatter@frontmatter
+```
+
+OpenAI Codex:
+
+```sh
+codex plugin marketplace add NoFuss-io/frontmatter
+```
+
+then install `frontmatter` from `/plugins` in Codex.
+
+Gemini CLI:
+
+```sh
+gemini extensions install https://github.com/NoFuss-io/frontmatter
+```
+
+Other agents that read Agent Skills (Cursor, OpenCode, …):
+
+```sh
+npx skills add NoFuss-io/frontmatter
 ```
 
 

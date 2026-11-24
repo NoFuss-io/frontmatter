@@ -8,8 +8,8 @@ Each phase ends with `just lint` and `just test`, edit till it passes, then comm
 
 ## Phase 1 — AST
 
-- [ ] **1.1** `internal/ast.go`: rename `BinOverlap` → `BinIntersect`; add `BinUnion`, `BinLike`, `BinNotLike`, `BinILike`, `BinNotILike`, `BinRegexp`, `BinNotRegexp` to `BinOp` iota.
-- [ ] **1.2** `internal/ast.go`: add `FuncExpr` node:
+- [x] **1.1** `internal/ast.go`: rename `BinOverlap` → `BinIntersect`; add `BinUnion`, `BinLike`, `BinNotLike`, `BinILike`, `BinNotILike`, `BinRegexp`, `BinNotRegexp` to `BinOp` iota.
+- [x] **1.2** `internal/ast.go`: add `FuncExpr` node:
   ```go
   type FuncExpr struct { Name string; Args []Expr }
   func (FuncExpr) expr() {}

@@ -7,6 +7,8 @@ fm \- Markdown frontmatter batch editor
 \f[B]fm\f[R] [\f[I]QUERY\f[R]] [\f[I]FLAGS\f[R]]
 .PP
 \f[B]fm\f[R] \f[B]completion\f[R] {bash|zsh|fish}
+.PP
+\f[B]fm\f[R] \f[B]help\f[R] [\f[I]TOPIC\f[R]]
 .SH DESCRIPTION
 \f[B]fm\f[R] queries and mutates YAML frontmatter in Markdown files
 using an SQL\-style DSL.
@@ -71,6 +73,12 @@ May be combined with \f[B]\-\-line\-comment\f[R] but not with
 \f[B]fm completion\f[R] \f[I]SHELL\f[R]
 Print a shell\-completion script for \f[I]SHELL\f[R] (one of
 \f[CR]bash\f[R], \f[CR]zsh\f[R], \f[CR]fish\f[R]) to stdout.
+.TP
+\f[B]fm help\f[R] [\f[I]TOPIC\f[R]]
+Without \f[I]TOPIC\f[R], print usage.
+With \f[I]TOPIC\f[R], print that reference page (Markdown) to stdout:
+\f[CR]syntax\f[R] (query language) or \f[CR]functions\f[R] (built\-in
+functions).
 .SH EXAMPLES
 Inspect frontmatter across a vault:
 .IP
