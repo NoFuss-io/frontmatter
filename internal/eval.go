@@ -198,6 +198,9 @@ func castToString(v Value) (Value, error) {
 
 func castToDate(v Value) (Value, error) {
 	switch v.Kind {
+	case TypeDatetime:
+		t := v.Data.(time.Time)
+		return Value{Kind: TypeDate, Data: time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())}, nil
 	case TypeString:
 		t, err := time.Parse("2006-01-02", v.Data.(string))
 		if err != nil {
@@ -210,6 +213,8 @@ func castToDate(v Value) (Value, error) {
 
 func castToDatetime(v Value) (Value, error) {
 	switch v.Kind {
+	case TypeDate:
+		return Value{Kind: TypeDatetime, Data: v.Data.(time.Time)}, nil
 	case TypeString:
 		t, err := time.Parse("2006-01-02T15:04:05", v.Data.(string))
 		if err != nil {
@@ -323,6 +328,14 @@ func (e LitExpr) Eval(_ FrontMatter) Value {
 		return Value{Kind: TypeBool, Data: strings.ToLower(e.Value) == "true"}
 	case LitNull:
 		return Value{Null: true}
+	case LitDate:
+		if t, err := time.Parse("2006-01-02", e.Value); err == nil {
+			return Value{Kind: TypeDate, Data: t}
+		}
+	case LitDatetime:
+		if t, err := time.Parse("2006-01-02T15:04:05", e.Value); err == nil {
+			return Value{Kind: TypeDatetime, Data: t}
+		}
 	}
 	return Value{Null: true}
 }
@@ -453,7 +466,9 @@ func (e BinExpr) Eval(fm FrontMatter) Value {
 // null = null → true; null != null → false; null = non-null → false; null != non-null → true.
 // Cast failures also follow null semantics.
 // Lists participate in set equality (= / !=) or set membership (list >= scalar,
-// scalar <= list); ordering operators require numeric coercion of both sides.
+// scalar <= list). If either side is a date or datetime, both sides are compared
+// as points in time (see temporalPair); otherwise ordering operators require
+// numeric coercion of both sides.
 func compare(op BinOp, l, r Value) Value {
 	if l.Null && r.Null {
 		return Value{Kind: TypeBool, Data: op == BinEq}
@@ -470,31 +485,84 @@ func compare(op BinOp, l, r Value) Value {
 	case BinNe:
 		return Value{Kind: TypeBool, Data: !scalarEq(l, r)}
 	}
+	if isTemporal(l) || isTemporal(r) {
+		a, b, ok := temporalPair(l, r)
+		if !ok {
+			return Value{Kind: TypeBool, Data: false}
+		}
+		return Value{Kind: TypeBool, Data: ordered(op, a.Compare(b))}
+	}
 	lf, errL := Cast(l, TypeNumber)
 	rf, errR := Cast(r, TypeNumber)
 	if errL != nil || errR != nil || lf.Null || rf.Null {
 		return Value{Kind: TypeBool, Data: false}
 	}
 	a, b := lf.Data.(float64), rf.Data.(float64)
-	var result bool
+	cmp := 0
+	if a < b {
+		cmp = -1
+	} else if a > b {
+		cmp = 1
+	}
+	return Value{Kind: TypeBool, Data: ordered(op, cmp)}
+}
+
+// ordered applies an ordering operator to a three-way comparison result.
+func ordered(op BinOp, cmp int) bool {
 	switch op {
 	case BinLt:
-		result = a < b
+		return cmp < 0
 	case BinLe:
-		result = a <= b
+		return cmp <= 0
 	case BinGt:
-		result = a > b
+		return cmp > 0
 	case BinGe:
-		result = a >= b
+		return cmp >= 0
 	}
-	return Value{Kind: TypeBool, Data: result}
+	return false
+}
+
+func isTemporal(v Value) bool { return v.Kind == TypeDate || v.Kind == TypeDatetime }
+
+// temporalPair converts l and r to points in time for comparison. A string side
+// is parsed as a date or datetime. If either side is a datetime, the other is
+// promoted (a date counts as midnight). ok is false if either side is not
+// temporal and cannot be parsed as one.
+func temporalPair(l, r Value) (a, b time.Time, ok bool) {
+	lt, okL := asTemporal(l)
+	rt, okR := asTemporal(r)
+	if !okL || !okR {
+		return time.Time{}, time.Time{}, false
+	}
+	return lt.Data.(time.Time), rt.Data.(time.Time), true
+}
+
+// asTemporal returns v as a date or datetime value, parsing strings in either
+// format. Dates and datetimes share one time.Time representation (a date is
+// midnight UTC), so mixed pairs compare correctly without further casting.
+func asTemporal(v Value) (Value, bool) {
+	if isTemporal(v) {
+		return v, true
+	}
+	if v.Kind != TypeString {
+		return Value{}, false
+	}
+	if d, err := castToDate(v); err == nil {
+		return d, true
+	}
+	if dt, err := castToDatetime(v); err == nil {
+		return dt, true
+	}
+	return Value{}, false
 }
 
 func scalarEq(l, r Value) bool {
-	if l.Kind == r.Kind {
-		if l.Kind == TypeDate || l.Kind == TypeDatetime {
-			return l.Data.(time.Time).Equal(r.Data.(time.Time))
+	if isTemporal(l) || isTemporal(r) {
+		if a, b, ok := temporalPair(l, r); ok {
+			return a.Equal(b)
 		}
+	}
+	if l.Kind == r.Kind {
 		return l.Data == r.Data
 	}
 	lf, errL := Cast(l, TypeNumber)

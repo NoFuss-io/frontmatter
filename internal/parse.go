@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -779,6 +781,8 @@ func (e *LitExpr) parse(c *cursor) error {
 	case (b0 == 'r' || b0 == 'R') && len(prefix) >= 2 && (prefix[1] == '"' || prefix[1] == '\''):
 		c.readRune() // consume 'r'/'R'
 		return e.parseString(c, true)
+	case b0 >= '0' && b0 <= '9' && temporalLitRe.Match(c.src[c.pos:]):
+		return e.parseTemporal(c)
 	case b0 == '-' || b0 == '.' || (b0 >= '0' && b0 <= '9'):
 		return e.parseNumber(c)
 	default:
@@ -801,6 +805,27 @@ func (e *LitExpr) parseKeyword(c *cursor) error {
 	default:
 		return fmt.Errorf("unexpected identifier %q in literal context", word)
 	}
+	return nil
+}
+
+// temporalLitRe matches an unquoted date (YYYY-MM-DD) or datetime
+// (YYYY-MM-DDTHH:MM:SS) literal. It is checked before number parsing so that
+// 2025-01-15 is a date rather than the arithmetic expression 2025 - 1 - 15.
+var temporalLitRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2})?\b`)
+
+func (e *LitExpr) parseTemporal(c *cursor) error {
+	m := temporalLitRe.Find(c.src[c.pos:])
+	text := string(m)
+	kind, layout := LitDate, "2006-01-02"
+	if len(text) > len("2006-01-02") {
+		kind, layout = LitDatetime, "2006-01-02T15:04:05"
+	}
+	if _, err := time.Parse(layout, text); err != nil {
+		return fmt.Errorf("invalid date literal %q", text)
+	}
+	consumeBytes(c, len(m))
+	e.Kind = kind
+	e.Value = text
 	return nil
 }
 

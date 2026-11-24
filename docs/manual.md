@@ -390,12 +390,15 @@ Decimal with optional fractional part and exponent:
 
 ##### Date and datetime literals
 
-`fm` does not use BigQuery's typed literal syntax (`DATE '...'`, `DATETIME '...'`). Instead, date and datetime values are encoded as plain strings matching ISO 8601 format, and type is controlled via the field type annotation:
+`fm` does not use BigQuery's typed literal syntax (`DATE '...'`, `DATETIME '...'`). Instead, an unquoted ISO 8601 date (`YYYY-MM-DD`) or local datetime (`YYYY-MM-DDTHH:MM:SS`) is a date or datetime literal:
 
 ```
 created:date = 2026-05-17
 modified:datetime = 2026-05-17T21:02:30
+where created >= 2026-01-01
 ```
+
+An unquoted date is never arithmetic: `2026-05-17` is a date, not `2026 - 5 - 17`. An invalid date such as `2026-13-01` is a parse error. Quoted strings in the same format (`"2026-05-17"`) are parsed as dates when compared with a date or datetime.
 
 
 #### Boolean expressions
@@ -412,6 +415,7 @@ Binary comparison is truthy if both operands exist (literals always exist), with
 | -------------------- | ----------------- | ----------------- | -------------- |
 | `=`, `!=`            | Scalar            | Scalar            | Equality       |
 | `>`, `>=`, `<`, `<=` | Bool, int, number | Bool, int, number | Size           |
+| `>`, `>=`, `<`, `<=` | Date, datetime    | Date, datetime    | Time order     |
 | `=`, `!=`            | List              | List              | Set equality   |
 | `>=`                 | List              | Scalar            | Set membership |
 | `<=`                 | Scalar            | List              | Set membership |
@@ -424,6 +428,8 @@ Binary comparison is truthy if both operands exist (literals always exist), with
 | `price = cost`                    | Price = cost. Always ok regardless of types, since all types can be relaxed to `string` and tested for equality.                                               |
 | `price:number > cost:number`        | Price > cost. `false` if casting fails.                                                                                                                        |
 | `price:int > cost:number`           | Dito. Price is first cast to `int`, then relaxed to `number` for the comparison. If price is 1.23 then whole expression is `falsey` since `int` casting fails. |
+| `created >= 2026-01-01`             | Created on or after 1 January 2026. A date is compared with a datetime as midnight; a string operand is parsed as a date or datetime, and the comparison is `false` if it cannot be. |
+| `due < today()`                     | Due date is in the past.                                                                                                                                       |
 | `price:string > cost:number`        | Static type error caught at parse; halts program. `>` does not accept strings.                                                                                 |
 
 

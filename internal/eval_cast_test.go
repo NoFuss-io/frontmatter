@@ -20,6 +20,7 @@ func TestCastReversible(t *testing.T) {
 		{vStr("2026-05-14T21:02:30"), vDatetime(2026, 5, 14, 21, 2, 30)},
 
 		{vStr("hello")},
+		{vDate(2026, 5, 14), vDatetime(2026, 5, 14, 0, 0, 0)},
 	}
 
 	for _, tc := range testCases {
@@ -63,8 +64,8 @@ func TestCastFailures(t *testing.T) {
 
 		{vStr("hello"), allBut(TypeList)},
 
-		{vDate(2026, 5, 14), allBut(TypeString, TypeList)},
-		{vDatetime(2026, 5, 14, 21, 2, 30), allBut(TypeString, TypeList)},
+		{vDate(2026, 5, 14), allBut(TypeDatetime, TypeString, TypeList)},
+		{vDatetime(2026, 5, 14, 21, 2, 30), allBut(TypeDate, TypeString, TypeList)},
 
 		{vList(vStr("a"), vStr("b")), allTypes},
 	}
@@ -96,4 +97,11 @@ func allBut(tt ...FieldType) []FieldType {
 	next:
 	}
 	return out
+}
+
+func TestCastDatetimeToDateTruncates(t *testing.T) {
+	got, err := Cast(vDatetime(2026, 5, 14, 21, 2, 30), TypeDate)
+	if err != nil || got != vDate(2026, 5, 14) {
+		t.Errorf("got %s, %v; want %s", got, err, vDate(2026, 5, 14))
+	}
 }
