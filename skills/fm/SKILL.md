@@ -12,8 +12,9 @@ Markdown file, or a YAML block in a comment at the top of a source file. Transla
 ## Before you start
 
 - Check that `fm` is installed: `fm --version`. If missing, tell the user to
-  install it, e.g. `go install github.com/nofuss-io/frontmatter/cmd/fm@latest`
-  or a binary from https://github.com/NoFuss-io/frontmatter/releases.
+  install it with `brew install nofuss-io/tap/fm` (macOS/Linux),
+  `go install github.com/nofuss-io/frontmatter/cmd/fm@latest`, or a binary
+  from https://github.com/NoFuss-io/frontmatter/releases.
 - `fm` edits files in place with no backup. Prefer working in a git repo, or
   suggest the user commits or backs up first.
 

@@ -66,7 +66,8 @@ just install
 
 ### AI agent plugin
 
-The repo is a plugin (skill `fm`) for common coding agents. The skill expects `fm` on `PATH`.
+The repo is also a plugin with an `fm` skill for common coding agents. The plugin
+only teaches the agent how to use `fm`; install the binary first (see above).
 
 Claude Code:
 
