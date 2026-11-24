@@ -59,7 +59,8 @@ A missing field, or a value that cannot be cast to the type, reads as `null`.
 - `field` — truthy (exists, not null/false/0)
 - `not field` — missing, null or falsy
 - `field = "x"`, `field != "x"`
-- `<`, `<=`, `>`, `>=` — numbers, booleans, dates and datetimes (not strings)
+- `<`, `<=`, `>`, `>=` — numbers, booleans, dates and datetimes (not strings);
+  comparing typed fields or literals that can never be ordered is a parse error
 - Dates are quoted strings: `created >= "2025-01-01"`,
   `modified > "2025-01-01T09:00:00"`, `due < today()`. Unquoted
   `2025-01-01` is arithmetic (2023).
