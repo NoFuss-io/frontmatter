@@ -550,6 +550,17 @@ func skipSeparators(c *cursor) {
 }
 
 func parseOneQuery(c *cursor) (Query, error) {
+	q, err := parseQueryKeyword(c)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkQuery(q); err != nil {
+		return nil, err
+	}
+	return q, nil
+}
+
+func parseQueryKeyword(c *cursor) (Query, error) {
 	skipWS(c)
 	kw := peekKeyword(c)
 	switch strings.ToLower(kw) {

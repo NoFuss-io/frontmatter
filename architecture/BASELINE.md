@@ -44,6 +44,7 @@ fm/
 ├── internal/                # Core engine (package internal)
 │   ├── ast.go               # Program / Query interface / SelectQuery / UpdateQuery / AlterQuery / Expr nodes / operators / FieldType / LiteralKind
 │   ├── parse.go             # Recursive-descent cursor-based parser for the DSL
+│   ├── typecheck.go         # Static type check of ordering comparisons (run after each statement is parsed)
 │   ├── parse_fuzz_test.go   # go test -fuzz fuzz target for ParseProgram
 │   ├── eval.go              # Value model, Cast pipeline, expression eval, list/scalar comparisons, Assign.Apply
 │   ├── eval_query.go        # Query.Eval implementations (select/update/alter projection + mutation)
@@ -416,6 +417,16 @@ followed by a digit or `.`, otherwise becomes `UnaryNeg`.
 
 `validateLitAssign` rejects obviously impossible literal assignments at parse
 time (e.g. `count:int = "hello"`); runtime cast failures handle the rest.
+
+After each statement is parsed, `checkQuery` (`typecheck.go`) walks every
+expression (select list, `where`, `sort by`, `set` values, function arguments)
+and rejects ordering comparisons whose operand types are statically known and
+never orderable. Each operand gets a class (numeric, temporal, string, list,
+unknown) from its field type, literal (date-formatted string literals count as
+temporal), operator, or a fixed function return type; string-returning
+functions and untyped fields are unknown and always pass. Allowed pairs are
+numeric/numeric, temporal/temporal, and list membership (`list >= x`,
+`x <= list`).
 
 ### Evaluator (`internal/eval.go`)
 

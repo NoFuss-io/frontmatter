@@ -303,7 +303,7 @@ Atoms are *primary expressions* — the highest-precedence forms in the grammar.
 
 ```
 title                   -- field, any type
-price:number            -- field cast to number
+price:numeric           -- field cast to numeric
 `created-at`:date       -- quoted-identifier field cast to date
 42                      -- integer literal
 "hello world"           -- string literal
@@ -414,7 +414,15 @@ Quote them: unquoted, `2026-05-17` is arithmetic (`2026 - 5 - 17`).
 
 Unary comparison evaluates to the boolean value of the field (after optional casting). Falsey values are: `null`, `false`, `0`, `0.0`, and a missing field or failed cast (which also produce null). All other values are truthy.
 
-Binary comparison is truthy if both operands exist (literals always exist), with comparable types, and values meeting the criteria. Types are comparable if they can be relaxed to a matching type — otherwise it is a static type error caught at parse and halts the program. Runtime cast failure on values is per-clause (see [Error handling and program flow](#error-handling-and-program-flow)).
+Binary comparison is truthy if both operands exist (literals always exist), with comparable types, and values meeting the criteria. Runtime cast failure on values is per-clause (see [Output](#output)).
+
+Ordering comparisons (`<`, `<=`, `>`, `>=`) are type-checked when the query is parsed. If the type of both operands is known and they can never be ordered, it is a static type error: the program halts with exit code 2 before any file is read. A type is known for typed fields (`field:type`), literals, arithmetic, boolean expressions, and functions with a fixed non-string return type (e.g. `length()`, `today()`). Untyped fields and string-returning functions are only checked at runtime. Orderable pairs:
+
+- `bool`, `int`, `numeric` with each other
+- `date`, `datetime` and date-formatted string literals (`"2026-01-01"`, `"2026-01-01T09:00:00"`) with each other
+- list membership: `list >= scalar` and `scalar <= list`
+
+Any other known pair (e.g. a `string`, `link` or `list` field, a non-date string literal, or a date against a number) is a static type error.
 
 | Operator             | LHS type          | RHS type          | Meaning        |
 | -------------------- | ----------------- | ----------------- | -------------- |
@@ -431,11 +439,11 @@ Binary comparison is truthy if both operands exist (literals always exist), with
 | `tags:list >= "recipe"`                | Tags contain value "recipe"                                                                                                                                    |
 | `url = source`                    | URL matches the value of the source field.                                                                                                                     |
 | `price = cost`                    | Price = cost. Always ok regardless of types, since all types can be relaxed to `string` and tested for equality.                                               |
-| `price:number > cost:number`        | Price > cost. `false` if casting fails.                                                                                                                        |
-| `price:int > cost:number`           | Dito. Price is first cast to `int`, then relaxed to `number` for the comparison. If price is 1.23 then whole expression is `falsey` since `int` casting fails. |
+| `price:numeric > cost:numeric`      | Price > cost. `false` if casting fails.                                                                                                                        |
+| `price:int > cost:numeric`          | Dito. Price is first cast to `int`, then relaxed to `numeric` for the comparison. If price is 1.23 then whole expression is `falsey` since `int` casting fails. |
 | `created >= "2026-01-01"`           | Created on or after 1 January 2026. A date is compared with a datetime as midnight; a string operand is parsed as a date or datetime, and the comparison is `false` if it cannot be. |
 | `due < today()`                     | Due date is in the past.                                                                                                                                       |
-| `price:string > cost:number`        | Static type error caught at parse; halts program. `>` does not accept strings.                                                                                 |
+| `price:string > cost:numeric`       | Static type error caught at parse; halts program. `>` does not accept strings.                                                                                 |
 
 
 ### Assignment
