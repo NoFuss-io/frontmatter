@@ -12,6 +12,14 @@ _fm_complete() {
         COMPREPLY=( $(compgen -W "--help --dry-run --hidden --max-columns --lang --line-comment --block-open --block-close" -- "$cur") )
         return
     fi
+    if [[ $COMP_CWORD -eq 1 ]]; then
+        COMPREPLY=( $(compgen -W "help completion" -- "$cur") $(compgen -f -- "$cur") )
+        return
+    fi
+    case "${COMP_WORDS[1]}" in
+        help) [[ $COMP_CWORD -eq 2 ]] && COMPREPLY=( $(compgen -W "syntax functions" -- "$cur") ); return ;;
+        completion) [[ $COMP_CWORD -eq 2 ]] && COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") ); return ;;
+    esac
     COMPREPLY=( $(compgen -f -- "$cur") )
 }
 complete -o default -F _fm_complete fm
@@ -19,6 +27,14 @@ complete -o default -F _fm_complete fm
 
 const completionZsh = `#compdef fm
 _fm() {
+    if (( CURRENT == 2 )); then
+        _alternative 'subcommands:subcommand:(help completion)' 'files:file:_files'
+        return
+    fi
+    case $words[2] in
+        help) (( CURRENT == 3 )) && _values topic syntax functions; return ;;
+        completion) (( CURRENT == 3 )) && _values shell bash zsh fish; return ;;
+    esac
     _arguments \
         '(-h --help)'{-h,--help}'[show help]' \
         '(-d --dry-run)'{-d,--dry-run}'[simulate without writing]' \
@@ -34,6 +50,10 @@ compdef _fm fm
 `
 
 const completionFish = `# fish completion for fm
+complete -c fm -n '__fish_is_first_arg' -a help -d 'show help or a reference topic'
+complete -c fm -n '__fish_is_first_arg' -a completion -d 'print shell-completion script'
+complete -c fm -n '__fish_seen_subcommand_from help' -x -a 'syntax functions'
+complete -c fm -n '__fish_seen_subcommand_from completion' -x -a 'bash zsh fish'
 complete -c fm -s h -l help -d 'show help'
 complete -c fm -s d -l dry-run -d 'simulate without writing'
 complete -c fm -s H -l hidden -d 'include hidden files'

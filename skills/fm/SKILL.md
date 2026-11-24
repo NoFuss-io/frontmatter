@@ -58,7 +58,8 @@ A missing field, or a value that cannot be cast to the type, reads as `null`.
 
 - `field` — truthy (exists, not null/false/0)
 - `not field` — missing, null or falsy
-- `field = "x"`, `field != "x"`, `<`, `<=`, `>`, `>=` (numbers, dates)
+- `field = "x"`, `field != "x"`
+- `<`, `<=`, `>`, `>=` — numbers and booleans only (not dates or strings)
 - `tags >= "recipe"` — list contains value
 - `and`, `or`, `not`, parentheses
 

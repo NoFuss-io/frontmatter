@@ -253,7 +253,7 @@ Scalar may be cast to a single-element list and vice versa. When casting to `lis
 ### Expressions
 
 An expression is recursively composed of [fields](#fields), [literals](#literals),
-operators, [function calls](./functions.md), and grouping parentheses.
+operators, [function calls](./functions.md) (`fm help functions`), and grouping parentheses.
 
 ```ebnf
 expression = and_expr { "or"  and_expr }
@@ -294,7 +294,7 @@ Atoms are *primary expressions* — the highest-precedence forms in the grammar.
 
 **Literal**: a constant value embedded directly in the query (see [Literals](#literals)). Literals always exist; they never produce null.
 
-**Function call** (`name(arg, ...)`): invokes a built-in function and returns its result. Functions return **null** on invalid or missing arguments. See [functions.md](functions.md) for the full reference.
+**Function call** (`name(arg, ...)`): invokes a built-in function and returns its result. Functions return **null** on invalid or missing arguments. See [functions.md](functions.md) (`fm help functions`) for the full reference.
 
 ```
 title                   -- field, any type
@@ -439,7 +439,7 @@ Unary assignment casts field to type and creates it if missing with `null` as va
 >```
 >update * set foo:int
 >```
-> Errors if `foo` exist but cannot be casted to `int` (see [[#Fields]]).
+> Errors if `foo` exist but cannot be casted to `int` (see [Fields](#fields)).
 
 Binary assignment assigns new value to field, optionally casts to specific type and creates if missing. `null` is assigned as `<field> = null`.
 
@@ -453,7 +453,7 @@ Binary assignment assigns new value to field, optionally casts to specific type 
 > ```
 > update * set foo = bar + 3
 > ```
-> Errors if `bar` cannot be casted to numeric (required by addition, see [[#Expressions]]).
+> Errors if `bar` cannot be casted to numeric (required by addition, see [Expressions](#expressions)).
 >
 > Type of `foo` is inferred automatically since type is not explicitly state. This may produce different types in different documents (`int` or `numeric`).
 > To ensure field type:
@@ -462,7 +462,7 @@ Binary assignment assigns new value to field, optionally casts to specific type 
 > ```
 > Errors if `bar + 3` cannot be casted to `int`.
 
-Statically invalid assignments raise parse errors and halt program before any file is touched (see [[#Usage]]).
+Statically invalid assignments raise parse errors and halt program before any file is touched (see [Usage](#usage)).
 
 > [!example] Invalid query
 > ```

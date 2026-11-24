@@ -4,7 +4,7 @@
   "version": "0.4.1",
   "description": "Query and batch-edit YAML frontmatter in Markdown files (e.g. Obsidian vaults) and source-file comments with the fm CLI",
   "author": {
-    "name": "No Fuss Data AB",
+    "name": "NoFuss.io",
     "url": "https://github.com/NoFuss-io"
   },
   "homepage": "https://github.com/NoFuss-io/frontmatter",

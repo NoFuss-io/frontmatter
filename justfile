@@ -76,8 +76,11 @@ plugin_manifests := "plugin.json .claude-plugin/plugin.json gemini-extension.jso
 
 # Set the plugin version (X.Y.Z, no `v`) in all plugin manifests.
 set-version VERSION:
-    for f in {{ plugin_manifests }}; do \
-        jq --arg v "{{ VERSION }}" '.version = $v' "$f" > "$f.tmp" && mv "$f.tmp" "$f"; \
+    #!/usr/bin/env sh
+    set -eu
+    for f in {{ plugin_manifests }}; do
+        jq --arg v "{{ VERSION }}" '.version = $v' "$f" > "$f.tmp"
+        mv "$f.tmp" "$f"
     done
 
 # Fail unless every plugin manifest has version VERSION (X.Y.Z, no `v`).
