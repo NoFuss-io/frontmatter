@@ -87,12 +87,6 @@ func TestLitExpr_Parse(t *testing.T) {
 		{in: "0xFF", want: LitExpr{Kind: LitInt, Value: "0xFF"}},
 		{in: "0x1A2B", want: LitExpr{Kind: LitInt, Value: "0x1A2B"}},
 
-		// Date and datetime literals (not arithmetic)
-		{in: "2025-01-15", want: LitExpr{Kind: LitDate, Value: "2025-01-15"}},
-		{in: "2025-01-15T09:30:00", want: LitExpr{Kind: LitDatetime, Value: "2025-01-15T09:30:00"}},
-		{in: "2025-13-45", wantErr: true},
-		{in: "2025-02-30T00:00:00", wantErr: true},
-
 		// Numeric (float) literals
 		{in: "3.14", want: LitExpr{Kind: LitNumeric, Value: "3.14"}},
 		{in: "-2.5", want: LitExpr{Kind: LitNumeric, Value: "-2.5"}},

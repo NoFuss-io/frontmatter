@@ -328,14 +328,6 @@ func (e LitExpr) Eval(_ FrontMatter) Value {
 		return Value{Kind: TypeBool, Data: strings.ToLower(e.Value) == "true"}
 	case LitNull:
 		return Value{Null: true}
-	case LitDate:
-		if t, err := time.Parse("2006-01-02", e.Value); err == nil {
-			return Value{Kind: TypeDate, Data: t}
-		}
-	case LitDatetime:
-		if t, err := time.Parse("2006-01-02T15:04:05", e.Value); err == nil {
-			return Value{Kind: TypeDatetime, Data: t}
-		}
 	}
 	return Value{Null: true}
 }
@@ -466,9 +458,9 @@ func (e BinExpr) Eval(fm FrontMatter) Value {
 // null = null → true; null != null → false; null = non-null → false; null != non-null → true.
 // Cast failures also follow null semantics.
 // Lists participate in set equality (= / !=) or set membership (list >= scalar,
-// scalar <= list). If either side is a date or datetime, both sides are compared
-// as points in time (see temporalPair); otherwise ordering operators require
-// numeric coercion of both sides.
+// scalar <= list). Ordering compares points in time when both sides are dates,
+// datetimes or date-formatted strings (see temporalPair); otherwise ordering
+// operators require numeric coercion of both sides.
 func compare(op BinOp, l, r Value) Value {
 	if l.Null && r.Null {
 		return Value{Kind: TypeBool, Data: op == BinEq}
@@ -485,12 +477,14 @@ func compare(op BinOp, l, r Value) Value {
 	case BinNe:
 		return Value{Kind: TypeBool, Data: !scalarEq(l, r)}
 	}
-	if isTemporal(l) || isTemporal(r) {
-		a, b, ok := temporalPair(l, r)
-		if !ok {
-			return Value{Kind: TypeBool, Data: false}
-		}
+	// Temporal ordering applies when either side is a date/datetime, or when
+	// both are strings in date/datetime format (YAML datetimes and query
+	// literals are both strings; strings have no ordering of their own).
+	if a, b, ok := temporalPair(l, r); ok {
 		return Value{Kind: TypeBool, Data: ordered(op, a.Compare(b))}
+	}
+	if isTemporal(l) || isTemporal(r) {
+		return Value{Kind: TypeBool, Data: false}
 	}
 	lf, errL := Cast(l, TypeNumber)
 	rf, errR := Cast(r, TypeNumber)

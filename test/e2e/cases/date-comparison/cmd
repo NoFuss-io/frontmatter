@@ -1,10 +1,10 @@
-fm --format simple 'select due from * where due > 2025-01-15 sort by due'
+fm --format simple 'select due from * where due > "2025-01-15" sort by due'
 echo ---
 fm --format simple 'select due from * where due:date <= "2025-02-01" sort by due'
 echo ---
-fm --format simple 'select due from * where due >= 2025-02-01T12:00:00'
+fm --format simple 'select due from * where due >= "2025-02-01T12:00:00"'
 echo ---
-fm --format simple 'select date_diff(due, 2025-01-15) from * where date_diff(due, 2025-01-15) > 0 sort by due'
+fm --format simple 'select date_diff(due, "2025-01-15") from * where date_diff(due, "2025-01-15") > 0 sort by due'
 echo ---
-fm 'update * set overdue = true where due < 2025-01-15'
+fm 'update * set overdue = true where due < "2025-01-15"'
 fm --format simple 'select overdue from * where overdue'

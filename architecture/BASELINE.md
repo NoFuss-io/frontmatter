@@ -363,7 +363,7 @@ domain-specific identifiers.
 | `BinExpr`  | `{Op BinOp, Left, Right Expr}`       | Boolean, comparison, set-overlap, arithmetic |
 | `UnaryExpr`| `{Op UnaryOp, Operand Expr}`         | `not`, arithmetic `-` |
 | `FieldExpr`| `{Field Field}`                      | Field reference with optional type annotation |
-| `LitExpr`  | `{Kind LiteralKind, Value string}`   | string / int / numeric / bool / null / date / datetime literal (unquoted `YYYY-MM-DD[THH:MM:SS]`, lexed before numbers so it is never arithmetic) |
+| `LitExpr`  | `{Kind LiteralKind, Value string}`   | string / int / numeric / bool / null literal (dates are written as strings) |
 | `ListExpr` | `{Elems []Expr}`                     | Bracketed list literal `[e1, e2, …]`; evaluates element-wise to a `TypeList` value |
 
 #### Operators
@@ -459,8 +459,9 @@ round-trip via `parseWikiLink` / `parseMdLink`. Casting `Null` is an error
 | `UnaryExpr.Eval` | `not` → `!truthy(v)`; `-` negates int/number, otherwise null. |
 | `BinExpr.Eval`   | `and`/`or` short-circuit via `truthy`; arithmetic via `arith` (int stays int unless `/` has a remainder, then promotes to number; div-by-zero → null); comparisons via `compare` (lists routed to `compareList`). |
 
-`scalarEq` and the ordering operators treat a pair as temporal when either side
-is a date or datetime: `asTemporal` keeps date/datetime values and parses strings
+Ordering operators treat a pair as temporal when both sides are dates, datetimes
+or date-formatted strings; `scalarEq` does so when either side is a date or
+datetime: `asTemporal` keeps date/datetime values and parses strings
 in either format, and the two `time.Time`s are compared (a date is midnight, so
 mixed date/datetime pairs work). A non-temporal side that cannot be parsed makes
 ordering `false` and equality fall back to the rules below. Otherwise `scalarEq`

@@ -228,11 +228,9 @@ const (
 type LiteralKind int
 
 const (
-	LitString   LiteralKind = iota // quoted or raw string
-	LitInt                         // decimal or 0x… integer
-	LitNumeric                     // floating-point
-	LitBool                        // true | false
-	LitNull                        // null
-	LitDate                        // unquoted YYYY-MM-DD
-	LitDatetime                    // unquoted YYYY-MM-DDTHH:MM:SS
+	LitString  LiteralKind = iota // quoted or raw string
+	LitInt                        // decimal or 0x… integer
+	LitNumeric                    // floating-point
+	LitBool                       // true | false
+	LitNull                       // null
 )

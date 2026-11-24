@@ -60,8 +60,9 @@ A missing field, or a value that cannot be cast to the type, reads as `null`.
 - `not field` — missing, null or falsy
 - `field = "x"`, `field != "x"`
 - `<`, `<=`, `>`, `>=` — numbers, booleans, dates and datetimes (not strings)
-- Dates are unquoted: `due < today()`, `created >= 2025-01-01`,
-  `modified > 2025-01-01T09:00:00`
+- Dates are quoted strings: `created >= "2025-01-01"`,
+  `modified > "2025-01-01T09:00:00"`, `due < today()`. Unquoted
+  `2025-01-01` is arithmetic (2023).
 - `tags >= "recipe"` — list contains value
 - `and`, `or`, `not`, parentheses
 
@@ -92,7 +93,7 @@ fm 'select title, tags from notes/*.md where published sort by date desc limit 1
 fm 'select title from notes/*.md where tags >= "recipe"'
 
 # Notes created this year, newest first
-fm 'select title, created from notes/*.md where created >= 2025-01-01 sort by created desc'
+fm 'select title, created from notes/*.md where created >= "2025-01-01" sort by created desc'
 
 # Notes missing a field
 fm 'select title from notes/*.md where not status'
