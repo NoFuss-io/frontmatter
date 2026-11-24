@@ -560,14 +560,11 @@ func fnDateDiff(args []Expr, fm FrontMatter) Value {
 		if v.Null {
 			return time.Time{}, false
 		}
-		if v.Kind != TypeDate && v.Kind != TypeDatetime {
-			c, err := Cast(v, TypeDate)
-			if err != nil {
-				return time.Time{}, false
-			}
-			v = c
+		t, ok := asTemporal(v)
+		if !ok {
+			return time.Time{}, false
 		}
-		return v.Data.(time.Time), true
+		return t.Data.(time.Time), true
 	}
 	a, ok1 := coerce(0)
 	b, ok2 := coerce(1)

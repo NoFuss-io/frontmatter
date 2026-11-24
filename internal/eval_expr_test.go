@@ -2,6 +2,7 @@ package internal
 
 import (
 	"testing"
+	"time"
 )
 
 // ── Row 2: LitExpr.Eval ───────────────────────────────────────────────────────
@@ -166,7 +167,13 @@ func TestBinExpr_Compare(t *testing.T) {
 	il := func(s string) LitExpr { return LitExpr{Kind: LitInt, Value: s} }
 	sl := func(s string) LitExpr { return LitExpr{Kind: LitString, Value: s} }
 	missing := FieldExpr{Field: Field{Name: "missing"}}
-	fm := FrontMatter{}
+	due := FieldExpr{Field: Field{Name: "due"}}
+	stamp := FieldExpr{Field: Field{Name: "stamp"}}
+	fm := FrontMatter{
+		"due":   time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC),
+		"stamp": time.Date(2025, 2, 1, 12, 0, 0, 0, time.UTC),
+		"when":  "2025-02-01",
+	}
 
 	tests := []struct {
 		name string
@@ -186,6 +193,22 @@ func TestBinExpr_Compare(t *testing.T) {
 		{"eq_null_null", BinExpr{Op: BinEq, Left: missing, Right: missing}, vBool(true)},
 		{"ne_null_null", BinExpr{Op: BinNe, Left: missing, Right: missing}, vBool(false)},
 		{"ne_null_value", BinExpr{Op: BinNe, Left: missing, Right: il("1")}, vBool(true)},
+
+		// Dates and datetimes compare as points in time.
+		{"date_gt_string", BinExpr{Op: BinGt, Left: due, Right: sl("2025-01-15")}, vBool(true)},
+		{"date_lt_string", BinExpr{Op: BinLt, Left: due, Right: sl("2025-01-15")}, vBool(false)},
+		{"date_le_same", BinExpr{Op: BinLe, Left: due, Right: sl("2025-02-01")}, vBool(true)},
+		{"string_lt_date", BinExpr{Op: BinLt, Left: sl("2024-12-31"), Right: due}, vBool(true)},
+		{"date_gt_bad_string", BinExpr{Op: BinGt, Left: due, Right: sl("soon")}, vBool(false)},
+		{"date_gt_int", BinExpr{Op: BinGt, Left: due, Right: il("1")}, vBool(false)},
+		{"date_lt_datetime_same_day", BinExpr{Op: BinLt, Left: due, Right: sl("2025-02-01T08:00:00")}, vBool(true)},
+		{"datetime_gt_date", BinExpr{Op: BinGt, Left: stamp, Right: sl("2025-02-01")}, vBool(true)},
+		{"date_eq_datetime_midnight", BinExpr{Op: BinEq, Left: due, Right: sl("2025-02-01T00:00:00")}, vBool(true)},
+		{"cast_string_field_gt_date", BinExpr{Op: BinGt, Left: FieldExpr{Field: Field{Name: "when", Type: TypeDate}}, Right: sl("2025-01-15")}, vBool(true)},
+		{"string_field_lt_date_field", BinExpr{Op: BinLt, Left: FieldExpr{Field: Field{Name: "when"}}, Right: stamp}, vBool(true)},
+		{"string_lt_string_dates", BinExpr{Op: BinLt, Left: sl("2025-01-15"), Right: sl("2025-02-01T12:30:00")}, vBool(true)},
+		{"string_lt_string_text", BinExpr{Op: BinLt, Left: sl("a"), Right: sl("b")}, vBool(false)},
+		{"missing_gt_date", BinExpr{Op: BinGt, Left: missing, Right: sl("2025-01-15")}, vBool(false)},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

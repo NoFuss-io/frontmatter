@@ -48,7 +48,7 @@ Flags:
 
 Query is read from `stdin` if omitted.
 Query results and logs are written to `stdout`.
-Errors are written to `stderr` and return exit code 1.
+Errors are written to `stderr`; see [Output](#output) for exit codes.
 
 
 ### Query using command line arguments
@@ -96,10 +96,15 @@ then send EOF with <kbd>Ctrl</kbd> <kbd>D</kbd>.
 
 `fm` prints normal output to `stdout`.
 
-Execution errors, e.g. failed casting, are written to `stderr` and exits with code 2.
+Errors are written to `stderr`. Exit codes:
 
-Query parsing errors (e.g. recognized type, malformed expression, static type error)
-halt the program before touching any file and exists with code 1.
+| Code | Meaning |
+| ---- | ------- |
+| 0    | Success: every file was processed. |
+| 1    | Execution error in at least one file, e.g. a failed cast in `set`. That file is skipped and left unchanged; other files are still processed. |
+| 2    | Error before execution: invalid flags or arguments, or a query parse error (unknown type, malformed expression, static type error). No file is read or written. |
+
+Errors in a `where` clause are not execution errors: the condition evaluates as falsey and the exit code is unaffected.
 
 
 #### File mutations
@@ -390,12 +395,15 @@ Decimal with optional fractional part and exponent:
 
 ##### Date and datetime literals
 
-`fm` does not use BigQuery's typed literal syntax (`DATE '...'`, `DATETIME '...'`). Instead, date and datetime values are encoded as plain strings matching ISO 8601 format, and type is controlled via the field type annotation:
+`fm` does not use BigQuery's typed literal syntax (`DATE '...'`, `DATETIME '...'`). Instead, date and datetime values are written as strings in ISO 8601 format (`"YYYY-MM-DD"`, `"YYYY-MM-DDTHH:MM:SS"`). Type is controlled via the field type annotation, and a string is parsed as a date or datetime when compared with one:
 
 ```
-created:date = 2026-05-17
-modified:datetime = 2026-05-17T21:02:30
+created:date = "2026-05-17"
+modified:datetime = "2026-05-17T21:02:30"
+where created >= "2026-01-01"
 ```
+
+Quote them: unquoted, `2026-05-17` is arithmetic (`2026 - 5 - 17`).
 
 
 #### Boolean expressions
@@ -412,6 +420,7 @@ Binary comparison is truthy if both operands exist (literals always exist), with
 | -------------------- | ----------------- | ----------------- | -------------- |
 | `=`, `!=`            | Scalar            | Scalar            | Equality       |
 | `>`, `>=`, `<`, `<=` | Bool, int, number | Bool, int, number | Size           |
+| `>`, `>=`, `<`, `<=` | Date, datetime    | Date, datetime    | Time order     |
 | `=`, `!=`            | List              | List              | Set equality   |
 | `>=`                 | List              | Scalar            | Set membership |
 | `<=`                 | Scalar            | List              | Set membership |
@@ -424,6 +433,8 @@ Binary comparison is truthy if both operands exist (literals always exist), with
 | `price = cost`                    | Price = cost. Always ok regardless of types, since all types can be relaxed to `string` and tested for equality.                                               |
 | `price:number > cost:number`        | Price > cost. `false` if casting fails.                                                                                                                        |
 | `price:int > cost:number`           | Dito. Price is first cast to `int`, then relaxed to `number` for the comparison. If price is 1.23 then whole expression is `falsey` since `int` casting fails. |
+| `created >= "2026-01-01"`           | Created on or after 1 January 2026. A date is compared with a datetime as midnight; a string operand is parsed as a date or datetime, and the comparison is `false` if it cannot be. |
+| `due < today()`                     | Due date is in the past.                                                                                                                                       |
 | `price:string > cost:number`        | Static type error caught at parse; halts program. `>` does not accept strings.                                                                                 |
 
 

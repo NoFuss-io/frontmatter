@@ -1,0 +1,27 @@
+filename  due
+--------  ---
+late.md   2025-02-01
+stamp.md  2025-02-01T12:30:00
+(2 rows)
+---
+filename  due
+--------  ---
+early.md  2025-01-10
+late.md   2025-02-01
+(2 rows)
+---
+filename  due
+--------  ---
+stamp.md  2025-02-01T12:30:00
+(1 row)
+---
+filename  expr1
+--------  -----
+late.md   17
+stamp.md  17
+(2 rows)
+---
+filename  overdue
+--------  -------
+early.md  true
+(1 row)
