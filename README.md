@@ -6,7 +6,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/nofuss-io/frontmatter.svg)](https://pkg.go.dev/github.com/nofuss-io/frontmatter)
 [![Go Report Card](https://goreportcard.com/badge/github.com/nofuss-io/frontmatter)](https://goreportcard.com/report/github.com/nofuss-io/frontmatter)
 
-**Status:** Alpha — single-maintainer project, breaking changes possible until v1.0.
+**Status:** Beta — feature complete for everyday use. Minor breaking changes still possible before v1.0.
 
 Harmonize, refactor, and batch edit YAML frontmatter using SQL expressions.
 
@@ -193,7 +193,6 @@ like SQL and round-trips Obsidian-specific link types.
 
 ## Contributing
 
-Open an issue before sending a PR.
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
-
-Contributions are most welcome and I do my best to respond quickly.
+Found a bug or missing a feature? [Open an issue](https://github.com/NoFuss-io/frontmatter/issues) —
+reports are very welcome and I aim to respond quickly.
+For code contributions, see [CONTRIBUTING.md](./CONTRIBUTING.md).

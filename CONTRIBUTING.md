@@ -1,14 +1,13 @@
 # Contributing
 
-`fm` is a single-maintainer hobby project.
-I try to be helpful but respond when I can.
+Thanks for helping improve `fm`! Bug reports, feature ideas and pull requests
+are all welcome, and I aim to respond quickly.
 
 ## Before opening a PR
 
-**Open an issue first.** A short description of the change and the use case
-is enough. Unsolicited large PRs may be closed unmerged because shape and
-scope haven't been agreed.
-If so, you are of course welcome to keep the change in your own fork.
+**Open an issue first** for anything bigger than a small fix. A short
+description of the change and the use case is enough, and it lets us agree
+on shape and scope before you put in the work.
 
 ## Local checks
 
@@ -19,7 +18,7 @@ just test
 
 Both must pass. CI re-runs the same checks on every push.
 
-These may also be automatiocally with a pre-commit git-hook installed by:
+They can also run automatically with a pre-commit git hook, installed by:
 
 ```sh
 just setup
